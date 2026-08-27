@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Conventional Commit 메시지 생성",
+      "trigger": "UserPromptSubmit",
+      "description": "git staged 변경사항 분석하여 Conventional Commit 형식 커밋 메시지 자동 생성",
+      "action": {
+        "type": "agent",
+        "prompt": "사용자가 커밋 메시지 생성을 요청하면: 1) git diff --cached --stat으로 변경 파일 확인 2) git diff --cached로 상세 내용 확인 3) Conventional Commit 형식으로 메시지 작성 (type: 한국어 subject + body). staged 변경사항이 없으면 안내만 한다. 커밋 실행 전 반드시 사용자 리뷰를 받는다."
+      }
+    }
+  ]
+}

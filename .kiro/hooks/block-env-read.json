@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": ".env 파일 읽기 차단",
+      "trigger": "PreToolUse",
+      "description": ".env 파일 읽기를 차단하여 시크릿 키 노출 방지",
+      "matcher": "read_file|read_files",
+      "action": {
+        "type": "agent",
+        "prompt": "읽으려는 파일 경로가 정확히 .env로 끝나는 경우 차단하라. .env.example, .env.local, .env.development 등 접미사가 있는 파일은 허용. 해당하지 않으면 즉시 허용."
+      }
+    }
+  ]
+}
