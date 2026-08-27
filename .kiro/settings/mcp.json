@@ -1,0 +1,54 @@
+{
+  "mcpServers": {
+    "ai-playbook": {
+      "command": "npx",
+      "args": [
+        "ai-playbook-mcp"
+      ],
+      "env": {
+        "PLAYBOOK_API_URL": "https://playbook.cloudrudtjq1213.com",
+        "PLAYBOOK_API_KEY": "sk-abcdef",
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      },
+      "autoApprove": [
+        "list_catalog",
+        "suggest_assets",
+        "get_group",
+        "load_asset",
+        "check_updates",
+        "apply_preset",
+        "init_project"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ],
+      "autoApprove": [
+        "browser_navigate",
+        "browser_screenshot",
+        "browser_close",
+        "browser_resize",
+        "browser_take_screenshot",
+        "browser_click",
+        "browser_snapshot",
+        "browser_wait_for",
+        "browser_find",
+        "browser_type",
+        "browser_run_code_unsafe",
+        "browser_tabs",
+        "browser_file_upload",
+        "browser_console_messages",
+        "browser_fill_form",
+        "browser_network_requests",
+        "browser_network_request",
+        "browser_navigate_back",
+        "browser_evaluate",
+        "browser_press_key",
+        "browser_select_option",
+        "browser_handle_dialog"
+      ]
+    }
+  }
+}
