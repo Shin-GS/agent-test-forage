@@ -46,6 +46,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 - [레시피 편집](pages/recipe-editor.md)
 - [전체 히스토리](pages/history-full.md)
 - [설정](pages/settings.md)
+- [관리자 페이지](pages/admin.md) — 스펙 관리, 사용자 관리
 
 ### 네비게이션
 
