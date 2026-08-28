@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>레시피 편집 — AI Test Forge Design</title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/components.css">
+  <style>
+    body { overflow: auto; }
+
+    .page { min-height: 100vh; background: var(--color-bg-primary); }
+
+    .page-header {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-6);
+      background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border);
+      position: sticky; top: 0; z-index: var(--z-sticky);
+    }
+    .page-header__back { font-size: var(--font-size-sm); color: var(--color-text-link); cursor: pointer; }
+    .page-header__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); flex: 1; }
+    .page-header__actions { display: flex; gap: var(--space-2); }
+
+    .page-body { max-width: 1200px; margin: 0 auto; padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); }
+
+    .section { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); }
+    .section__title { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2); }
+    .section__number { width: 24px; height: 24px; background: var(--color-accent-subtle); color: var(--color-accent); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); }
+
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+    .field-full { grid-column: 1 / -1; }
+
+    /* 테이블 */
+    .data-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+    .data-table th { text-align: left; padding: var(--space-2) var(--space-3); color: var(--color-text-tertiary); font-weight: var(--font-weight-medium); border-bottom: 1px solid var(--color-border); font-size: var(--font-size-xs); }
+    .data-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); color: var(--color-text-primary); vertical-align: middle; }
+    .data-table tr:hover td { background: var(--color-bg-hover); }
+    .data-table__actions { display: flex; gap: var(--space-1); }
+
+    /* 스텝 카드 */
+    .step-card { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: var(--space-3); }
+    .step-card__header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--color-border); cursor: pointer; }
+    .step-card__number { width: 24px; height: 24px; background: var(--color-bg-primary); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-size: var(--font-size-xs); color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); }
+    .step-card__name { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary); flex: 1; }
+    .step-card__type { font-size: var(--font-size-xs); padding: 2px var(--space-2); background: var(--color-bg-primary); border-radius: var(--radius-sm); color: var(--color-text-tertiary); }
+    .step-card__body { padding: var(--space-4); }
+
+    /* 2단 레이아웃 (스텝 편집) */
+    .split-layout { display: grid; grid-template-columns: 1fr 300px; gap: var(--space-4); }
+    .data-explorer { background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); max-height: 400px; overflow-y: auto; }
+    .data-explorer__group { margin-bottom: var(--space-3); }
+    .data-explorer__title { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); margin-bottom: var(--space-1); display: flex; align-items: center; gap: var(--space-1); }
+    .data-explorer__item { padding: 2px var(--space-2); font-size: var(--font-size-xs); font-family: var(--font-mono); color: var(--color-text-secondary); cursor: pointer; border-radius: var(--radius-sm); transition: all var(--transition-fast); }
+    .data-explorer__item:hover { background: var(--color-accent-subtle); color: var(--color-accent); }
+
+    /* 매핑 테이블 */
+    .mapping-table { width: 100%; font-size: var(--font-size-sm); }
+    .mapping-table td { padding: var(--space-2) var(--space-2); vertical-align: middle; }
+    .mapping-table__field { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-primary); }
+    .mapping-table__required { color: var(--color-error); margin-left: 2px; }
+    .mapping-source { font-size: var(--font-size-xs); padding: var(--space-1) var(--space-2); background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-secondary); cursor: pointer; }
+
+    /* 태그 입력 */
+    .tag-input { display: flex; flex-wrap: wrap; gap: var(--space-1); padding: var(--space-2) var(--space-3); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); min-height: 36px; align-items: center; }
+    .tag-chip { display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-2); background: var(--color-accent-subtle); color: var(--color-accent); border-radius: var(--radius-full); font-size: var(--font-size-xs); }
+    .tag-chip__remove { cursor: pointer; opacity: 0.7; }
+
+    /* 리스트 페이지 필터 */
+    .list-filters { display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4); }
+  </style>
+</head>
+<body>
+
+  <div class="case-switcher">
+    <button class="case-switcher__btn active" onclick="showCase('list')">1. 레시피 목록</button>
+    <button class="case-switcher__btn" onclick="showCase('create')">2. 새 레시피 생성</button>
+    <button class="case-switcher__btn" onclick="showCase('step-api')">3. 스텝: API</button>
+    <button class="case-switcher__btn" onclick="showCase('step-script')">4. 스텝: 스크립트</button>
+    <button class="case-switcher__btn" onclick="showCase('validation')">5. 유효성 에러</button>
+    <button class="case-switcher__btn" onclick="showCase('step-sub')">6. 스텝: 서브레시피</button>
+    <button class="case-switcher__btn" onclick="showCase('step-input')">7. 스텝: 사용자입력</button>
+  </div>
+
+  <!-- ═══ Case 1: 레시피 목록 ═══ -->
+  <div id="case-list" class="screen active">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">레시피 관리</span>
+        <div class="page-header__actions">
+          <button class="btn btn--primary">+ 레시피 만들기</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="list-filters">
+          <input class="input" type="text" placeholder="🔍 레시피 검색..." style="max-width: 300px;">
+          <select class="input" style="max-width: 160px;"><option>전체 서비스</option><option>사람인</option><option>잡코리아</option><option>쇼핑몰</option></select>
+          <select class="input" style="max-width: 120px;"><option>전체</option><option>공통</option><option>개인</option></select>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr><th>레시피명</th><th>서비스</th><th>범위</th><th>태그</th><th>수정일</th><th>액션</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-weight: var(--font-weight-medium);">회원가입</td>
+              <td><span class="badge badge--neutral">사람인</span></td>
+              <td>공통</td>
+              <td><span class="tag-chip">가입</span> <span class="tag-chip">테스트</span></td>
+              <td style="color: var(--color-text-tertiary);">2026-08-25</td>
+              <td class="data-table__actions"><button class="btn btn--ghost btn--sm">✏️</button><button class="btn btn--ghost btn--sm">📋</button><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+            </tr>
+            <tr>
+              <td style="font-weight: var(--font-weight-medium);">공고 등록</td>
+              <td><span class="badge badge--neutral">사람인</span></td>
+              <td>공통</td>
+              <td><span class="tag-chip">채용</span></td>
+              <td style="color: var(--color-text-tertiary);">2026-08-24</td>
+              <td class="data-table__actions"><button class="btn btn--ghost btn--sm">✏️</button><button class="btn btn--ghost btn--sm">📋</button><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+            </tr>
+            <tr>
+              <td style="font-weight: var(--font-weight-medium);">입사지원</td>
+              <td><span class="badge badge--neutral">잡코리아</span></td>
+              <td>개인</td>
+              <td><span class="tag-chip">지원</span></td>
+              <td style="color: var(--color-text-tertiary);">2026-08-20</td>
+              <td class="data-table__actions"><button class="btn btn--ghost btn--sm">✏️</button><button class="btn btn--ghost btn--sm">📋</button><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+            </tr>
+            <tr>
+              <td style="font-weight: var(--font-weight-medium);">결제 플로우</td>
+              <td><span class="badge badge--neutral">쇼핑몰</span></td>
+              <td>공통</td>
+              <td><span class="tag-chip">결제</span> <span class="tag-chip">주문</span></td>
+              <td style="color: var(--color-text-tertiary);">2026-08-18</td>
+              <td class="data-table__actions"><button class="btn btn--ghost btn--sm">✏️</button><button class="btn btn--ghost btn--sm">📋</button><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 2: 새 레시피 생성 ═══ -->
+  <div id="case-create" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">새 레시피</span>
+        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body">
+        <!-- ① 메타 정보 -->
+        <div class="section">
+          <div class="section__title"><span class="section__number">1</span> 메타 정보</div>
+          <div class="field-grid">
+            <div class="form-group"><label class="form-label">레시피명 *</label><input class="input" type="text" placeholder="레시피 이름"></div>
+            <div class="form-group"><label class="form-label">대상 서비스 *</label><select class="input"><option value="">서비스 선택...</option><option>사람인</option><option>잡코리아</option><option>쇼핑몰</option></select></div>
+            <div class="form-group field-full"><label class="form-label">설명 *</label><textarea class="textarea" placeholder="이 레시피가 하는 일을 설명해주세요 (AI 매칭에 활용됩니다)" style="min-height: 60px;"></textarea></div>
+            <div class="form-group"><label class="form-label">태그</label><div class="tag-input"><input type="text" placeholder="태그 입력 후 Enter" style="border: none; background: none; outline: none; color: var(--color-text-primary); font-size: var(--font-size-sm); flex: 1; min-width: 100px;"></div></div>
+            <div class="form-group"><label class="form-label">공개 범위 *</label>
+              <div style="display: flex; gap: var(--space-4); font-size: var(--font-size-sm); color: var(--color-text-primary); padding-top: var(--space-1);">
+                <label style="display: flex; align-items: center; gap: var(--space-1); cursor: pointer;"><input type="radio" name="scope" checked> 공통</label>
+                <label style="display: flex; align-items: center; gap: var(--space-1); cursor: pointer;"><input type="radio" name="scope"> 개인</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ② 사용자 입력 변수 -->
+        <div class="section">
+          <div class="section__title"><span class="section__number">2</span> 사용자 입력 변수</div>
+          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-3);">실행 시 액션 피커로 사용자에게 물어볼 값</p>
+          <table class="data-table">
+            <thead><tr><th>변수명</th><th>라벨</th><th>타입</th><th>필수</th><th>기본값</th><th></th></tr></thead>
+            <tbody>
+              <tr><td colspan="6" style="text-align: center; color: var(--color-text-tertiary); padding: var(--space-4);">변수가 없습니다</td></tr>
+            </tbody>
+          </table>
+          <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-2);">+ 변수 추가</button>
+        </div>
+
+        <!-- ③ 스텝 -->
+        <div class="section">
+          <div class="section__title"><span class="section__number">3</span> 스텝</div>
+          <div style="text-align: center; padding: var(--space-6); color: var(--color-text-tertiary); font-size: var(--font-size-sm);">
+            <p>스텝을 추가하여 워크플로우를 구성하세요</p>
+          </div>
+          <div style="display: flex; gap: var(--space-2); justify-content: center;">
+            <button class="btn btn--secondary btn--sm">+ API 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 스크립트 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 서브레시피 스텝</button>
+          </div>
+        </div>
+
+        <!-- ④ 결과 정의 -->
+        <div class="section">
+          <div class="section__title"><span class="section__number">4</span> 결과 정의</div>
+          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-3);">실행 완료 후 저장할 값 (히스토리 표시 + 템플릿에서 사용)</p>
+          <button class="btn btn--ghost btn--sm">+ 결과 변수 추가</button>
+        </div>
+
+        <!-- ⑤ 결과 메시지 -->
+        <div class="section">
+          <div class="section__title"><span class="section__number">5</span> 결과 메시지 템플릿</div>
+          <textarea class="textarea" placeholder="레시피 성공 시 표시할 메시지. 변수는 [변수명]으로 삽입." style="min-height: 80px;"></textarea>
+          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: var(--space-2);">미입력 시 AI가 자동 요약합니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 3: 스텝 편집 (API 타입) ═══ -->
+  <div id="case-step-api" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">회원가입 레시피 편집</span>
+        <div class="page-header__actions"><button class="btn btn--secondary">미리보기</button><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body">
+        <!-- 스텝 목록 (축약) -->
+        <div class="section">
+          <div class="section__title"><span class="section__number">3</span> 스텝 (3개)</div>
+
+          <!-- 스텝 1 (접힘) -->
+          <div class="step-card">
+            <div class="step-card__header">
+              <span class="step-card__number">1</span>
+              <span class="step-card__name">이메일 생성</span>
+              <span class="step-card__type">스크립트</span>
+              <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+          </div>
+
+          <!-- 스텝 2 (펼침 — API 타입) -->
+          <div class="step-card" style="border-color: var(--color-accent);">
+            <div class="step-card__header" style="background: var(--color-accent-subtle);">
+              <span class="step-card__number">2</span>
+              <span class="step-card__name">회원가입 API</span>
+              <span class="step-card__type">API</span>
+              <button class="btn btn--ghost btn--sm">▴</button>
+            </div>
+            <div class="step-card__body">
+              <div class="split-layout">
+                <!-- 좌: 설정 -->
+                <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                  <div class="field-grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="form-group"><label class="form-label">서브도메인</label><select class="input"><option>member-api</option></select></div>
+                    <div class="form-group"><label class="form-label">API</label><select class="input"><option>POST /api/v1/users</option></select></div>
+                  </div>
+
+                  <!-- 요청 필드 매핑 -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">요청 필드 매핑</label>
+                    <table class="mapping-table">
+                      <tr>
+                        <td><span class="mapping-table__field">email<span class="mapping-table__required">*</span></span></td>
+                        <td><span class="mapping-source">이전 스텝 결과 ▾</span></td>
+                        <td><span class="mapping-source">스텝1 > email ▾</span></td>
+                      </tr>
+                      <tr>
+                        <td><span class="mapping-table__field">password<span class="mapping-table__required">*</span></span></td>
+                        <td><span class="mapping-source">이전 스텝 결과 ▾</span></td>
+                        <td><span class="mapping-source">스텝1 > password ▾</span></td>
+                      </tr>
+                      <tr>
+                        <td><span class="mapping-table__field">nickname</span></td>
+                        <td><span class="mapping-source">AI 생성 ▾</span></td>
+                        <td><span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">(자동)</span></td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <!-- Extract -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">응답 추출 (Extract)</label>
+                    <table class="mapping-table">
+                      <tr>
+                        <td><span class="mapping-table__field">memberId</span></td>
+                        <td><span class="mapping-source">JSONPath ▾</span></td>
+                        <td><span class="mapping-source">$.data.memberId ▾</span></td>
+                      </tr>
+                    </table>
+                    <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-2);">+ 추출 추가</button>
+                  </div>
+
+                  <!-- 조건 -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">조건 (선택)</label>
+                    <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">조건 없음 (항상 실행)</p>
+                  </div>
+                </div>
+
+                <!-- 우: 데이터 탐색기 -->
+                <div class="data-explorer">
+                  <div class="data-explorer__group">
+                    <div class="data-explorer__title">📂 사용자 입력</div>
+                    <div class="data-explorer__item">userInput.productId</div>
+                    <div class="data-explorer__item">userInput.quantity</div>
+                  </div>
+                  <div class="data-explorer__group">
+                    <div class="data-explorer__title">📂 스텝 1: 이메일 생성</div>
+                    <div class="data-explorer__item">email</div>
+                    <div class="data-explorer__item">password</div>
+                  </div>
+                  <div class="data-explorer__group" style="border-top: 1px solid var(--color-border); padding-top: var(--space-2);">
+                    <div class="data-explorer__title">📋 현재 API 스키마</div>
+                    <div class="data-explorer__item" style="color: var(--color-text-tertiary);">email (string, 필수)</div>
+                    <div class="data-explorer__item" style="color: var(--color-text-tertiary);">password (string, 필수)</div>
+                    <div class="data-explorer__item" style="color: var(--color-text-tertiary);">nickname (string)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 스텝 3 (접힘) -->
+          <div class="step-card">
+            <div class="step-card__header">
+              <span class="step-card__number">3</span>
+              <span class="step-card__name">프로필 설정</span>
+              <span class="step-card__type">API</span>
+              <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);">
+            <button class="btn btn--secondary btn--sm">+ API 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 스크립트 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 서브레시피 스텝</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 4: 스텝 편집 (스크립트) ═══ -->
+  <div id="case-step-script" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">회원가입 레시피 편집</span>
+        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body">
+        <div class="section">
+          <div class="section__title"><span class="section__number">3</span> 스텝</div>
+
+          <!-- 스크립트 스텝 (펼침) -->
+          <div class="step-card" style="border-color: var(--color-accent);">
+            <div class="step-card__header" style="background: var(--color-accent-subtle);">
+              <span class="step-card__number">1</span>
+              <span class="step-card__name">이메일 생성</span>
+              <span class="step-card__type">스크립트</span>
+              <button class="btn btn--ghost btn--sm">▴</button>
+            </div>
+            <div class="step-card__body">
+              <div class="split-layout">
+                <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                  <!-- 사용할 변수 -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">사용할 변수</label>
+                    <div style="display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--font-size-sm);">
+                      <label style="display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-primary); cursor: pointer;"><input type="checkbox" checked> userInput.quantity</label>
+                      <label style="display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-primary); cursor: pointer;"><input type="checkbox" checked> userInput.domain</label>
+                    </div>
+                  </div>
+
+                  <!-- 코드 -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">코드</label>
+                    <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); font-family: var(--font-mono); font-size: var(--font-size-xs); line-height: var(--line-height-relaxed); color: var(--color-text-primary); min-height: 120px; white-space: pre;">function execute(context) {
+  const emails = [];
+  const domain = context.userInput.domain || '@test.com';
+  for (let i = 0; i < context.userInput.quantity; i++) {
+    emails.push(`test${Date.now()}${i}${domain}`);
+  }
+  return { email: emails[0], password: 'Test1234!' };
+}</div>
+                  </div>
+
+                  <!-- 출력 변수 -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">출력 변수</label>
+                    <table class="mapping-table">
+                      <tr><td><span class="mapping-table__field">email</span></td><td style="color: var(--color-text-tertiary); font-size: var(--font-size-xs);">생성된 이메일</td></tr>
+                      <tr><td><span class="mapping-table__field">password</span></td><td style="color: var(--color-text-tertiary); font-size: var(--font-size-xs);">생성된 비밀번호</td></tr>
+                    </table>
+                    <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-2);">+ 출력 변수 추가</button>
+                  </div>
+                </div>
+
+                <!-- 우: 데이터 탐색기 -->
+                <div class="data-explorer">
+                  <div class="data-explorer__group">
+                    <div class="data-explorer__title">📂 사용자 입력</div>
+                    <div class="data-explorer__item">userInput.quantity</div>
+                    <div class="data-explorer__item">userInput.domain</div>
+                  </div>
+                  <div class="data-explorer__group" style="border-top: 1px solid var(--color-border); padding-top: var(--space-2); opacity: 0.5;">
+                    <div class="data-explorer__title">📂 이전 스텝 없음</div>
+                    <div style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">첫 번째 스텝입니다</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 5: 유효성 에러 ═══ -->
+  <div id="case-validation" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">회원가입 레시피 편집</span>
+        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body">
+        <!-- 에러 요약 -->
+        <div class="alert alert--error">
+          ✕ 저장할 수 없습니다 — 3개의 문제를 해결해주세요
+        </div>
+
+        <div class="section">
+          <div class="section__title"><span class="section__number">1</span> 메타 정보</div>
+          <div class="field-grid">
+            <div class="form-group">
+              <label class="form-label">레시피명 *</label>
+              <input class="input input--error" type="text" value="">
+              <span class="form-error">레시피명은 필수입니다</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">대상 서비스 *</label>
+              <select class="input input--error"><option value="">서비스 선택...</option></select>
+              <span class="form-error">서비스를 선택해주세요</span>
+            </div>
+            <div class="form-group field-full"><label class="form-label">설명 *</label><textarea class="textarea" placeholder="설명 입력">사람인 회원가입</textarea></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section__title"><span class="section__number">3</span> 스텝</div>
+          <div class="step-card" style="border-color: var(--color-error);">
+            <div class="step-card__header">
+              <span class="step-card__number" style="background: var(--color-error-subtle); color: var(--color-error);">2</span>
+              <span class="step-card__name">회원가입 API</span>
+              <span class="step-card__type">API</span>
+              <span class="badge badge--error" style="margin-left: auto;">매핑 오류</span>
+            </div>
+            <div class="step-card__body">
+              <div class="alert alert--error" style="margin-bottom: var(--space-3);">
+                필수 필드 'email'의 값 소스가 지정되지 않았습니다
+              </div>
+              <table class="mapping-table">
+                <tr style="background: var(--color-error-subtle);">
+                  <td><span class="mapping-table__field">email<span class="mapping-table__required">*</span></span></td>
+                  <td><span class="mapping-source" style="border-color: var(--color-error);">선택하세요 ▾</span></td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td><span class="mapping-table__field">password<span class="mapping-table__required">*</span></span></td>
+                  <td><span class="mapping-source">이전 스텝 결과 ▾</span></td>
+                  <td><span class="mapping-source">스텝1 > password ▾</span></td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 6: 스텝 편집 (서브레시피 타입) ═══ -->
+  <div id="case-step-sub" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">입사지원 플로우 레시피 편집</span>
+        <div class="page-header__actions"><button class="btn btn--secondary">미리보기</button><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body">
+        <div class="section">
+          <div class="section__title"><span class="section__number">3</span> 스텝 (3개)</div>
+
+          <!-- 스텝 1 (접힘) -->
+          <div class="step-card">
+            <div class="step-card__header">
+              <span class="step-card__number">1</span>
+              <span class="step-card__name">이메일 생성</span>
+              <span class="step-card__type">스크립트</span>
+              <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+          </div>
+
+          <!-- 스텝 2 (펼침 — 서브레시피 타입) -->
+          <div class="step-card" style="border-color: var(--color-accent);">
+            <div class="step-card__header" style="background: var(--color-accent-subtle);">
+              <span class="step-card__number">2</span>
+              <span class="step-card__name">회원가입 실행</span>
+              <span class="step-card__type">서브레시피</span>
+              <button class="btn btn--ghost btn--sm">▴</button>
+            </div>
+            <div class="step-card__body">
+              <div class="split-layout">
+                <!-- 좌: 설정 -->
+                <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                  <!-- 대상 레시피 선택 -->
+                  <div class="form-group">
+                    <label class="form-label">대상 레시피 *</label>
+                    <select class="input"><option>회원가입</option><option>공고 등록</option><option>결제 플로우</option></select>
+                  </div>
+
+                  <!-- 입력 매핑 테이블 -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">입력 매핑</label>
+                    <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-2);">서브레시피의 사용자 입력 변수에 값을 매핑합니다</p>
+                    <table class="mapping-table">
+                      <tr>
+                        <td><span class="mapping-table__field">email<span class="mapping-table__required">*</span></span></td>
+                        <td><span class="mapping-source">이전 스텝 결과 ▾</span></td>
+                        <td><span class="mapping-source">스텝1 > email ▾</span></td>
+                      </tr>
+                      <tr>
+                        <td><span class="mapping-table__field">password<span class="mapping-table__required">*</span></span></td>
+                        <td><span class="mapping-source">직접 입력 ▾</span></td>
+                        <td><input class="input" type="text" value="test1234" style="max-width: 160px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"></td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <!-- 조건 (선택) -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">조건 (선택)</label>
+                    <div style="display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--font-size-xs);">
+                      <select class="input" style="max-width: 120px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"><option>스텝1.email</option></select>
+                      <select class="input" style="max-width: 80px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"><option>!= null</option><option>== true</option><option>contains</option></select>
+                      <span style="color: var(--color-text-tertiary);">→ 이 조건을 만족할 때만 실행</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 우: 데이터 탐색기 -->
+                <div class="data-explorer">
+                  <div class="data-explorer__group">
+                    <div class="data-explorer__title">📂 사용자 입력</div>
+                    <div class="data-explorer__item">userInput.domain</div>
+                    <div class="data-explorer__item">userInput.quantity</div>
+                  </div>
+                  <div class="data-explorer__group">
+                    <div class="data-explorer__title">📂 스텝 1: 이메일 생성</div>
+                    <div class="data-explorer__item">email</div>
+                    <div class="data-explorer__item">password</div>
+                  </div>
+                  <div class="data-explorer__group" style="border-top: 1px solid var(--color-border); padding-top: var(--space-2);">
+                    <div class="data-explorer__title">📤 서브레시피 출력 (미리보기)</div>
+                    <div class="data-explorer__item" style="color: var(--color-text-tertiary);">memberId (string)</div>
+                    <div class="data-explorer__item" style="color: var(--color-text-tertiary);">email (string)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 스텝 3 (접힘) -->
+          <div class="step-card">
+            <div class="step-card__header">
+              <span class="step-card__number">3</span>
+              <span class="step-card__name">프로필 설정</span>
+              <span class="step-card__type">API</span>
+              <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);">
+            <button class="btn btn--secondary btn--sm">+ API 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 스크립트 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 서브레시피 스텝</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 7: 스텝 편집 (사용자 입력 타입) ═══ -->
+  <div id="case-step-input" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">결제 플로우 레시피 편집</span>
+        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body">
+        <div class="section">
+          <div class="section__title"><span class="section__number">3</span> 스텝 (3개)</div>
+
+          <!-- 스텝 1 (펼침 — 사용자 입력 타입) -->
+          <div class="step-card" style="border-color: var(--color-accent);">
+            <div class="step-card__header" style="background: var(--color-accent-subtle);">
+              <span class="step-card__number">1</span>
+              <span class="step-card__name">주문 정보 입력</span>
+              <span class="step-card__type">사용자 입력</span>
+              <button class="btn btn--ghost btn--sm">▴</button>
+            </div>
+            <div class="step-card__body">
+              <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-4);">이 스텝에서 사용자에게 물어볼 변수를 정의합니다. 실행 시 액션 피커로 표시됩니다.</p>
+
+              <!-- 변수 정의 테이블 -->
+              <table class="data-table" style="margin-bottom: var(--space-3);">
+                <thead>
+                  <tr><th>변수명</th><th>라벨</th><th>타입</th><th>필수</th><th>기본값</th><th></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span style="font-family: var(--font-mono); font-size: var(--font-size-xs);">productId</span></td>
+                    <td>상품 ID</td>
+                    <td><select class="input" style="max-width: 100px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"><option>text</option><option>number</option><option>select</option></select></td>
+                    <td><input type="checkbox" checked></td>
+                    <td><span style="color: var(--color-text-tertiary); font-size: var(--font-size-xs);">(없음)</span></td>
+                    <td class="data-table__actions"><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+                  </tr>
+                  <tr>
+                    <td><span style="font-family: var(--font-mono); font-size: var(--font-size-xs);">quantity</span></td>
+                    <td>수량</td>
+                    <td><select class="input" style="max-width: 100px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"><option>number</option><option>text</option><option>select</option></select></td>
+                    <td><input type="checkbox" checked></td>
+                    <td><input class="input" type="text" value="1" style="max-width: 80px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"></td>
+                    <td class="data-table__actions"><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+                  </tr>
+                </tbody>
+              </table>
+              <button class="btn btn--ghost btn--sm">+ 변수 추가</button>
+
+              <!-- 조건 (선택) -->
+              <div style="margin-top: var(--space-4);">
+                <label class="form-label" style="margin-bottom: var(--space-2);">조건 (선택)</label>
+                <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">조건 없음 (항상 실행)</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 스텝 2 (접힘) -->
+          <div class="step-card">
+            <div class="step-card__header">
+              <span class="step-card__number">2</span>
+              <span class="step-card__name">재고 확인 API</span>
+              <span class="step-card__type">API</span>
+              <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+          </div>
+
+          <!-- 스텝 3 (접힘) -->
+          <div class="step-card">
+            <div class="step-card__header">
+              <span class="step-card__number">3</span>
+              <span class="step-card__name">결제 처리</span>
+              <span class="step-card__type">API</span>
+              <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);">
+            <button class="btn btn--secondary btn--sm">+ API 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 스크립트 스텝</button>
+            <button class="btn btn--secondary btn--sm">+ 서브레시피 스텝</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showCase(caseId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('case-' + caseId).classList.add('active');
+      document.querySelectorAll('.case-switcher__btn').forEach(b => {
+        if (b.getAttribute('onclick').includes("'" + caseId + "'")) b.classList.add('active');
+      });
+    }
+  </script>
+</body>
+</html>

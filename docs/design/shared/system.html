@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Test Forge — Design System</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="components.css">
+  <style>
+    /* 카탈로그 전용 스타일 */
+    body {
+      overflow: auto;
+      padding: var(--space-8);
+    }
+
+    .catalog-section {
+      margin-bottom: var(--space-10);
+    }
+
+    .catalog-section h2 {
+      font-size: var(--font-size-xl);
+      font-weight: var(--font-weight-bold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-2);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .catalog-section h3 {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-secondary);
+      margin: var(--space-4) 0 var(--space-2);
+    }
+
+    .catalog-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      align-items: center;
+      margin-bottom: var(--space-4);
+    }
+
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+
+    .color-swatch {
+      width: 60px;
+      height: 60px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      display: flex;
+      align-items: flex-end;
+      padding: var(--space-1);
+    }
+
+    .color-swatch span {
+      font-size: 9px;
+      font-family: var(--font-mono);
+      color: var(--color-text-secondary);
+      background: var(--color-bg-primary);
+      padding: 1px 3px;
+      border-radius: 2px;
+    }
+
+    .catalog-title {
+      font-size: var(--font-size-3xl);
+      font-weight: var(--font-weight-bold);
+      margin-bottom: var(--space-2);
+    }
+
+    .catalog-desc {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      margin-bottom: var(--space-8);
+    }
+  </style>
+</head>
+<body>
+
+  <h1 class="catalog-title">AI Test Forge Design System</h1>
+  <p class="catalog-desc">
+    컴포넌트 카탈로그 — 모든 UI 요소를 한눈에 확인합니다.
+    다크 테마 only · Desktop + Tablet 반응형
+  </p>
+
+  <!-- ═══ Colors ═══ -->
+  <section class="catalog-section">
+    <h2>Colors</h2>
+
+    <h3>Background</h3>
+    <div class="catalog-row">
+      <div class="color-swatch" style="background: var(--color-bg-primary)"><span>bg-primary</span></div>
+      <div class="color-swatch" style="background: var(--color-bg-secondary)"><span>bg-secondary</span></div>
+      <div class="color-swatch" style="background: var(--color-bg-tertiary)"><span>bg-tertiary</span></div>
+      <div class="color-swatch" style="background: var(--color-bg-hover)"><span>bg-hover</span></div>
+      <div class="color-swatch" style="background: var(--color-bg-active)"><span>bg-active</span></div>
+    </div>
+
+    <h3>Accent & Semantic</h3>
+    <div class="catalog-row">
+      <div class="color-swatch" style="background: var(--color-accent)"><span>accent</span></div>
+      <div class="color-swatch" style="background: var(--color-accent-hover)"><span>accent-hover</span></div>
+      <div class="color-swatch" style="background: var(--color-success)"><span>success</span></div>
+      <div class="color-swatch" style="background: var(--color-warning)"><span>warning</span></div>
+      <div class="color-swatch" style="background: var(--color-error)"><span>error</span></div>
+      <div class="color-swatch" style="background: var(--color-info)"><span>info</span></div>
+    </div>
+  </section>
+
+  <!-- ═══ Typography ═══ -->
+  <section class="catalog-section">
+    <h2>Typography</h2>
+    <div style="display: flex; flex-direction: column; gap: var(--space-2);">
+      <p style="font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold);">3xl Bold — 제목</p>
+      <p style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold);">2xl Semibold — 큰 제목</p>
+      <p style="font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold);">xl Semibold — 섹션 제목</p>
+      <p style="font-size: var(--font-size-lg); font-weight: var(--font-weight-medium);">lg Medium — 소제목</p>
+      <p style="font-size: var(--font-size-base);">base Normal — 본문</p>
+      <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary);">sm — 보조 텍스트</p>
+      <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">xs — 캡션, 라벨</p>
+      <p style="font-family: var(--font-mono); font-size: var(--font-size-sm);">Mono — 코드, API 경로</p>
+    </div>
+  </section>
+
+  <!-- ═══ Buttons ═══ -->
+  <section class="catalog-section">
+    <h2>Buttons</h2>
+
+    <h3>Variants</h3>
+    <div class="catalog-row">
+      <button class="btn btn--primary">Primary</button>
+      <button class="btn btn--secondary">Secondary</button>
+      <button class="btn btn--ghost">Ghost</button>
+      <button class="btn btn--danger">Danger</button>
+      <button class="btn btn--primary" disabled>Disabled</button>
+    </div>
+
+    <h3>Sizes</h3>
+    <div class="catalog-row">
+      <button class="btn btn--primary btn--sm">Small</button>
+      <button class="btn btn--primary">Default</button>
+      <button class="btn btn--primary btn--lg">Large</button>
+    </div>
+
+    <h3>Icon & Full Width</h3>
+    <div class="catalog-row" style="flex-direction: column; align-items: stretch; max-width: 300px;">
+      <button class="btn btn--primary btn--icon">⚡</button>
+      <button class="btn btn--primary btn--full">Full Width Button</button>
+    </div>
+  </section>
+
+  <!-- ═══ Inputs ═══ -->
+  <section class="catalog-section">
+    <h2>Inputs</h2>
+    <div style="max-width: 400px; display: flex; flex-direction: column; gap: var(--space-4);">
+      <div class="form-group">
+        <label class="form-label">Label</label>
+        <input class="input" type="text" placeholder="입력하세요...">
+        <span class="form-hint">도움말 텍스트</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">에러 상태</label>
+        <input class="input input--error" type="text" value="잘못된 입력">
+        <span class="form-error">올바른 값을 입력해주세요</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Textarea</label>
+        <textarea class="textarea" placeholder="긴 텍스트를 입력하세요..."></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Badges ═══ -->
+  <section class="catalog-section">
+    <h2>Badges</h2>
+    <div class="catalog-row">
+      <span class="badge badge--success">✓ 성공</span>
+      <span class="badge badge--warning">⚠ 경고</span>
+      <span class="badge badge--error">✕ 실패</span>
+      <span class="badge badge--info">ℹ 정보</span>
+      <span class="badge badge--neutral">기본</span>
+    </div>
+  </section>
+
+  <!-- ═══ Cards ═══ -->
+  <section class="catalog-section">
+    <h2>Cards</h2>
+    <div class="catalog-grid">
+      <div class="card">
+        <div class="card__header">
+          <span class="card__title">기본 카드</span>
+          <span class="badge badge--neutral">Draft</span>
+        </div>
+        <div class="card__body">카드 본문 내용입니다. 설명 텍스트가 여기에 들어갑니다.</div>
+      </div>
+      <div class="card card--interactive">
+        <div class="card__header">
+          <span class="card__title">인터랙티브 카드</span>
+        </div>
+        <div class="card__body">호버 시 스타일이 변합니다.</div>
+      </div>
+      <div class="card card--highlighted">
+        <div class="card__header">
+          <span class="card__title">하이라이트 카드</span>
+        </div>
+        <div class="card__body">강조된 상태의 카드입니다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Avatars ═══ -->
+  <section class="catalog-section">
+    <h2>Avatars</h2>
+    <div class="catalog-row">
+      <div class="avatar avatar--sm avatar--ai">AI</div>
+      <div class="avatar avatar--ai">🤖</div>
+      <div class="avatar avatar--lg avatar--ai">AI</div>
+      <div class="avatar avatar--sm avatar--user">U</div>
+      <div class="avatar avatar--user">👤</div>
+      <div class="avatar avatar--lg avatar--user">U</div>
+    </div>
+  </section>
+
+  <!-- ═══ Chat Messages ═══ -->
+  <section class="catalog-section">
+    <h2>Chat Messages</h2>
+    <div style="background: var(--color-bg-primary); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border);">
+      <div class="message message--user">
+        <div class="avatar avatar--user message__avatar">U</div>
+        <div class="message__body">
+          <span class="message__sender">사용자</span>
+          <div class="message__content">
+            <p>회원가입 테스트 데이터 5건 만들어줘</p>
+          </div>
+        </div>
+      </div>
+      <div class="message">
+        <div class="avatar avatar--ai message__avatar">🤖</div>
+        <div class="message__body">
+          <span class="message__sender">AI Test Forge</span>
+          <div class="message__content">
+            <p>회원가입 레시피를 5회 실행하겠습니다. 아래 실행 계획을 확인해주세요.</p>
+          </div>
+          <!-- Tool Card -->
+          <div class="tool-card">
+            <div class="tool-card__header">
+              <span class="tool-card__status tool-card__status--success"></span>
+              <span class="tool-card__name">회원가입 API 호출</span>
+              <span class="tool-card__method">POST /api/v1/users</span>
+            </div>
+            <div class="tool-card__body">{"status": 201, "userId": "usr_abc123"}</div>
+          </div>
+          <!-- Progress -->
+          <div class="progress">
+            <div class="progress__header">📋 실행 진행 (3/5)</div>
+            <div class="progress__step progress__step--done">
+              <span class="progress__icon">✓</span> Step 1: 이메일 생성
+            </div>
+            <div class="progress__step progress__step--done">
+              <span class="progress__icon">✓</span> Step 2: 비밀번호 생성
+            </div>
+            <div class="progress__step progress__step--active">
+              <span class="progress__icon"><span class="spinner"></span></span> Step 3: 회원가입 API 호출
+            </div>
+            <div class="progress__step progress__step--pending">
+              <span class="progress__icon">○</span> Step 4: 이메일 인증
+            </div>
+            <div class="progress__step progress__step--pending">
+              <span class="progress__icon">○</span> Step 5: 프로필 설정
+            </div>
+          </div>
+          <div class="message__actions">
+            <button class="btn btn--ghost btn--sm">👍</button>
+            <button class="btn btn--ghost btn--sm">👎</button>
+            <button class="btn btn--ghost btn--sm">📋 복사</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Action Picker ═══ -->
+  <section class="catalog-section">
+    <h2>Action Picker</h2>
+    <div style="max-width: 500px;">
+      <div class="action-picker">
+        <div class="action-picker__title">회원가입 데이터 생성</div>
+        <div class="action-picker__fields">
+          <div class="form-group">
+            <label class="form-label">이메일 도메인</label>
+            <input class="input" type="text" value="@test.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">생성 건수</label>
+            <input class="input" type="number" value="5">
+          </div>
+        </div>
+        <div class="action-picker__actions">
+          <button class="btn btn--ghost">취소</button>
+          <button class="btn btn--primary">실행</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Quick Actions ═══ -->
+  <section class="catalog-section">
+    <h2>Quick Actions</h2>
+    <div class="quick-actions">
+      <button class="quick-action"><span class="quick-action__icon">🧪</span> 테스트 데이터 생성</button>
+      <button class="quick-action"><span class="quick-action__icon">🔄</span> 마지막 작업 재실행</button>
+      <button class="quick-action"><span class="quick-action__icon">📋</span> 레시피 목록 보기</button>
+      <button class="quick-action"><span class="quick-action__icon">⚙️</span> 설정 변경</button>
+    </div>
+  </section>
+
+  <!-- ═══ Alerts ═══ -->
+  <section class="catalog-section">
+    <h2>Alerts</h2>
+    <div style="display: flex; flex-direction: column; gap: var(--space-3); max-width: 500px;">
+      <div class="alert alert--success">✓ 레시피 실행이 완료되었습니다. 5건 모두 성공.</div>
+      <div class="alert alert--warning">⚠ 인증 토큰이 30분 후 만료됩니다.</div>
+      <div class="alert alert--error">✕ API 호출 실패: 서버 연결을 확인해주세요.</div>
+      <div class="alert alert--info">ℹ 새로운 레시피 버전이 있습니다.</div>
+    </div>
+  </section>
+
+  <!-- ═══ Modal ═══ -->
+  <section class="catalog-section">
+    <h2>Modal</h2>
+    <div style="position: relative; background: var(--color-bg-overlay); border-radius: var(--radius-lg); padding: var(--space-8); display: flex; align-items: center; justify-content: center;">
+      <div class="modal" style="position: relative; animation: none;">
+        <div class="modal__header">
+          <h3 class="modal__title">대화 삭제</h3>
+          <button class="btn btn--ghost btn--icon">✕</button>
+        </div>
+        <div class="modal__body">
+          <p>이 대화를 삭제하시겠습니까? 삭제된 대화는 복구할 수 없습니다.</p>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary">취소</button>
+          <button class="btn btn--danger">삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Tabs ═══ -->
+  <section class="catalog-section">
+    <h2>Tabs</h2>
+    <div style="background: var(--color-bg-secondary); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border);">
+      <div class="tabs">
+        <button class="tab active">레시피</button>
+        <button class="tab">히스토리</button>
+        <button class="tab">설정</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Sidebar Items ═══ -->
+  <section class="catalog-section">
+    <h2>Sidebar Items</h2>
+    <div style="width: 260px; background: var(--color-bg-secondary); border-radius: var(--radius-lg); padding: var(--space-2) 0; border: 1px solid var(--color-border);">
+      <div class="sidebar-group">오늘</div>
+      <button class="sidebar-item active">
+        <span class="sidebar-item__icon">💬</span>
+        <span class="sidebar-item__text">회원가입 테스트 데이터</span>
+        <span class="badge badge--success sidebar-item__badge">✓</span>
+      </button>
+      <button class="sidebar-item">
+        <span class="sidebar-item__icon">💬</span>
+        <span class="sidebar-item__text">결제 플로우 검증</span>
+        <span class="badge badge--warning sidebar-item__badge">⚠</span>
+      </button>
+      <div class="sidebar-group">어제</div>
+      <button class="sidebar-item">
+        <span class="sidebar-item__icon">💬</span>
+        <span class="sidebar-item__text">상품 등록 API 테스트</span>
+      </button>
+      <button class="sidebar-item">
+        <span class="sidebar-item__icon">💬</span>
+        <span class="sidebar-item__text">주문 취소 시나리오</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ═══ Empty State ═══ -->
+  <section class="catalog-section">
+    <h2>Empty State</h2>
+    <div style="background: var(--color-bg-secondary); border-radius: var(--radius-lg); border: 1px solid var(--color-border);">
+      <div class="empty-state">
+        <div class="empty-state__icon">💬</div>
+        <h3 class="empty-state__title">대화를 시작해보세요</h3>
+        <p class="empty-state__desc">테스트하고 싶은 API나 시나리오를 자연어로 설명해주세요. AI가 적절한 레시피를 찾아 실행합니다.</p>
+        <div class="quick-actions" style="justify-content: center;">
+          <button class="quick-action"><span class="quick-action__icon">🧪</span> 회원가입 테스트</button>
+          <button class="quick-action"><span class="quick-action__icon">📦</span> 상품 등록</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Code Block ═══ -->
+  <section class="catalog-section">
+    <h2>Code Block</h2>
+    <div style="max-width: 500px;">
+      <div class="code-block">
+        <div class="code-block__header">
+          <span>response.json</span>
+          <button class="btn btn--ghost btn--sm">📋 복사</button>
+        </div>
+        <div class="code-block__body">{
+  "status": 201,
+  "data": {
+    "userId": "usr_abc123",
+    "email": "test01@test.com",
+    "createdAt": "2026-08-28T09:00:00Z"
+  }
+}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Loading States ═══ -->
+  <section class="catalog-section">
+    <h2>Loading States</h2>
+    <div class="catalog-row">
+      <span class="spinner"></span>
+      <span class="spinner spinner--lg"></span>
+      <div style="display: flex; flex-direction: column; gap: var(--space-2); width: 200px;">
+        <div class="skeleton skeleton--text" style="width: 100%;"></div>
+        <div class="skeleton skeleton--text" style="width: 60%;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Chat Input ═══ -->
+  <section class="catalog-section">
+    <h2>Chat Input</h2>
+    <div style="max-width: 600px; background: var(--color-bg-primary); border-radius: var(--radius-lg); border: 1px solid var(--color-border);">
+      <div class="chat-input">
+        <div class="chat-input__wrapper">
+          <textarea class="chat-input__field" placeholder="무엇을 테스트할까요?" rows="1"></textarea>
+          <button class="chat-input__send">↑</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>

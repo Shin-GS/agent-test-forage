@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>설정 — AI Test Forge Design</title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/components.css">
+  <style>
+    body { overflow: auto; }
+    .page { min-height: 100vh; background: var(--color-bg-primary); }
+    .page-header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-6); background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: var(--z-sticky); }
+    .page-header__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); flex: 1; }
+    .page-body { max-width: 640px; margin: 0 auto; padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
+    .settings-section { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); }
+    .settings-section__title { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2); }
+    .settings-row { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row__label { font-size: var(--font-size-sm); color: var(--color-text-primary); }
+    .settings-row__desc { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: 2px; }
+    .settings-row__value { min-width: 160px; }
+    .password-form { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border); margin-top: var(--space-3); }
+  </style>
+</head>
+<body>
+
+  <div class="case-switcher">
+    <button class="case-switcher__btn active" onclick="showCase('default')">1. 기본 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('password')">2. 비밀번호 변경</button>
+    <button class="case-switcher__btn" onclick="showCase('saved')">3. 저장 완료</button>
+  </div>
+
+  <!-- Case 1: 기본 -->
+  <div id="case-default" class="screen active">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">설정</span>
+        <button class="btn btn--primary">저장</button>
+      </div>
+      <div class="page-body">
+        <div class="settings-section">
+          <div class="settings-section__title">🤖 AI 설정</div>
+          <div class="settings-row">
+            <div><div class="settings-row__label">AI Provider</div><div class="settings-row__desc">사용할 AI 서비스 선택</div></div>
+            <div class="settings-row__value"><select class="input"><option>OpenAI</option><option>Claude</option><option>OpenRouter</option></select></div>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row__label">모델</div><div class="settings-row__desc">추론에 사용할 모델</div></div>
+            <div class="settings-row__value"><select class="input"><option>gpt-4o</option><option>gpt-4o-mini</option></select></div>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row__label">대화 이력 전달 수</div><div class="settings-row__desc">AI에게 전달하는 최근 대화 건수</div></div>
+            <div class="settings-row__value"><input class="input" type="number" value="15" style="width: 80px;"></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">⚡ 레시피 실행 설정</div>
+          <div class="settings-row">
+            <div><div class="settings-row__label">스텝 타임아웃</div><div class="settings-row__desc">개별 스텝 최대 대기 시간</div></div>
+            <div class="settings-row__value" style="display: flex; align-items: center; gap: var(--space-2);"><input class="input" type="number" value="30" style="width: 80px;"><span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">초</span></div>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row__label">전체 타임아웃</div><div class="settings-row__desc">레시피 전체 최대 실행 시간</div></div>
+            <div class="settings-row__value" style="display: flex; align-items: center; gap: var(--space-2);"><input class="input" type="number" value="300" style="width: 80px;"><span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">초</span></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">👤 계정</div>
+          <div class="settings-row">
+            <div><div class="settings-row__label">비밀번호 변경</div></div>
+            <button class="btn btn--secondary btn--sm">변경하기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 2: 비밀번호 변경 -->
+  <div id="case-password" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">설정</span>
+        <button class="btn btn--primary">저장</button>
+      </div>
+      <div class="page-body">
+        <div class="settings-section">
+          <div class="settings-section__title">🤖 AI 설정</div>
+          <div class="settings-row"><div><div class="settings-row__label">AI Provider</div></div><div class="settings-row__value"><select class="input"><option>OpenAI</option></select></div></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">👤 계정</div>
+          <div class="settings-row">
+            <div><div class="settings-row__label">비밀번호 변경</div></div>
+            <span class="badge badge--info">편집 중</span>
+          </div>
+          <div class="password-form">
+            <div class="form-group"><label class="form-label">현재 비밀번호</label><input class="input" type="password" placeholder="현재 비밀번호 입력"></div>
+            <div class="form-group"><label class="form-label">새 비밀번호</label><input class="input" type="password" placeholder="새 비밀번호 입력"></div>
+            <div class="form-group"><label class="form-label">새 비밀번호 확인</label><input class="input" type="password" placeholder="새 비밀번호 다시 입력"></div>
+            <div style="display: flex; gap: var(--space-2); justify-content: flex-end;">
+              <button class="btn btn--ghost btn--sm">취소</button>
+              <button class="btn btn--primary btn--sm">변경</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 3: 저장 완료 -->
+  <div id="case-saved" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">설정</span>
+        <button class="btn btn--primary">저장</button>
+      </div>
+      <div class="page-body">
+        <div class="settings-section">
+          <div class="settings-section__title">🤖 AI 설정</div>
+          <div class="settings-row"><div><div class="settings-row__label">AI Provider</div></div><div class="settings-row__value"><select class="input"><option>OpenAI</option></select></div></div>
+          <div class="settings-row"><div><div class="settings-row__label">모델</div></div><div class="settings-row__value"><select class="input"><option>gpt-4o</option></select></div></div>
+        </div>
+      </div>
+      <!-- Toast -->
+      <div class="toast" role="status" aria-live="polite">
+        <div style="display: flex; align-items: center; gap: var(--space-2);">
+          <span style="color: var(--color-success);">✓</span>
+          <span style="font-size: var(--font-size-sm); color: var(--color-text-primary);">설정이 저장되었습니다</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showCase(caseId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('case-' + caseId).classList.add('active');
+      document.querySelectorAll('.case-switcher__btn').forEach(b => {
+        if (b.getAttribute('onclick').includes("'" + caseId + "'")) b.classList.add('active');
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>사이드 패널 — AI Test Forge Design</title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/components.css">
+  <style>
+    body {
+      overflow: auto;
+    }
+
+    /* 패널 단독 표시용 래퍼 */
+    .panel-demo {
+      width: 360px;
+      height: 700px;
+      margin: var(--space-4) auto;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 패널 탭 */
+    .panel-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .panel-tab {
+      flex: 1;
+      padding: var(--space-3);
+      text-align: center;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all var(--transition-fast);
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+    }
+
+    .panel-tab:hover {
+      color: var(--color-text-primary);
+    }
+
+    .panel-tab.active {
+      color: var(--color-accent);
+      border-bottom-color: var(--color-accent);
+    }
+
+    /* 패널 콘텐츠 */
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-3);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    /* 서브 필터 탭 */
+    .sub-filters {
+      display: flex;
+      gap: var(--space-1);
+      flex-wrap: wrap;
+    }
+
+    .sub-filter {
+      padding: var(--space-1) var(--space-2);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-text-secondary);
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .sub-filter:hover {
+      color: var(--color-text-primary);
+      border-color: var(--color-border-light);
+    }
+
+    .sub-filter.active {
+      color: var(--color-accent);
+      background: var(--color-accent-subtle);
+      border-color: var(--color-accent);
+    }
+
+    /* 레시피 아이템 */
+    .recipe-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: var(--space-3);
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .recipe-item:hover {
+      border-color: var(--color-border-light);
+      background: var(--color-bg-hover);
+    }
+
+    .recipe-item__header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .recipe-item__name {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-text-primary);
+      flex: 1;
+    }
+
+    .recipe-item__star {
+      color: var(--color-warning);
+      font-size: var(--font-size-xs);
+      cursor: pointer;
+    }
+
+    .recipe-item__play {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-accent-subtle);
+      color: var(--color-accent);
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
+    }
+
+    .recipe-item__play:hover {
+      background: var(--color-accent);
+      color: #fff;
+    }
+
+    .recipe-item__meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+    }
+
+    /* 히스토리 아이템 */
+    .history-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: var(--space-3);
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .history-item:hover {
+      border-color: var(--color-border-light);
+    }
+
+    .history-item__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .history-item__name {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-text-primary);
+    }
+
+    .history-item__time {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+    }
+
+    .history-item__summary {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+    }
+
+    /* 패널 헤더 (상세 뷰) */
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3);
+      border-bottom: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .panel-header__back {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .panel-header__back:hover {
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
+    }
+
+    .panel-header__title {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+    }
+
+    /* 스텝 목록 */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-bg-primary);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+    }
+
+    .step-item__number {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-secondary);
+      flex-shrink: 0;
+    }
+
+    .step-item__name {
+      flex: 1;
+      color: var(--color-text-primary);
+    }
+
+    .step-item__type {
+      font-size: var(--font-size-xs);
+      padding: 2px var(--space-2);
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-tertiary);
+    }
+
+    /* 결과 스텝 */
+    .result-step {
+      padding: var(--space-3);
+      background: var(--color-bg-primary);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+    }
+
+    .result-step__header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-2);
+      font-size: var(--font-size-sm);
+    }
+
+    .result-step__status--success {
+      color: var(--color-success);
+    }
+    .result-step__status--error {
+      color: var(--color-error);
+    }
+
+    .result-step__body {
+      font-family: var(--font-mono);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+      background: var(--color-bg-tertiary);
+      padding: var(--space-2);
+      border-radius: var(--radius-sm);
+      max-height: 100px;
+      overflow-y: auto;
+      white-space: pre;
+    }
+
+    /* 패널 하단 고정 */
+    .panel-footer {
+      padding: var(--space-3);
+      border-top: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    /* 섹션 헤더 */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: var(--space-2);
+    }
+
+    .section-header__link {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-link);
+      text-transform: none;
+      letter-spacing: normal;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Case Switcher -->
+  <div class="case-switcher">
+    <button class="case-switcher__btn active" onclick="showCase('recipe-list')">1. 레시피 목록</button>
+    <button class="case-switcher__btn" onclick="showCase('recipe-detail')">2. 레시피 상세</button>
+    <button class="case-switcher__btn" onclick="showCase('history-list')">3. 히스토리</button>
+    <button class="case-switcher__btn" onclick="showCase('result-detail')">4. 결과 상세</button>
+    <button class="case-switcher__btn" onclick="showCase('empty')">5. 빈 상태</button>
+  </div>
+
+  <!-- ═══ Case 1: 레시피 목록 ═══ -->
+  <div id="case-recipe-list" class="screen active">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab active">레시피</button>
+        <button class="panel-tab">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <!-- 검색 -->
+        <input class="input" type="text" placeholder="🔍 레시피 검색...">
+        <!-- 필터 -->
+        <div class="sub-filters">
+          <button class="sub-filter active">전체</button>
+          <button class="sub-filter">⭐ 즐겨찾기</button>
+          <button class="sub-filter">내 레시피</button>
+          <button class="sub-filter">공통</button>
+        </div>
+        <!-- 레시피 목록 -->
+        <div class="recipe-item">
+          <div class="recipe-item__header">
+            <span class="recipe-item__name">회원가입</span>
+            <span class="badge badge--neutral">사람인</span>
+            <span class="recipe-item__star">⭐</span>
+            <button class="recipe-item__play" title="바로 실행">▶</button>
+          </div>
+          <div class="recipe-item__meta">
+            <span>마지막 실행: 10분 전</span>
+            <span class="badge badge--success" style="font-size: 10px;">성공</span>
+          </div>
+        </div>
+        <div class="recipe-item">
+          <div class="recipe-item__header">
+            <span class="recipe-item__name">공고 등록</span>
+            <span class="badge badge--neutral">사람인</span>
+            <span class="recipe-item__star" style="opacity: 0.3;">☆</span>
+            <button class="recipe-item__play" title="바로 실행">▶</button>
+          </div>
+          <div class="recipe-item__meta">
+            <span>마지막 실행: 2시간 전</span>
+            <span class="badge badge--success" style="font-size: 10px;">성공</span>
+          </div>
+        </div>
+        <div class="recipe-item">
+          <div class="recipe-item__header">
+            <span class="recipe-item__name">입사지원</span>
+            <span class="badge badge--neutral">잡코리아</span>
+            <span class="recipe-item__star" style="opacity: 0.3;">☆</span>
+            <button class="recipe-item__play" title="바로 실행">▶</button>
+          </div>
+          <div class="recipe-item__meta">
+            <span>마지막 실행: 어제</span>
+            <span class="badge badge--error" style="font-size: 10px;">실패</span>
+          </div>
+        </div>
+        <div class="recipe-item">
+          <div class="recipe-item__header">
+            <span class="recipe-item__name">결제 플로우</span>
+            <span class="badge badge--neutral">쇼핑몰</span>
+            <span class="recipe-item__star">⭐</span>
+            <button class="recipe-item__play" title="바로 실행">▶</button>
+          </div>
+          <div class="recipe-item__meta">
+            <span>실행한 적 없음</span>
+          </div>
+        </div>
+        <!-- 최근 실행 섹션 -->
+        <div class="section-header">
+          <span>최근 실행</span>
+          <span class="section-header__link">전체 히스토리 →</span>
+        </div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">회원가입 × 5</span>
+            <span class="badge badge--warning" style="font-size: 10px;">부분실패</span>
+          </div>
+          <div class="history-item__summary">09:15 · 3/5 성공</div>
+        </div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">공고 등록</span>
+            <span class="badge badge--success" style="font-size: 10px;">성공</span>
+          </div>
+          <div class="history-item__summary">08:42 · 전체 성공</div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn--secondary btn--full btn--sm">+ 레시피 만들기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 2: 레시피 상세 ═══ -->
+  <div id="case-recipe-detail" class="screen">
+    <div class="panel-demo">
+      <div class="panel-header">
+        <button class="panel-header__back" aria-label="뒤로가기">←</button>
+        <span class="panel-header__title">회원가입</span>
+        <span class="badge badge--neutral" style="margin-left: auto;">사람인</span>
+      </div>
+      <div class="panel-body">
+        <!-- 레시피 정보 -->
+        <div style="display: flex; flex-direction: column; gap: var(--space-2);">
+          <div style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">
+            작성자: admin · 최종 수정: 2026-08-25
+          </div>
+          <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); line-height: var(--line-height-relaxed);">
+            사람인 서비스에 테스트 회원을 등록하는 레시피입니다. 이메일 생성부터 프로필 설정까지 전체 플로우를 실행합니다.
+          </p>
+        </div>
+        <!-- 스텝 목록 -->
+        <div class="section-header" style="margin-bottom: var(--space-2);">
+          <span>스텝 구성 (5단계)</span>
+        </div>
+        <div class="step-list">
+          <div class="step-item">
+            <span class="step-item__number">1</span>
+            <span class="step-item__name">이메일 생성</span>
+            <span class="step-item__type">스크립트</span>
+          </div>
+          <div class="step-item">
+            <span class="step-item__number">2</span>
+            <span class="step-item__name">비밀번호 생성</span>
+            <span class="step-item__type">스크립트</span>
+          </div>
+          <div class="step-item">
+            <span class="step-item__number">3</span>
+            <span class="step-item__name">회원가입 API</span>
+            <span class="step-item__type">API</span>
+          </div>
+          <div class="step-item">
+            <span class="step-item__number">4</span>
+            <span class="step-item__name">이메일 인증</span>
+            <span class="step-item__type">API</span>
+          </div>
+          <div class="step-item">
+            <span class="step-item__number">5</span>
+            <span class="step-item__name">프로필 설정</span>
+            <span class="step-item__type">API</span>
+          </div>
+        </div>
+        <!-- 최근 실행 이력 -->
+        <div class="section-header" style="margin-bottom: var(--space-2);">
+          <span>최근 실행</span>
+        </div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">× 5 실행</span>
+            <span class="history-item__time">09:15</span>
+          </div>
+          <div class="history-item__summary">3/5 성공 · 프로필 설정 2건 실패</div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn--primary btn--full">실행하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 3: 히스토리 목록 ═══ -->
+  <div id="case-history-list" class="screen">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab">레시피</button>
+        <button class="panel-tab active">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <div class="section-header"><span>오늘</span></div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">회원가입 × 5</span>
+            <span class="badge badge--warning" style="font-size: 10px;">부분실패</span>
+          </div>
+          <div class="history-item__summary">09:15 · 3/5 성공 · 사람인</div>
+        </div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">공고 등록</span>
+            <span class="badge badge--success" style="font-size: 10px;">성공</span>
+          </div>
+          <div class="history-item__summary">08:42 · 전체 성공 · 사람인</div>
+        </div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">회원가입 × 3</span>
+            <span class="badge badge--success" style="font-size: 10px;">성공</span>
+          </div>
+          <div class="history-item__summary">08:10 · 전체 성공 · 사람인</div>
+        </div>
+        <div class="section-header"><span>어제</span></div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">입사지원</span>
+            <span class="badge badge--error" style="font-size: 10px;">실패</span>
+          </div>
+          <div class="history-item__summary">17:30 · Step 3 실패 · 잡코리아</div>
+        </div>
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">결제 플로우</span>
+            <span class="badge badge--success" style="font-size: 10px;">성공</span>
+          </div>
+          <div class="history-item__summary">15:20 · 전체 성공 · 쇼핑몰</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 4: 실행 결과 상세 ═══ -->
+  <div id="case-result-detail" class="screen">
+    <div class="panel-demo">
+      <div class="panel-header">
+        <button class="panel-header__back" aria-label="뒤로가기">←</button>
+        <span class="panel-header__title">실행 결과</span>
+      </div>
+      <div class="panel-body">
+        <!-- 기본 정보 -->
+        <div class="card">
+          <div class="card__header">
+            <span class="card__title">회원가입</span>
+            <span class="badge badge--warning">부분실패</span>
+          </div>
+          <div class="card__body" style="display: flex; flex-direction: column; gap: var(--space-1);">
+            <span>실행 시각: 2026-08-28 09:15</span>
+            <span>소요 시간: 12초</span>
+            <span>결과: 3/5 성공</span>
+          </div>
+        </div>
+        <!-- 스텝별 결과 -->
+        <div class="section-header"><span>스텝별 결과</span></div>
+        <div class="result-step">
+          <div class="result-step__header">
+            <span class="result-step__status--success">✓</span>
+            <span style="font-weight: var(--font-weight-medium); color: var(--color-text-primary);">이메일 생성</span>
+          </div>
+          <div class="result-step__body">["test01@company.co.kr", "test02@company.co.kr", "test03@company.co.kr"]</div>
+        </div>
+        <div class="result-step">
+          <div class="result-step__header">
+            <span class="result-step__status--success">✓</span>
+            <span style="font-weight: var(--font-weight-medium); color: var(--color-text-primary);">회원가입 API</span>
+          </div>
+          <div class="result-step__body">{"status": 201, "count": 5}</div>
+        </div>
+        <div class="result-step" style="border-color: rgba(239, 68, 68, 0.3);">
+          <div class="result-step__header">
+            <span class="result-step__status--error">✕</span>
+            <span style="font-weight: var(--font-weight-medium); color: var(--color-text-primary);">프로필 설정</span>
+            <span class="badge badge--error" style="margin-left: auto;">2건 실패</span>
+          </div>
+          <div class="result-step__body">{"error": "DUPLICATE_NICKNAME", "message": "이미 사용 중인 닉네임입니다"}</div>
+        </div>
+      </div>
+      <div class="panel-footer" style="display: flex; gap: var(--space-2);">
+        <button class="btn btn--secondary btn--sm" style="flex: 1;">실패 건 재실행</button>
+        <button class="btn btn--ghost btn--sm" style="flex: 1;">전체 재실행</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 5: 빈 상태 ═══ -->
+  <div id="case-empty" class="screen">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab active">레시피</button>
+        <button class="panel-tab">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <input class="input" type="text" placeholder="🔍 레시피 검색...">
+        <div class="sub-filters">
+          <button class="sub-filter active">전체</button>
+          <button class="sub-filter">⭐ 즐겨찾기</button>
+          <button class="sub-filter">내 레시피</button>
+          <button class="sub-filter">공통</button>
+        </div>
+        <!-- Empty state -->
+        <div class="empty-state" style="padding: var(--space-8) var(--space-4);">
+          <div class="empty-state__icon">📋</div>
+          <h3 class="empty-state__title" style="font-size: var(--font-size-sm);">아직 레시피가 없어요</h3>
+          <p class="empty-state__desc" style="font-size: var(--font-size-xs);">
+            관리자에게 요청하거나 직접 만들어보세요.
+          </p>
+          <button class="btn btn--primary btn--sm">+ 레시피 만들기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showCase(caseId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('case-' + caseId).classList.add('active');
+      document.querySelectorAll('.case-switcher__btn').forEach(b => {
+        if (b.getAttribute('onclick').includes("'" + caseId + "'")) b.classList.add('active');
+      });
+    }
+  </script>
+
+</body>
+</html>

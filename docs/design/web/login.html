@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로그인 — AI Test Forge Design</title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/components.css">
+  <style>
+    body {
+      overflow: auto;
+    }
+
+    .login-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4);
+      background: var(--color-bg-primary);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-8);
+    }
+
+    .login-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-3);
+      margin-bottom: var(--space-8);
+    }
+
+    .login-logo__icon {
+      width: 48px;
+      height: 48px;
+      background: var(--color-accent-subtle);
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--font-size-2xl);
+    }
+
+    .login-logo__title {
+      font-size: var(--font-size-xl);
+      font-weight: var(--font-weight-bold);
+      color: var(--color-text-primary);
+    }
+
+    .login-logo__subtitle {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .login-form .btn {
+      margin-top: var(--space-2);
+    }
+
+    .password-wrapper {
+      position: relative;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: var(--space-3);
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--color-text-tertiary);
+      font-size: var(--font-size-sm);
+      cursor: pointer;
+      padding: var(--space-1);
+      border-radius: var(--radius-sm);
+    }
+
+    .password-toggle:hover {
+      color: var(--color-text-secondary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Case Switcher -->
+  <div class="case-switcher">
+    <button class="case-switcher__btn active" onclick="showCase('default')">1. 기본 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('filled')">2. 입력 중</button>
+    <button class="case-switcher__btn" onclick="showCase('loading')">3. 로딩</button>
+    <button class="case-switcher__btn" onclick="showCase('error')">4. 로그인 실패</button>
+  </div>
+
+  <!-- Case 1: 기본 상태 -->
+  <div id="case-default" class="screen active">
+    <div class="login-page">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo__icon">⚡</div>
+          <h1 class="login-logo__title">AI Test Forge</h1>
+          <p class="login-logo__subtitle">API 워크플로우 실행 플랫폼</p>
+        </div>
+        <form class="login-form">
+          <div class="form-group">
+            <label class="form-label" for="id-1">아이디</label>
+            <input class="input" id="id-1" type="text" placeholder="아이디를 입력하세요" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pw-1">비밀번호</label>
+            <input class="input" id="pw-1" type="password" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+          </div>
+          <button class="btn btn--primary btn--full btn--lg" type="button" disabled>로그인</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 2: 입력 중 -->
+  <div id="case-filled" class="screen">
+    <div class="login-page">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo__icon">⚡</div>
+          <h1 class="login-logo__title">AI Test Forge</h1>
+          <p class="login-logo__subtitle">API 워크플로우 실행 플랫폼</p>
+        </div>
+        <form class="login-form">
+          <div class="form-group">
+            <label class="form-label" for="id-2">아이디</label>
+            <input class="input" id="id-2" type="text" value="admin" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pw-2">비밀번호</label>
+            <div class="password-wrapper">
+              <input class="input" id="pw-2" type="password" value="password123" autocomplete="current-password">
+              <button type="button" class="password-toggle" aria-label="비밀번호 표시">👁</button>
+            </div>
+          </div>
+          <button class="btn btn--primary btn--full btn--lg" type="button">로그인</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 3: 로딩 -->
+  <div id="case-loading" class="screen">
+    <div class="login-page">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo__icon">⚡</div>
+          <h1 class="login-logo__title">AI Test Forge</h1>
+          <p class="login-logo__subtitle">API 워크플로우 실행 플랫폼</p>
+        </div>
+        <form class="login-form">
+          <div class="form-group">
+            <label class="form-label" for="id-3">아이디</label>
+            <input class="input" id="id-3" type="text" value="admin" disabled autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pw-3">비밀번호</label>
+            <input class="input" id="pw-3" type="password" value="password123" disabled autocomplete="current-password">
+          </div>
+          <button class="btn btn--primary btn--full btn--lg" type="button" disabled>
+            <span class="spinner"></span> 로그인 중...
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 4: 로그인 실패 -->
+  <div id="case-error" class="screen">
+    <div class="login-page">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo__icon">⚡</div>
+          <h1 class="login-logo__title">AI Test Forge</h1>
+          <p class="login-logo__subtitle">API 워크플로우 실행 플랫폼</p>
+        </div>
+        <form class="login-form">
+          <div class="alert alert--error" role="alert" aria-live="polite">
+            ✕ 아이디 또는 비밀번호가 올바르지 않습니다
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="id-4">아이디</label>
+            <input class="input" id="id-4" type="text" value="admin" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pw-4">비밀번호</label>
+            <input class="input input--error" id="pw-4" type="password" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+          </div>
+          <button class="btn btn--primary btn--full btn--lg" type="button">로그인</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showCase(caseId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('case-' + caseId).classList.add('active');
+      document.querySelectorAll('.case-switcher__btn').forEach(b => {
+        if (b.getAttribute('onclick').includes("'" + caseId + "'")) b.classList.add('active');
+      });
+    }
+  </script>
+
+</body>
+</html>

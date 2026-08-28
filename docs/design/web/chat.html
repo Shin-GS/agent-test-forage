@@ -1,0 +1,858 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>채팅 — AI Test Forge Design</title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/components.css">
+  <style>
+    .chat-messages { flex: 1; overflow-y: auto; padding: var(--space-4) 0; }
+
+    .chat-welcome {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: var(--space-6); padding: var(--space-8);
+    }
+    .chat-welcome__icon { width: 64px; height: 64px; background: var(--color-accent-subtle); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; font-size: 32px; }
+    .chat-welcome__title { font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); text-align: center; }
+    .chat-welcome__desc { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-align: center; max-width: 400px; }
+
+    .chat-header { display: flex; align-items: center; gap: var(--space-3); height: var(--header-height); padding: 0 var(--space-4); background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
+    .chat-header__title { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+    .chat-header__service { display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-2); background: var(--color-bg-tertiary); border-radius: var(--radius-sm); font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+    .chat-header__change { font-size: var(--font-size-xs); color: var(--color-text-link); cursor: pointer; }
+
+    .typing-indicator { display: flex; gap: var(--space-3); padding: var(--space-4) var(--space-6); }
+    .typing-dots { display: flex; align-items: center; gap: 4px; padding: var(--space-2) var(--space-3); background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+    .typing-dots span { width: 6px; height: 6px; background: var(--color-text-tertiary); border-radius: var(--radius-full); animation: typingBounce 1.4s ease-in-out infinite; }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+
+    .action-picker-area { padding: var(--space-3) var(--space-4); background: var(--color-bg-primary); border-top: 1px solid var(--color-border); }
+    .chat-input--disabled { opacity: 0.5; pointer-events: none; }
+
+    .result-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); margin: var(--space-2) 0; }
+    .result-card__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
+    .result-card__title { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+    .result-card__time { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+    .result-card__summary { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-3); font-size: var(--font-size-sm); }
+    .result-card__item--success { color: var(--color-success); }
+    .result-card__item--error { color: var(--color-error); }
+
+    .panel-placeholder { flex: 1; display: flex; flex-direction: column; }
+
+    /* 참조 태그 */
+    .reference-tag { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: 0 var(--space-4); background: var(--color-accent-subtle); border: 1px solid var(--color-accent); border-radius: var(--radius-md) var(--radius-md) 0 0; border-bottom: none; font-size: var(--font-size-xs); color: var(--color-accent); }
+    .reference-tag__close { margin-left: auto; cursor: pointer; opacity: 0.7; }
+    .reference-tag__close:hover { opacity: 1; }
+
+    /* 후보 선택 카드 */
+    .candidate-list { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-2) 0; }
+    .candidate-item { padding: var(--space-3); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer; transition: all var(--transition-fast); }
+    .candidate-item:hover { border-color: var(--color-accent); background: var(--color-accent-subtle); }
+    .candidate-item__name { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
+    .candidate-item__desc { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+  <div class="case-switcher">
+    <button class="case-switcher__btn active" onclick="showCase('empty')">1. 첫 접속</button>
+    <button class="case-switcher__btn" onclick="showCase('conversation')">2. 대화 진행</button>
+    <button class="case-switcher__btn" onclick="showCase('executing')">3. 실행 중</button>
+    <button class="case-switcher__btn" onclick="showCase('action-picker')">4. 액션 피커</button>
+    <button class="case-switcher__btn" onclick="showCase('result')">5. 결과 요약</button>
+    <button class="case-switcher__btn" onclick="showCase('error')">6. 에러</button>
+    <button class="case-switcher__btn" onclick="showCase('collapsed')">7. 접힘 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('candidates')">8. 후보 선택</button>
+    <button class="case-switcher__btn" onclick="showCase('reference')">9. 참조 태그</button>
+    <button class="case-switcher__btn" onclick="showCase('manage')">10. 대화 관리</button>
+    <button class="case-switcher__btn" onclick="showCase('plan-propose')">11. 플랜 제안</button>
+    <button class="case-switcher__btn" onclick="showCase('plan-executing')">12. 플랜 실행 중</button>
+    <button class="case-switcher__btn" onclick="showCase('stopped')">13. 중단 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('auth-required')">14. 인증 요구</button>
+    <button class="case-switcher__btn" onclick="showCase('service-select')">15. 서비스 선택</button>
+  </div>
+
+  <!-- ═══ Case 1: 첫 접속 ═══ -->
+  <div id="case-empty" class="screen active">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-header__title">대화</span>
+          <button class="btn btn--ghost btn--sm">+ 새 대화</button>
+        </div>
+        <div class="sidebar-list">
+          <div style="padding: var(--space-6) var(--space-4); text-align: center;">
+            <p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary);">대화가 없습니다</p>
+          </div>
+        </div>
+        <div class="sidebar-footer">
+          <button class="sidebar-footer__icon active">💬</button>
+          <button class="sidebar-footer__icon">📋</button>
+          <button class="sidebar-footer__icon">📊</button>
+          <button class="sidebar-footer__icon">⚙️</button>
+        </div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-welcome">
+              <div class="chat-welcome__icon">⚡</div>
+              <h2 class="chat-welcome__title">무엇을 테스트할까요?</h2>
+              <p class="chat-welcome__desc">테스트하고 싶은 API나 시나리오를 설명해주세요. AI가 적절한 레시피를 찾아 실행합니다.</p>
+              <div class="quick-actions">
+                <button class="quick-action"><span class="quick-action__icon">🧪</span> 회원가입 테스트</button>
+                <button class="quick-action"><span class="quick-action__icon">📦</span> 상품 등록</button>
+                <button class="quick-action"><span class="quick-action__icon">💳</span> 결제 플로우</button>
+              </div>
+            </div>
+            <div class="chat-input">
+              <div class="chat-input__wrapper">
+                <textarea class="chat-input__field" placeholder="테스트하고 싶은 내용을 입력하세요" rows="1"></textarea>
+                <button class="chat-input__send" disabled>↑</button>
+              </div>
+            </div>
+          </div>
+          <aside class="side-panel">
+            <div class="panel-placeholder">
+              <div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div>
+              <div class="panel-content">
+                <div class="form-group" style="margin-bottom: var(--space-3);"><input class="input" type="text" placeholder="🔍 레시피 검색..."></div>
+                <div style="display: flex; flex-direction: column; gap: var(--space-2);">
+                  <div class="card card--interactive"><div class="card__header"><span class="card__title">회원가입</span><span class="badge badge--neutral">사람인</span></div><div class="card__body">사람인 회원가입 플로우 실행</div></div>
+                  <div class="card card--interactive"><div class="card__header"><span class="card__title">공고 등록</span><span class="badge badge--neutral">사람인</span></div><div class="card__body">채용공고 등록 API 실행</div></div>
+                  <div class="card card--interactive"><div class="card__header"><span class="card__title">입사지원</span><span class="badge badge--neutral">잡코리아</span></div><div class="card__body">잡코리아 입사지원 플로우</div></div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 2: 대화 진행 중 ═══ -->
+  <div id="case-conversation" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row">
+              <span class="sidebar-item__icon">💬</span>
+              <span class="sidebar-item__text">회원가입 테스트</span>
+              <span class="sidebar-item__time">3분 전</span>
+            </div>
+            <div class="sidebar-item__meta">
+              <span class="sidebar-item__service">사람인</span>
+              <span class="sidebar-item__status">🔄</span>
+            </div>
+          </button>
+          <button class="sidebar-item">
+            <div class="sidebar-item__row">
+              <span class="sidebar-item__icon">💬</span>
+              <span class="sidebar-item__text">결제 플로우 검증</span>
+              <span class="sidebar-item__time">2시간 전</span>
+            </div>
+            <div class="sidebar-item__meta">
+              <span class="sidebar-item__service">쇼핑몰</span>
+              <span class="sidebar-item__status">🔵</span>
+            </div>
+          </button>
+          <button class="sidebar-item">
+            <div class="sidebar-item__row">
+              <span class="sidebar-item__icon">💬</span>
+              <span class="sidebar-item__text">상품 등록 API</span>
+              <span class="sidebar-item__time">어제</span>
+            </div>
+            <div class="sidebar-item__meta">
+              <span class="sidebar-item__service">쇼핑몰</span>
+            </div>
+          </button>
+          <button class="sidebar-item">
+            <div class="sidebar-item__row">
+              <span class="sidebar-item__icon">💬</span>
+              <span class="sidebar-item__text">입사지원 시나리오</span>
+              <span class="sidebar-item__time">8/25</span>
+            </div>
+            <div class="sidebar-item__meta">
+              <span class="sidebar-item__service">잡코리아</span>
+            </div>
+          </button>
+        </div>
+        <div class="sidebar-footer">
+          <button class="sidebar-footer__icon active">💬</button>
+          <button class="sidebar-footer__icon">📋</button>
+          <button class="sidebar-footer__icon">📊</button>
+          <button class="sidebar-footer__icon">⚙️</button>
+        </div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header">
+              <span class="chat-header__title">회원가입 테스트</span>
+              <span class="chat-header__service">🏷️ 사람인</span>
+              <span class="chat-header__change">[변경]</span>
+            </div>
+            <div class="chat-messages">
+              <div class="message message--user">
+                <div class="avatar avatar--user message__avatar">U</div>
+                <div class="message__body">
+                  <span class="message__sender">나</span>
+                  <div class="message__content"><p>회원가입 테스트 데이터 3건 만들어줘</p></div>
+                </div>
+              </div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div>
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>사람인 회원가입 레시피를 3회 실행하겠습니다.</p></div>
+                  <div class="tool-card">
+                    <div class="tool-card__header"><span class="tool-card__status tool-card__status--success"></span><span class="tool-card__name">회원가입</span><span class="tool-card__method">POST /api/v1/users</span></div>
+                    <div class="tool-card__body">{"status": 201, "userId": "usr_x7k2m"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input">
+              <div class="chat-input__wrapper">
+                <textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea>
+                <button class="chat-input__send">↑</button>
+              </div>
+            </div>
+          </div>
+          <aside class="side-panel">
+            <div class="panel-placeholder">
+              <div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div>
+              <div class="panel-content">
+                <div class="card card--highlighted"><div class="card__header"><span class="card__title">회원가입</span><span class="badge badge--success">실행됨</span></div><div class="card__body">사람인 회원가입 플로우</div></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 3: 레시피 실행 중 ═══ -->
+  <div id="case-executing" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">회원가입 테스트</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span><span class="sidebar-item__status">🔄</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">회원가입 테스트</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>자동 실행으로 해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>자동 실행 모드로 회원가입 레시피를 시작합니다.</p></div>
+                  <div class="progress">
+                    <div class="progress__header">📋 회원가입 실행 중 (2/5)</div>
+                    <div class="progress__step progress__step--done"><span class="progress__icon">✓</span> 이메일 생성</div>
+                    <div class="progress__step progress__step--done"><span class="progress__icon">✓</span> 비밀번호 생성</div>
+                    <div class="progress__step progress__step--active"><span class="progress__icon"><span class="spinner"></span></span> 회원가입 API 호출</div>
+                    <div class="progress__step progress__step--pending"><span class="progress__icon">○</span> 이메일 인증</div>
+                    <div class="progress__step progress__step--pending"><span class="progress__icon">○</span> 프로필 설정</div>
+                  </div>
+                </div>
+              </div>
+              <div class="typing-indicator"><div class="avatar avatar--ai">⚡</div><div class="typing-dots"><span></span><span></span><span></span></div></div>
+            </div>
+            <div class="chat-input chat-input--disabled"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="실행 중에는 입력할 수 없습니다" rows="1" disabled></textarea><button class="chat-input__send" disabled>↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="card card--highlighted"><div class="card__header"><span class="card__title">회원가입</span><span class="badge badge--warning">실행 중</span></div><div class="card__body">Step 3/5 진행 중...</div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 4: 액션 피커 (다중 필드) ═══ -->
+  <div id="case-action-picker" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">입사지원 테스트</span><span class="sidebar-item__time">1분 전</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span><span class="sidebar-item__status">🟡</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">입사지원 테스트</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>네이버 백엔드 공고에 입사지원 해줘</p></div></div></div>
+              <div class="message"><div class="avatar avatar--ai message__avatar">⚡</div><div class="message__body"><span class="message__sender">AI Test Forge</span><div class="message__content"><p>입사지원 레시피를 실행합니다. 아래 정보를 입력해주세요.</p></div></div></div>
+            </div>
+            <div class="action-picker-area">
+              <div class="action-picker">
+                <div class="action-picker__title">지원 정보 입력</div>
+                <div class="action-picker__fields">
+                  <div class="form-group"><label class="form-label">공고 선택 *</label><input class="input" type="text" value="네이버 백엔드 (3년차)" readonly></div>
+                  <div class="form-group"><label class="form-label">지원 유형 *</label>
+                    <div style="display: flex; gap: var(--space-3); font-size: var(--font-size-sm); color: var(--color-text-primary);">
+                      <label style="display: flex; align-items: center; gap: var(--space-1); cursor: pointer;"><input type="radio" name="type" checked> 정규직</label>
+                      <label style="display: flex; align-items: center; gap: var(--space-1); cursor: pointer;"><input type="radio" name="type"> 계약직</label>
+                      <label style="display: flex; align-items: center; gap: var(--space-1); cursor: pointer;"><input type="radio" name="type"> 인턴</label>
+                    </div>
+                  </div>
+                  <div class="form-group"><label class="form-label">희망 연봉 (만원)</label><input class="input" type="number" value="5000"></div>
+                </div>
+                <div class="action-picker__actions"><button class="btn btn--ghost">취소</button><button class="btn btn--primary">확인</button></div>
+              </div>
+            </div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="card card--highlighted"><div class="card__header"><span class="card__title">입사지원</span><span class="badge badge--warning">입력 대기</span></div><div class="card__body">사람인 입사지원 플로우</div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 5: 결과 요약 ═══ -->
+  <div id="case-result" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">회원가입 테스트</span><span class="sidebar-item__time">5분 전</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">회원가입 테스트</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 5건 자동으로 실행해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div>
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>회원가입 레시피 5건 실행이 완료되었습니다.</p></div>
+                  <div class="result-card">
+                    <div class="result-card__header"><span class="result-card__title">📋 회원가입 × 5</span><span class="result-card__time">09:15</span></div>
+                    <div class="result-card__summary">
+                      <span class="result-card__item--success">✓ 이메일 생성 — 5/5 성공</span>
+                      <span class="result-card__item--success">✓ 회원가입 API — 5/5 성공</span>
+                      <span class="result-card__item--error">✕ 프로필 설정 — 3/5 성공, 2건 실패</span>
+                    </div>
+                    <div style="display: flex; gap: var(--space-2);"><button class="btn btn--secondary btn--sm">결과 보기</button><button class="btn btn--ghost btn--sm">다시 실행</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab">레시피</button><button class="panel-tab active">히스토리</button></div><div class="panel-content"><div class="card"><div class="card__header"><span class="card__title">회원가입 × 5</span><span class="badge badge--warning">부분 실패</span></div><div class="card__body"><p>09:15 완료 · 3/5 성공</p><button class="btn btn--secondary btn--sm btn--full" style="margin-top: var(--space-2);">상세 보기</button></div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 6: 에러 ═══ -->
+  <div id="case-error" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">결제 플로우 검증</span><span class="sidebar-item__time">10분 전</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">쇼핑몰</span><span class="sidebar-item__status" style="color: var(--color-error);">!</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">결제 플로우 검증</span><span class="chat-header__service">🏷️ 쇼핑몰</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>결제 테스트 실행해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>결제 레시피 실행 중 오류가 발생했습니다.</p></div>
+                  <div class="tool-card" style="border-color: rgba(239, 68, 68, 0.3);">
+                    <div class="tool-card__header"><span class="tool-card__status tool-card__status--error"></span><span class="tool-card__name">결제 API 호출 실패</span><span class="tool-card__method">POST /api/v1/payments</span></div>
+                    <div class="tool-card__body">{"error": "TIMEOUT", "message": "서버 응답 시간 초과 (30s)"}</div>
+                  </div>
+                  <div class="alert alert--error" style="margin-top: var(--space-2);">✕ Step 3에서 실패: 결제 서버 응답 시간 초과.</div>
+                  <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);"><button class="btn btn--primary btn--sm">다시 시도</button><button class="btn btn--ghost btn--sm">실행 취소</button></div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab">레시피</button><button class="panel-tab active">히스토리</button></div><div class="panel-content"><div class="card" style="border-color: rgba(239, 68, 68, 0.3);"><div class="card__header"><span class="card__title">결제 플로우</span><span class="badge badge--error">실패</span></div><div class="card__body"><p style="color: var(--color-error); font-size: var(--font-size-xs);">TIMEOUT: 서버 응답 시간 초과</p></div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 7: 접힘 상태 ═══ -->
+  <div id="case-collapsed" class="screen">
+    <div class="app">
+      <aside class="app-sidebar collapsed">
+        <div class="sidebar-header" style="justify-content: center; padding: var(--space-3) var(--space-2);"><button class="btn btn--ghost btn--sm" title="사이드바 펼치기">☰</button></div>
+        <div class="sidebar-footer" style="flex-direction: column; gap: var(--space-2);"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header">
+              <button class="btn btn--ghost btn--icon" title="사이드바 펼치기">☰</button>
+              <span class="chat-header__title">회원가입 테스트</span>
+              <span class="chat-header__service">🏷️ 사람인</span>
+              <span style="margin-left: auto;"></span>
+              <button class="btn btn--ghost btn--icon" title="패널 열기">◀</button>
+            </div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 테스트 3건 만들어줘</p></div></div></div>
+              <div class="message"><div class="avatar avatar--ai message__avatar">⚡</div><div class="message__body"><div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div><span class="message__sender">AI Test Forge</span><div class="message__content"><p>사람인 회원가입 레시피를 3회 실행하겠습니다. 패널이 닫힌 상태에서 채팅 영역이 넓게 표시됩니다.</p></div><div class="tool-card"><div class="tool-card__header"><span class="tool-card__status tool-card__status--success"></span><span class="tool-card__name">회원가입</span><span class="tool-card__method">POST /api/v1/users</span></div><div class="tool-card__body">{"status": 201, "userId": "usr_abc123"}</div></div></div></div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel hidden"></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 8: 후보 선택 카드 ═══ -->
+  <div id="case-candidates" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">입사지원</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">미지정</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">입사지원</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>입사지원 해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>요청하신 내용과 비슷한 레시피가 여러 개 있어요. 어떤 걸 실행할까요?</p></div>
+                  <div class="candidate-list">
+                    <div class="candidate-item">
+                      <div class="candidate-item__name">입사지원 (사람인)</div>
+                      <div class="candidate-item__desc">사람인 채용공고에 이력서 제출</div>
+                    </div>
+                    <div class="candidate-item">
+                      <div class="candidate-item__name">입사지원 (잡코리아)</div>
+                      <div class="candidate-item__desc">잡코리아 채용공고에 이력서 제출</div>
+                    </div>
+                    <div class="candidate-item">
+                      <div class="candidate-item__name">입사지원 (자체 ATS)</div>
+                      <div class="candidate-item__desc">내부 채용시스템에 지원</div>
+                    </div>
+                  </div>
+                  <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-1);">없으면 다시 설명할게요</button>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="form-group" style="margin-bottom: var(--space-3);"><input class="input" type="text" placeholder="🔍 레시피 검색..."></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 9: 참조 태그 + 버튼형 액션 피커 ═══ -->
+  <div id="case-reference" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">주문 생성 테스트</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">쇼핑몰</span><span class="sidebar-item__status">🟡</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">주문 생성 테스트</span><span class="chat-header__service">🏷️ 쇼핑몰</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>이거 실행해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>주문 생성 레시피를 실행합니다. 어떤 모드로 진행할까요?</p></div>
+                  <!-- 버튼형 액션 피커 (인라인) -->
+                  <div style="display: flex; gap: var(--space-2); margin-top: var(--space-2);">
+                    <button class="btn btn--primary btn--sm">자동 실행</button>
+                    <button class="btn btn--secondary btn--sm">직접 입력하며 실행</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 참조 태그 + Input -->
+            <div style="padding: 0 var(--space-4);">
+              <div class="reference-tag">📎 주문 생성 레시피 참조 중 <span class="reference-tag__close">✕ 해제</span></div>
+            </div>
+            <div class="chat-input">
+              <div class="chat-input__wrapper" style="border-top-left-radius: 0; border-top-right-radius: 0;">
+                <textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea>
+                <button class="chat-input__send">↑</button>
+              </div>
+            </div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="card card--highlighted"><div class="card__header"><span class="card__title">주문 생성</span><span class="badge badge--neutral">쇼핑몰</span></div><div class="card__body">주문 생성 플로우 (3 스텝)</div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 10: 대화 관리 (이름 변경 + 삭제) ═══ -->
+  <div id="case-manage" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active" style="position: relative;">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">회원가입 테스트</span><span class="sidebar-item__time">3분 전</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span></div>
+          </button>
+          <!-- 컨텍스트 메뉴 (우클릭) -->
+          <div class="dropdown-menu" style="position: absolute; left: 80px; top: 90px; z-index: 500;">
+            <button class="dropdown-item">✏️ 이름 변경</button>
+            <button class="dropdown-item">🏷️ 서비스 변경</button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item dropdown-item--danger">🗑️ 삭제</button>
+          </div>
+          <button class="sidebar-item">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">결제 플로우</span><span class="sidebar-item__time">1시간 전</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">쇼핑몰</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">회원가입 테스트</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message"><div class="avatar avatar--ai message__avatar">⚡</div><div class="message__body"><span class="message__sender">AI Test Forge</span><div class="message__content"><p>사이드바 대화 항목에서 우클릭하면 컨텍스트 메뉴가 나타납니다.</p></div></div></div>
+            </div>
+            <!-- 삭제 확인 모달 (오버레이) -->
+            <div class="modal-backdrop" style="position: absolute; border-radius: var(--radius-lg);">
+              <div class="modal" style="animation: none; max-width: 360px;">
+                <div class="modal__header">
+                  <h3 class="modal__title">대화 삭제</h3>
+                  <button class="btn btn--ghost btn--icon">✕</button>
+                </div>
+                <div class="modal__body"><p>"회원가입 테스트" 대화를 삭제하시겠습니까?</p><p style="margin-top: var(--space-2); color: var(--color-text-tertiary); font-size: var(--font-size-xs);">삭제해도 작업 히스토리는 유지됩니다.</p></div>
+                <div class="modal__footer"><button class="btn btn--secondary">취소</button><button class="btn btn--danger">삭제</button></div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 11: 플랜 제안 ═══ -->
+  <div id="case-plan-propose" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">입사지원 플랜</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span><span class="sidebar-item__status">🟡</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">입사지원 플랜</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>이력서 작성하고 포지션 찾아서 입사지원까지 해줘</p></div></div></div>
+              <div class="message"><div class="avatar avatar--ai message__avatar">⚡</div><div class="message__body"><span class="message__sender">AI Test Forge</span><div class="message__content"><p>요청하신 내용을 3개 레시피로 구성한 실행 계획을 준비했습니다. 확인 후 실행해주세요.</p></div></div></div>
+            </div>
+            <div class="action-picker-area">
+              <div class="action-picker">
+                <div class="action-picker__title">📋 실행 계획</div>
+                <div class="action-picker__fields">
+                  <label style="display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer;">
+                    <input type="checkbox" checked>
+                    <span style="font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary);">1. 이력서 작성</span>
+                    <span class="badge badge--neutral" style="margin-left: auto;">사람인</span>
+                    <button class="btn btn--ghost btn--sm" style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">값 지정 ▾</button>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer;">
+                    <input type="checkbox" checked>
+                    <span style="font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary);">2. 포지션 탐색</span>
+                    <span class="badge badge--neutral" style="margin-left: auto;">사람인</span>
+                    <button class="btn btn--ghost btn--sm" style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">값 지정 ▾</button>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer;">
+                    <input type="checkbox" checked>
+                    <span style="font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary);">3. 입사지원</span>
+                    <span class="badge badge--neutral" style="margin-left: auto;">사람인</span>
+                    <button class="btn btn--ghost btn--sm" style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">값 지정 ▾</button>
+                  </label>
+                </div>
+                <div class="action-picker__actions">
+                  <button class="btn btn--ghost btn--sm">+ 레시피 추가</button>
+                  <button class="btn btn--ghost">취소</button>
+                  <button class="btn btn--primary">자동 실행</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="card card--highlighted"><div class="card__header"><span class="card__title">입사지원 플랜</span><span class="badge badge--info">3개 레시피</span></div><div class="card__body">이력서 작성 → 포지션 탐색 → 입사지원</div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 12: 플랜 실행 중 ═══ -->
+  <div id="case-plan-executing" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">입사지원 플랜</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span><span class="sidebar-item__status">🔄</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">입사지원 플랜</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>자동 실행해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>플랜을 자동 실행합니다. 3개 레시피를 순차 진행합니다.</p></div>
+                  <div class="progress">
+                    <div class="progress__header">📋 입사지원 플랜 실행 중 (2/3)</div>
+                    <!-- 레시피 1: 완료 (접힌 상태) -->
+                    <div class="progress__step progress__step--done"><span class="progress__icon">✓</span> 1. 이력서 작성 — 이력서 ID: RES-001</div>
+                    <!-- 레시피 2: 진행 중 (펼침 — 내부 스텝) -->
+                    <div class="progress__step progress__step--active" style="flex-direction: column; align-items: flex-start; gap: var(--space-1);">
+                      <div style="display: flex; align-items: center; gap: var(--space-2);"><span class="progress__icon"><span class="spinner"></span></span> 2. 포지션 탐색</div>
+                      <div style="padding-left: var(--space-6); display: flex; flex-direction: column; gap: var(--space-1); width: 100%;">
+                        <div class="progress__step progress__step--done" style="padding: 0;"><span class="progress__icon">✓</span> 로그인</div>
+                        <div class="progress__step progress__step--active" style="padding: 0;"><span class="progress__icon"><span class="spinner"></span></span> 포지션 목록 조회</div>
+                        <div class="progress__step progress__step--pending" style="padding: 0;"><span class="progress__icon">○</span> 결과 추출</div>
+                      </div>
+                    </div>
+                    <!-- 레시피 3: 대기 -->
+                    <div class="progress__step progress__step--pending"><span class="progress__icon">○</span> 3. 입사지원</div>
+                  </div>
+                </div>
+              </div>
+              <div class="typing-indicator"><div class="avatar avatar--ai">⚡</div><div class="typing-dots"><span></span><span></span><span></span></div></div>
+            </div>
+            <div class="chat-input chat-input--disabled">
+              <div class="chat-input__wrapper">
+                <textarea class="chat-input__field" placeholder="실행 중에는 입력할 수 없습니다" rows="1" disabled></textarea>
+                <button class="btn btn--danger btn--sm" style="border-radius: var(--radius-full); padding: var(--space-2) var(--space-3);">중지</button>
+              </div>
+            </div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="card card--highlighted"><div class="card__header"><span class="card__title">입사지원 플랜</span><span class="badge badge--warning">실행 중</span></div><div class="card__body">레시피 2/3 진행 중...</div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 13: 실행 중지 + 중단 상태 ═══ -->
+  <div id="case-stopped" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">입사지원 플랜</span><span class="sidebar-item__time">2분 전</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span><span class="sidebar-item__status">⏹️</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">입사지원 플랜</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>자동 실행해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>플랜 실행이 중단되었습니다. 이미 완료된 결과는 보존됩니다.</p></div>
+                  <div class="progress">
+                    <div class="progress__header">📋 입사지원 플랜 — 중단됨</div>
+                    <div class="progress__step progress__step--done"><span class="progress__icon">✓</span> 1. 이력서 작성 — RES-001</div>
+                    <div class="progress__step progress__step--error"><span class="progress__icon">⏹️</span> 2. 포지션 탐색 — 스텝 2/4에서 중단</div>
+                    <div class="progress__step progress__step--pending"><span class="progress__icon">○</span> 3. 입사지원 — 미실행</div>
+                  </div>
+                  <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);">
+                    <button class="btn btn--primary btn--sm">이어서 실행</button>
+                    <button class="btn btn--ghost btn--sm">처음부터 다시</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab">레시피</button><button class="panel-tab active">히스토리</button></div><div class="panel-content"><div class="card" style="border-color: rgba(245, 158, 11, 0.3);"><div class="card__header"><span class="card__title">입사지원 플랜</span><span class="badge badge--warning">중단됨</span></div><div class="card__body"><p style="font-size: var(--font-size-xs); color: var(--color-text-secondary);">1/3 완료 · 스텝 2에서 중단</p></div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 14: 인증 요구 카드 ═══ -->
+  <div id="case-auth-required" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">회원가입 테스트</span><span class="sidebar-item__time">1분 전</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span><span class="sidebar-item__status">🔒</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">회원가입 테스트</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 테스트 실행해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>사람인 서비스에 로그인이 필요합니다.</p></div>
+                  <div class="card" style="margin: var(--space-2) 0; border-color: var(--color-warning); background: var(--color-warning-subtle);">
+                    <div class="card__header"><span class="card__title" style="color: var(--color-warning);">🔒 인증이 필요합니다</span></div>
+                    <div class="card__body"><p>아래 버튼으로 로그인 페이지를 열고, 로그인 완료 후 '로그인 완료' 버튼을 클릭해주세요.</p></div>
+                    <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);">
+                      <button class="btn btn--primary btn--sm">로그인하러 가기</button>
+                      <button class="btn btn--secondary btn--sm">로그인 완료</button>
+                    </div>
+                  </div>
+                  <div class="progress" style="margin-top: var(--space-2);">
+                    <div class="progress__header">📋 회원가입 실행 (1/4)</div>
+                    <div class="progress__step progress__step--active"><span class="progress__icon">🔒</span> 로그인 — 인증 대기 중</div>
+                    <div class="progress__step progress__step--pending"><span class="progress__icon">○</span> 이메일 생성</div>
+                    <div class="progress__step progress__step--pending"><span class="progress__icon">○</span> 회원가입 API 호출</div>
+                    <div class="progress__step progress__step--pending"><span class="progress__icon">○</span> 결과 확인</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="card card--highlighted"><div class="card__header"><span class="card__title">회원가입</span><span class="badge badge--warning">인증 대기</span></div><div class="card__body">사람인 로그인 필요</div></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 15: 서비스 선택 ═══ -->
+  <div id="case-service-select" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">새 대화</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">미지정</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">새 대화</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 테스트 해줘</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>어느 서비스에서 진행할까요?</p></div>
+                  <div style="display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2);">
+                    <button class="btn btn--secondary">사람인</button>
+                    <button class="btn btn--secondary">잡코리아</button>
+                    <button class="btn btn--secondary">쇼핑몰</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div style="padding: var(--space-6); text-align: center;"><p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary);">서비스를 선택하면 레시피가 표시됩니다</p></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function showCase(caseId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('case-' + caseId).classList.add('active');
+      // Find and activate the clicked button by matching caseId
+      document.querySelectorAll('.case-switcher__btn').forEach(b => {
+        if (b.getAttribute('onclick').includes("'" + caseId + "'")) b.classList.add('active');
+      });
+    }
+  </script>
+</body>
+</html>

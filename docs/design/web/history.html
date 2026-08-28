@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>히스토리 — AI Test Forge Design</title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/components.css">
+  <style>
+    body { overflow: auto; }
+    .page { min-height: 100vh; background: var(--color-bg-primary); }
+    .page-header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-6); background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: var(--z-sticky); }
+    .page-header__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); flex: 1; }
+    .page-body { max-width: 1100px; margin: 0 auto; padding: var(--space-6); }
+    .filters { display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+    .data-table th { text-align: left; padding: var(--space-2) var(--space-3); color: var(--color-text-tertiary); font-weight: var(--font-weight-medium); border-bottom: 1px solid var(--color-border); font-size: var(--font-size-xs); }
+    .data-table td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); color: var(--color-text-primary); }
+    .data-table tr:hover td { background: var(--color-bg-hover); cursor: pointer; }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-top: var(--space-4); }
+    .pagination__btn { padding: var(--space-1) var(--space-3); font-size: var(--font-size-sm); color: var(--color-text-secondary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition-fast); }
+    .pagination__btn:hover { background: var(--color-bg-hover); }
+    .pagination__btn.active { background: var(--color-accent-subtle); color: var(--color-accent); border-color: var(--color-accent); }
+
+    /* 상세 모달 */
+    .detail-panel { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); margin-top: var(--space-4); }
+    .detail-panel__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); }
+    .detail-panel__title { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+    .detail-step { padding: var(--space-3); margin-bottom: var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+    .detail-step__header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); cursor: pointer; }
+    .detail-step__json { margin-top: var(--space-2); padding: var(--space-2); background: var(--color-bg-primary); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: pre; overflow-x: auto; max-height: 120px; }
+  </style>
+</head>
+<body>
+
+  <div class="case-switcher">
+    <button class="case-switcher__btn active" onclick="showCase('list')">1. 목록</button>
+    <button class="case-switcher__btn" onclick="showCase('detail')">2. 상세 보기</button>
+    <button class="case-switcher__btn" onclick="showCase('empty')">3. 빈 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('plan-history')">4. 플랜 히스토리</button>
+  </div>
+
+  <!-- Case 1: 목록 -->
+  <div id="case-list" class="screen active">
+    <div class="page">
+      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <div class="page-body">
+        <div class="filters">
+          <input class="input" type="text" placeholder="🔍 레시피명 검색..." style="max-width: 240px;">
+          <select class="input" style="max-width: 140px;"><option>전체 서비스</option><option>사람인</option><option>잡코리아</option><option>쇼핑몰</option></select>
+          <select class="input" style="max-width: 120px;"><option>전체 상태</option><option>성공</option><option>실패</option></select>
+          <input class="input" type="date" style="max-width: 160px;">
+        </div>
+        <table class="data-table">
+          <thead><tr><th>실행 시각</th><th>레시피명</th><th>서비스</th><th>상태</th><th>소요시간</th></tr></thead>
+          <tbody>
+            <tr><td>08/28 09:15</td><td>회원가입 × 5</td><td><span class="badge badge--neutral">사람인</span></td><td><span class="badge badge--warning">부분실패</span></td><td>12.3s</td></tr>
+            <tr><td>08/28 08:42</td><td>공고 등록</td><td><span class="badge badge--neutral">사람인</span></td><td><span class="badge badge--success">성공</span></td><td>2.1s</td></tr>
+            <tr><td>08/28 08:10</td><td>회원가입 × 3</td><td><span class="badge badge--neutral">사람인</span></td><td><span class="badge badge--success">성공</span></td><td>5.4s</td></tr>
+            <tr><td>08/27 17:30</td><td>입사지원</td><td><span class="badge badge--neutral">잡코리아</span></td><td><span class="badge badge--error">실패</span></td><td>0.8s</td></tr>
+            <tr><td>08/27 15:20</td><td>결제 플로우</td><td><span class="badge badge--neutral">쇼핑몰</span></td><td><span class="badge badge--success">성공</span></td><td>3.2s</td></tr>
+            <tr><td>08/27 14:00</td><td>재고 확인</td><td><span class="badge badge--neutral">쇼핑몰</span></td><td><span class="badge badge--success">성공</span></td><td>1.1s</td></tr>
+            <tr><td>08/26 16:45</td><td>회원가입</td><td><span class="badge badge--neutral">사람인</span></td><td><span class="badge badge--success">성공</span></td><td>1.8s</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button class="pagination__btn">←</button>
+          <button class="pagination__btn active">1</button>
+          <button class="pagination__btn">2</button>
+          <button class="pagination__btn">3</button>
+          <button class="pagination__btn">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 2: 상세 보기 -->
+  <div id="case-detail" class="screen">
+    <div class="page">
+      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <div class="page-body">
+        <table class="data-table">
+          <thead><tr><th>실행 시각</th><th>레시피명</th><th>서비스</th><th>상태</th><th>소요시간</th></tr></thead>
+          <tbody>
+            <tr style="background: var(--color-accent-subtle);"><td>08/28 09:15</td><td style="font-weight: var(--font-weight-semibold);">회원가입 × 5</td><td><span class="badge badge--neutral">사람인</span></td><td><span class="badge badge--warning">부분실패</span></td><td>12.3s</td></tr>
+          </tbody>
+        </table>
+
+        <div class="detail-panel">
+          <div class="detail-panel__header">
+            <span class="detail-panel__title">회원가입 × 5 — 실행 상세</span>
+            <button class="btn btn--ghost btn--sm">✕ 닫기</button>
+          </div>
+          <div style="display: flex; gap: var(--space-6); font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-4);">
+            <span>실행 시각: 2026-08-28 09:15</span>
+            <span>소요 시간: 12.3초</span>
+            <span>실행 모드: 자동</span>
+          </div>
+
+          <div class="detail-step">
+            <div class="detail-step__header"><span style="color: var(--color-success);">✓</span> <span>Step 1: 이메일 생성</span> <span class="badge badge--success" style="margin-left: auto;">성공</span></div>
+            <div class="detail-step__json">{"email": "test1724828100@company.co.kr", "password": "Test1234!"}</div>
+          </div>
+          <div class="detail-step">
+            <div class="detail-step__header"><span style="color: var(--color-success);">✓</span> <span>Step 2: 회원가입 API</span> <span class="badge badge--success" style="margin-left: auto;">성공</span></div>
+            <div class="detail-step__json">{"status": 201, "data": {"memberId": "usr_x7k2m", "email": "test1724828100@company.co.kr"}}</div>
+          </div>
+          <div class="detail-step" style="border-color: rgba(239, 68, 68, 0.3);">
+            <div class="detail-step__header"><span style="color: var(--color-error);">✕</span> <span>Step 3: 프로필 설정</span> <span class="badge badge--error" style="margin-left: auto;">2건 실패</span></div>
+            <div class="detail-step__json">{"error": "DUPLICATE_NICKNAME", "message": "이미 사용 중인 닉네임입니다"}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 3: 빈 상태 -->
+  <div id="case-empty" class="screen">
+    <div class="page">
+      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <div class="page-body">
+        <div class="empty-state">
+          <div class="empty-state__icon">📊</div>
+          <h3 class="empty-state__title">실행 이력이 없습니다</h3>
+          <p class="empty-state__desc">레시피를 실행하면 여기에 이력이 쌓입니다. 채팅에서 레시피를 실행해보세요.</p>
+          <button class="btn btn--primary">채팅으로 이동</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 4: 플랜 히스토리 -->
+  <div id="case-plan-history" class="screen">
+    <div class="page">
+      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <div class="page-body">
+        <div class="filters">
+          <input class="input" type="text" placeholder="🔍 레시피명 검색..." style="max-width: 240px;">
+          <select class="input" style="max-width: 140px;"><option>전체 서비스</option><option>사람인</option></select>
+          <select class="input" style="max-width: 120px;"><option>전체 상태</option><option>성공</option><option>실패</option></select>
+          <input class="input" type="date" style="max-width: 160px;">
+        </div>
+        <table class="data-table">
+          <thead><tr><th>실행 시각</th><th>레시피명</th><th>서비스</th><th>상태</th><th>소요시간</th></tr></thead>
+          <tbody>
+            <!-- 플랜 그룹 (accordion) -->
+            <tr style="background: var(--color-bg-tertiary); border-left: 3px solid var(--color-accent); cursor: pointer;">
+              <td>08/27 14:30</td>
+              <td style="font-weight: var(--font-weight-semibold);">📋 플랜: 입사지원 (3건)</td>
+              <td><span class="badge badge--neutral">사람인</span></td>
+              <td><span class="badge badge--success">성공</span></td>
+              <td>12.5s</td>
+            </tr>
+            <!-- 플랜 하위 항목 (펼침 상태) -->
+            <tr style="background: var(--color-bg-secondary);">
+              <td style="padding-left: var(--space-8); color: var(--color-text-tertiary); position: relative;">
+                <span style="position: absolute; left: var(--space-4); top: 0; bottom: 0; width: 1px; background: var(--color-border);"></span>
+                <span style="position: absolute; left: var(--space-4); top: 50%; width: var(--space-3); height: 1px; background: var(--color-border);"></span>
+                14:30
+              </td>
+              <td style="padding-left: var(--space-6); color: var(--color-text-secondary);">└ 이력서 작성</td>
+              <td></td>
+              <td><span class="badge badge--success">성공</span></td>
+              <td style="color: var(--color-text-tertiary);">3.2s</td>
+            </tr>
+            <tr style="background: var(--color-bg-secondary);">
+              <td style="padding-left: var(--space-8); color: var(--color-text-tertiary); position: relative;">
+                <span style="position: absolute; left: var(--space-4); top: 0; bottom: 0; width: 1px; background: var(--color-border);"></span>
+                <span style="position: absolute; left: var(--space-4); top: 50%; width: var(--space-3); height: 1px; background: var(--color-border);"></span>
+                14:31
+              </td>
+              <td style="padding-left: var(--space-6); color: var(--color-text-secondary);">└ 포지션 탐색</td>
+              <td></td>
+              <td><span class="badge badge--success">성공</span></td>
+              <td style="color: var(--color-text-tertiary);">4.1s</td>
+            </tr>
+            <tr style="background: var(--color-bg-secondary);">
+              <td style="padding-left: var(--space-8); color: var(--color-text-tertiary); position: relative;">
+                <span style="position: absolute; left: var(--space-4); top: 0; bottom: 50%; width: 1px; background: var(--color-border);"></span>
+                <span style="position: absolute; left: var(--space-4); top: 50%; width: var(--space-3); height: 1px; background: var(--color-border);"></span>
+                14:32
+              </td>
+              <td style="padding-left: var(--space-6); color: var(--color-text-secondary);">└ 입사지원</td>
+              <td></td>
+              <td><span class="badge badge--success">성공</span></td>
+              <td style="color: var(--color-text-tertiary);">5.2s</td>
+            </tr>
+            <!-- 일반 항목 -->
+            <tr>
+              <td>08/27 14:00</td>
+              <td>📄 회원가입</td>
+              <td><span class="badge badge--neutral">사람인</span></td>
+              <td><span class="badge badge--success">성공</span></td>
+              <td>2.1s</td>
+            </tr>
+            <tr>
+              <td>08/27 11:20</td>
+              <td>📄 공고 등록</td>
+              <td><span class="badge badge--neutral">사람인</span></td>
+              <td><span class="badge badge--success">성공</span></td>
+              <td>1.8s</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button class="pagination__btn">←</button>
+          <button class="pagination__btn active">1</button>
+          <button class="pagination__btn">2</button>
+          <button class="pagination__btn">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showCase(caseId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('case-' + caseId).classList.add('active');
+      document.querySelectorAll('.case-switcher__btn').forEach(b => {
+        if (b.getAttribute('onclick').includes("'" + caseId + "'")) b.classList.add('active');
+      });
+    }
+  </script>
+</body>
+</html>
