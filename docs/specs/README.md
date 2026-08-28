@@ -21,13 +21,20 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 - [로그인, 회원가입, 권한/역할](common/auth.md)
 - [에러 처리 정책](common/error-handling.md)
 - [메시징 및 SSE 이벤트](common/messaging.md) — 메시지 포맷, SSE 이벤트 타입, 연결 정책
-- [AI 프롬프트 설계](common/ai-prompt.md) — 호출 구조, 토큰 절약, 프롬프트 구조
+- [AI 프롬프트 설계](common/ai-config.md) — 모델 구성, 토큰 절약, 호출 구조
 - [AI 응답 가이드](common/response-guide.md)
 
 ### 채팅
 - [채팅 인터페이스 구조](chat/overview.md)
 - [액션 피커 상세](chat/action-picker.md)
 - [카드 UI 유형](chat/card-ui.md)
+- 시나리오:
+  - [의도 분류 + 레시피 매칭](chat/scenarios/intent-classification.md)
+  - [서비스 선택](chat/scenarios/service-selection.md)
+  - [플랜 제안](chat/scenarios/plan-proposal.md)
+  - [레시피 실행](chat/scenarios/recipe-execution.md)
+  - [AI 필드 생성](chat/scenarios/ai-generation.md)
+  - [결과 요약](chat/scenarios/result-summary.md)
 
 ### 레시피
 - [레시피 구조](recipe/structure.md) — 스텝 타입, 조건 분기, 변수
