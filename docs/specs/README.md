@@ -20,6 +20,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 ### 공통
 - [로그인, 회원가입, 권한/역할](common/auth.md)
 - [에러 처리 정책](common/error-handling.md)
+- [메시징 및 SSE 이벤트](common/messaging.md) — 메시지 포맷, SSE 이벤트 타입, 연결 정책
 - [AI 응답 가이드](common/response-guide.md)
 
 ### 채팅
