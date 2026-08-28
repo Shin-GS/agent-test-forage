@@ -367,25 +367,37 @@
   <section class="catalog-section">
     <h2>Sidebar Items</h2>
     <div style="width: 260px; background: var(--color-bg-secondary); border-radius: var(--radius-lg); padding: var(--space-2) 0; border: 1px solid var(--color-border);">
-      <div class="sidebar-group">오늘</div>
       <button class="sidebar-item active">
-        <span class="sidebar-item__icon">💬</span>
-        <span class="sidebar-item__text">회원가입 테스트 데이터</span>
-        <span class="badge badge--success sidebar-item__badge">✓</span>
+        <div class="sidebar-item__row">
+          <span class="sidebar-item__icon">💬</span>
+          <span class="sidebar-item__text">회원가입 테스트</span>
+          <span class="sidebar-item__time">3분 전</span>
+        </div>
+        <div class="sidebar-item__meta">
+          <span class="sidebar-item__service">사람인</span>
+          <span class="sidebar-item__status">🔄</span>
+        </div>
       </button>
       <button class="sidebar-item">
-        <span class="sidebar-item__icon">💬</span>
-        <span class="sidebar-item__text">결제 플로우 검증</span>
-        <span class="badge badge--warning sidebar-item__badge">⚠</span>
+        <div class="sidebar-item__row">
+          <span class="sidebar-item__icon">💬</span>
+          <span class="sidebar-item__text">결제 플로우 검증</span>
+          <span class="sidebar-item__time">2시간 전</span>
+        </div>
+        <div class="sidebar-item__meta">
+          <span class="sidebar-item__service">쇼핑몰</span>
+          <span class="sidebar-item__status">🔵</span>
+        </div>
       </button>
-      <div class="sidebar-group">어제</div>
       <button class="sidebar-item">
-        <span class="sidebar-item__icon">💬</span>
-        <span class="sidebar-item__text">상품 등록 API 테스트</span>
-      </button>
-      <button class="sidebar-item">
-        <span class="sidebar-item__icon">💬</span>
-        <span class="sidebar-item__text">주문 취소 시나리오</span>
+        <div class="sidebar-item__row">
+          <span class="sidebar-item__icon">💬</span>
+          <span class="sidebar-item__text">상품 등록 API</span>
+          <span class="sidebar-item__time">어제</span>
+        </div>
+        <div class="sidebar-item__meta">
+          <span class="sidebar-item__service">쇼핑몰</span>
+        </div>
       </button>
     </div>
   </section>

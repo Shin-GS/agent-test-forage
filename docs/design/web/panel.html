@@ -25,38 +25,6 @@
       overflow: hidden;
     }
 
-    /* 패널 탭 */
-    .panel-tabs {
-      display: flex;
-      border-bottom: 1px solid var(--color-border);
-      flex-shrink: 0;
-    }
-
-    .panel-tab {
-      flex: 1;
-      padding: var(--space-3);
-      text-align: center;
-      font-size: var(--font-size-sm);
-      font-weight: var(--font-weight-medium);
-      color: var(--color-text-secondary);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all var(--transition-fast);
-      background: none;
-      border-top: none;
-      border-left: none;
-      border-right: none;
-    }
-
-    .panel-tab:hover {
-      color: var(--color-text-primary);
-    }
-
-    .panel-tab.active {
-      color: var(--color-accent);
-      border-bottom-color: var(--color-accent);
-    }
-
     /* 패널 콘텐츠 */
     .panel-body {
       flex: 1;
