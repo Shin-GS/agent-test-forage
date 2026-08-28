@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Test Checklist — ai-test-forge</title>
+  <link rel="stylesheet" href="shared/test-base.css">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="module">
+    import TestRenderer from './shared/test-renderer.js';
+    import CHAT_TESTS from './web/chat.js';
+    import RECIPE_EDITOR_TESTS from './web/recipe-editor.js';
+    import LOGIN_TESTS from './web/login.js';
+    import SPEC_TESTS from './web/spec.js';
+    import SETTINGS_TESTS from './web/settings.js';
+
+    const renderer = new TestRenderer('app');
+
+    // 모듈 등록
+    renderer.registerModule(CHAT_TESTS);
+    renderer.registerModule(RECIPE_EDITOR_TESTS);
+    renderer.registerModule(LOGIN_TESTS);
+    renderer.registerModule(SPEC_TESTS);
+    renderer.registerModule(SETTINGS_TESTS);
+
+    // 초기 렌더링
+    renderer.render();
+
+    // 전역 접근 (초기화 버튼용)
+    window.renderer = renderer;
+  </script>
+</body>
+</html>
