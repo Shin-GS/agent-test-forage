@@ -21,6 +21,7 @@ ref: docs/specs/spec/registration.md
 
 - 서비스 메타(description/domain/capabilities/notes), Jira projectKey는 `API_SPEC`에 저장
 - 원본 JSON은 조회 성능을 위해 `API_SPEC_DOCUMENT`로 분리, API는 `API_ENDPOINT`로 정규화 분해
+- 등록 계약/클라이언트 정보(`SCHEMA_VERSION`/`CLIENT_LANG`/`CLIENT_VERSION`)는 진단용으로 보관 (여러 언어·버전 라이브러리 추적)
 
 ## 공통 audit 컬럼
 
@@ -46,9 +47,12 @@ ref: docs/specs/spec/registration.md
 | `SPEC_HASH` | CHAR(64) | 정규화 후 SHA-256 (변경 감지) |
 | `SERVICE_DESCRIPTION` | VARCHAR(500) | 서비스 설명 (관리자 우선) |
 | `SERVICE_DOMAIN` | VARCHAR(100) | 도메인 영역 |
-| `SERVICE_CAPABILITIES` | JSON | 기능 키워드 배열 |
+| `SERVICE_CAPABILITIES` | TEXT | 기능 키워드 배열 (JSON 문자열로 저장, H2/MySQL 호환) |
 | `SERVICE_NOTES` | VARCHAR(500) | 주의사항 |
 | `JIRA_PROJECT_KEY` | VARCHAR(50) | 정보 조회용 Jira 프로젝트 키 |
+| `CLIENT_LANG` | VARCHAR(20) | 등록한 라이브러리 언어 (진단용, 예: java) |
+| `CLIENT_VERSION` | VARCHAR(20) | 등록한 라이브러리 버전 (진단용, 예: 0.0.1) |
+| `SCHEMA_VERSION` | VARCHAR(10) | 마지막 등록에 사용된 계약 버전 (진단용) |
 | `IS_ADMIN_EDITED` | BOOLEAN | 관리자가 메타를 수정했는지 (yml 덮어쓰기 방지) |
 | `YML_META_HASH` | CHAR(64) | yml에서 온 메타 해시 (yml 변경 감지용) |
 | `LAST_HEARTBEAT_AT` | DATETIME | 마지막 heartbeat 시각 |
@@ -104,7 +108,7 @@ ref: docs/specs/spec/registration.md
 | `API_SPEC_ID` | BIGINT FK | 소속 스펙 |
 | `HTTP_METHOD` | VARCHAR(10) | GET/POST/PUT/PATCH/DELETE |
 | `PATH` | VARCHAR(500) | 경로 (예: /api/v1/users) |
-| `OPERATION_JSON` | JSON | 해당 API의 요청/응답 스키마 (OpenAPI operation) |
+| `OPERATION_JSON` | TEXT | 해당 API의 요청/응답 스키마 (OpenAPI operation, JSON 문자열, H2/MySQL 호환) |
 | `SUMMARY` | VARCHAR(500) | API 설명 (매칭 힌트) |
 | `IS_EXCLUDED` | BOOLEAN | @TestForgeExclude (목록 제외) |
 | `IS_CONFIRM_REQUIRED` | BOOLEAN | @TestForgeConfirm (실행 전 확인) |

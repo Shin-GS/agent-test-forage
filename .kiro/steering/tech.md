@@ -68,6 +68,13 @@ packages/
 - Java는 LTS만 사용 (8, 11, 17, 21, 25)
 - server = Java 25, library 최초 = Java 21 (테스트 서버 버전에 맞춤)
 
+## 로컬 빌드 주의 (Windows, 비ASCII 경로)
+
+- 프로젝트 경로에 비ASCII 문자(예: 사용자 홈 `신경섭`)가 있으면 Windows에서 Gradle test worker classpath가 손상되어 `test` 태스크가 실패할 수 있음
+- `server` 패키지는 이를 위해 `-PasciiBuildDir` opt-in 플래그 제공 (기본 체크아웃/CI에는 무영향)
+- 로컬 테스트 실행 시: `GRADLE_USER_HOME=C:\gradle-home` 지정 + `-PasciiBuildDir=C:\tf-build` 플래그 사용
+- `compileJava`/`assemble`은 플래그 없이도 정상 동작
+
 ## 미확정 / 추후
 
 - Spring AI 2.0 세부 마이너 버전은 구현 시 최신 확인
