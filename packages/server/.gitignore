@@ -1,0 +1,9 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.idea/
+*.iml
+
+# 환경변수 (시크릿) — .env.example 만 커밋
+.env
+.env.local

@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: ai-test-forge-server
+
+  # ── DB (실제 연동 시 활성화) ──
+  # datasource:
+  #   url: ${DB_URL}
+  #   username: ${DB_USERNAME}
+  #   password: ${DB_PASSWORD}
+
+  # ── Spring AI (실제 연동 시 활성화) ──
+  # ai:
+  #   openai:
+  #     api-key: ${OPENAI_API_KEY}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+# ── ai-test-forge 커스텀 설정 ──
+ai-test-forge:
+  jira:
+    base-url: ${JIRA_BASE_URL:}
+    api-token: ${JIRA_API_TOKEN:}   # 시크릿. .env / 환경변수로 주입

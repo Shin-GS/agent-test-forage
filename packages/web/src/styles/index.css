@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* 디자인 토큰 — docs/design/shared/tokens.css 와 동기화 유지 */
+:root {
+  /* Background */
+  --color-bg-primary: #0f1117;
+  --color-bg-secondary: #1a1d27;
+  --color-bg-tertiary: #242834;
+  --color-bg-hover: #2d3140;
+  --color-bg-active: #363b4d;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+
+  /* Text */
+  --color-text-primary: #f0f2f5;
+  --color-text-secondary: #9ca3b4;
+  --color-text-tertiary: #6b7280;
+  --color-text-link: #818cf8;
+
+  /* Accent */
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-accent-active: #4f46e5;
+  --color-accent-subtle: rgba(99, 102, 241, 0.15);
+
+  /* Semantic */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  /* Border */
+  --color-border: #2d3140;
+  --color-border-light: #363b4d;
+
+  --font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Tailwind v4 테마 매핑 — 토큰을 유틸리티로 노출 */
+@theme {
+  --color-bg-primary: #0f1117;
+  --color-bg-secondary: #1a1d27;
+  --color-bg-tertiary: #242834;
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
