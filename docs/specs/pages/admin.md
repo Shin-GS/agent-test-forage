@@ -45,9 +45,24 @@ last-updated: 2026-08-27
 
 ### 상세 (행 클릭)
 
-- API 엔드포인트 목록 (method + path + 제어 상태)
+- 서비스 설명 (description/domain/capabilities/notes) — 표시 + [편집] (관리자 수정, yml보다 우선)
+- API 엔드포인트 목록 (method + path + 제어 상태 + DEPRECATED 여부)
 - 인증 프로필 정보 (name + loginPageUrl)
-- [삭제] 버튼 (확인 팝업)
+- [비활성화] / [활성화] 토글
+- [삭제] 버튼 (확인 팝업, 소프트 삭제)
+
+### 스펙 수동 관리 (비활성/삭제)
+
+서버 URL 변경 등으로 좀비 스펙(구 baseUrl)이 남을 수 있어, 관리자가 직접 정리한다.
+
+| 액션 | 동작 |
+|------|------|
+| 비활성화 | STATUS = INACTIVE. AI 매칭/실행 대상에서 제외. 자동 삭제 대상 아님 |
+| 활성화 | INACTIVE → ACTIVE 복귀 (관리자만) |
+| 삭제 | 소프트 삭제. 참조 레시피는 유효성 검증에서 경고 |
+
+- 예: `shop-api.acme.com` → `shop.acme.com`으로 URL 변경 시, 구 URL 스펙은 heartbeat 끊겨 STALE → 관리자가 비활성/삭제로 정리
+- INACTIVE/삭제된 스펙을 참조하는 레시피는 실행 전 유효성 검증에서 경고
 
 ---
 

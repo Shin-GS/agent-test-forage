@@ -28,8 +28,18 @@ DB 저장 → 레시피 작성 시 API 목록으로 활용
 
 - 클라이언트 라이브러리를 외부 서버에 의존성 추가
 - 앱 기동 시 자동으로 `/v3/api-docs`에서 OpenAPI JSON 수집
-- 메인 서버에 POST (name, environment, baseUrl, specJson, specHash, authProfiles, **serviceInfo**)
+- 메인 서버에 POST (name, baseUrl, specJson, specHash, authProfiles, **serviceInfo**, jira)
 - SHA-256 해시로 변경 감지 (heartbeat 시 해시만 전송, 불일치 시 재전송)
+- 등록은 앱 기동을 블로킹하지 않음. 실패 시 최대 3회 재시도 후 로그만 남기고 계속 진행 (외부 서버는 정상 기동)
+- 등록 완료 시 콘솔에 배너 로그 출력 (예: `AI Test Forge: 스펙 등록 완료 — demo-shop (42개 API)`)
+
+## 서비스 식별 (name / baseUrl)
+
+- `name`: 사용자에게 보이는 **서비스 이름**. 채팅 매칭/사이드바 태그/AI 컨텍스트에 노출 (중복 허용)
+- `baseUrl`: 시스템 **식별 키** (고유). 서버 도메인
+- 예: `demo-shop` — 사용자가 "demo-shop에서 회원가입 해줘"로 지칭
+
+> 환경(dev/stg/prod)은 ai-test-forge 인스턴스를 환경별로 따로 배포하여 구분한다. 스펙에 environment 필드를 두지 않는다.
 
 ## 서비스 설명 (serviceInfo)
 
@@ -38,17 +48,18 @@ DB 저장 → 레시피 작성 시 API 목록으로 활용
 | 항목 | 설명 | 필수 |
 |------|------|------|
 | `description` | 한 줄 요약 (AI 서비스 매칭 컨텍스트) | 권장 |
-| `domain` | 도메인 영역 (예: 채용, 결제, 회원) | 선택 |
+| `domain` | 도메인 영역 (예: 커머스, 결제, 회원) | 선택 |
 | `capabilities` | 이 서비스로 할 수 있는 작업 키워드 (복수) | 선택 |
 | `notes` | 주의사항 (예: 스테이징 전용, rate limit) | 선택 |
 
 ```yaml
 # 외부 서버 application.yml
 ai-test-forge:
+  name: "demo-shop"
   service:
-    description: "채용 공고 등록 및 지원자 관리 서비스"
-    domain: "채용"
-    capabilities: ["회원가입", "공고등록", "입사지원"]
+    description: "온라인 쇼핑몰 API"
+    domain: "커머스"
+    capabilities: ["회원가입", "상품등록", "주문"]
     notes: "스테이징 환경, 실 결제 없음"
 ```
 
@@ -75,15 +86,27 @@ ai-test-forge:
 
 ## 커스텀 어노테이션
 
-외부 서버 컨트롤러에 붙여서 API별 제어:
+외부 서버 컨트롤러에 붙여서 API별 제어. 프로토타입은 **안전 관련 2종**만 제공한다.
 
 | 어노테이션 | 역할 |
 |-----------|------|
-| `@TestForgeExclude` | API 목록에서 제외 |
-| `@TestForgeBlock` | AI 호출 차단 |
-| `@TestForgeConfirm` | 실행 전 확인 필요 |
-| `@TestForgeHint` | AI에게 전달할 힌트 문자열 |
-| `@TestForgeGroup` | 그룹 분류 |
+| `@TestForgeExclude` | API 목록에서 제외 (내부/관리용 API를 AI가 못 보게) |
+| `@TestForgeConfirm` | 실행 전 사용자 확인 필요 (결제 등 되돌릴 수 없는 API) |
+
+- OpenAPI 스펙에 `x-test-forge-*` 확장 필드로 변환되어 전송됨
+- springdoc(OperationCustomizer)이 클래스패스에 있을 때만 동작 (없으면 자동 스킵)
+
+```java
+@TestForgeConfirm(message = "실제 결제가 발생합니다")
+@PostMapping("/orders/{id}/pay")
+public PaymentResponse pay(...) { ... }
+
+@TestForgeExclude
+@DeleteMapping("/admin/users/{id}")   // 관리자용, 테스트에서 제외
+public void deleteUser(...) { ... }
+```
+
+> 추후 확장 후보: `@TestForgeHint`, `@TestForgeBlock`, `@TestForgeGroup`, `@TestForgeReadOnly`. 필요 시 추가 (어노테이션은 추가는 안전, 제거는 breaking이므로 최소로 시작).
 
 ## 인증 프로필
 
@@ -138,7 +161,7 @@ FE가 쿠키 인증으로 API를 호출하려면 아래 조건이 필요하다. 
 # 외부 서버 application.yml
 ai-test-forge:
   jira:
-    projectKey: "RECRUIT"   # 이 서비스와 연관된 Jira 프로젝트 키
+    projectKey: "SHOP"   # 이 서비스와 연관된 Jira 프로젝트 키
 ```
 
 | 항목 | 위치 | 이유 |
@@ -151,10 +174,43 @@ ai-test-forge:
 
 ## 스펙 상태
 
-| 상태 | 설명 |
-|------|------|
-| ACTIVE | 정상 |
-| STALE | 5분 이상 heartbeat 없음 |
-| (삭제) | 30분 이상 heartbeat 없음 → 자동 삭제 |
+| 상태 | 설명 | 전이 |
+|------|------|------|
+| ACTIVE | 정상 | heartbeat 유지 |
+| STALE | 5분 이상 heartbeat 없음 | heartbeat 재수신 시 ACTIVE 복귀 |
+| INACTIVE | 관리자가 수동 비활성 | 관리자만 ACTIVE 복귀 (자동 삭제 제외) |
+| (삭제) | 30분 이상 heartbeat 없음 → 소프트 삭제 | INACTIVE는 대상 아님 |
 
 > 프로토타입에서는 스펙 파싱을 **동기 처리**한다. 대형 스펙(5MB+) 비동기 파싱(REGISTERING 상태)은 추후 필요 시 도입.
+
+## 재등록 정합성
+
+서버가 여러 번 실행/재배포되면 매번 등록/heartbeat이 온다. 데이터 정합성 처리:
+
+- 식별: `baseUrl`로 기존 스펙을 찾음 (heartbeat의 specHash가 같으면 아무 것도 안 함)
+- specHash 불일치 → 전체 재전송 → 아래 병합
+
+| 대상 | 재등록 처리 |
+|------|------------|
+| 서비스 메타 (설명/Jira) | 관리자 수정본 우선 보존, yml 변경은 감지만 |
+| API 엔드포인트 | `method + path` 키로 upsert |
+| └ 기존 API | 스키마 갱신 (**내부 ID 유지** → 레시피 참조 보존) |
+| └ 신규 API | 추가 |
+| └ 스펙에서 사라진 API | **비활성(DEPRECATED) 마킹** (삭제 X → 레시피 보호) |
+| 인증 프로필 | 전체 재구성 |
+
+- DEPRECATED API를 참조하는 레시피는 유효성 검증에서 경고 (즉시 실행 실패 방지)
+- 경로 변경(`/v1/users` → `/v2/users`)은 삭제+신규로 취급 (구 API는 DEPRECATED)
+- 상세 스키마: [db/spec.md](../../db/spec.md)
+
+## 등록 보안
+
+- 아무 서버나 등록하지 못하도록, 등록/heartbeat 요청에 **공유 시크릿 토큰** 필요
+- 헤더 `X-TestForge-Token` — 외부 서버 yml에 설정, ai-test-forge 서버 환경변수와 대조
+- 불일치 시 `401`
+
+```yaml
+# 외부 서버 application.yml
+ai-test-forge:
+  register-token: ${TESTFORGE_TOKEN}   # 시크릿, 환경변수로 주입
+```

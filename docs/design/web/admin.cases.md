@@ -31,6 +31,14 @@ ref: docs/specs/pages/admin.md
 - yml 값 변경 시 "변경 감지" 경고 + 변경 내용 보기 (강제 덮어쓰기 X)
 - 참조: [스펙 등록 방식](../../specs/spec/registration.md)
 
+## 스펙 상태 / 수동 관리
+
+- 스펙 상태: ACTIVE / STALE / **INACTIVE**(관리자 수동 비활성)
+- 목록에서 INACTIVE 스펙은 흐리게 표시 (예: URL 변경으로 남은 좀비 스펙)
+- 상세에서 [비활성화]/[활성화] 토글 + [삭제]
+- API 목록에 **DEPRECATED 뱃지** (스펙에서 사라진 API, 참조 레시피는 경고)
+- 참조: [스펙 등록 - 재등록 정합성](../../specs/spec/registration.md)
+
 ## 접근성
 
 - role 변경은 confirm 필요
