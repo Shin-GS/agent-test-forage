@@ -55,6 +55,21 @@
     .candidate-item:hover { border-color: var(--color-accent); background: var(--color-accent-subtle); }
     .candidate-item__name { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
     .candidate-item__desc { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: 2px; }
+
+    /* 참고 자료 카드 */
+    .references { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px dashed var(--color-border); }
+    .references__label { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-2); }
+    .references__list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+    .reference-btn { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-secondary); cursor: pointer; transition: all var(--transition-fast); }
+    .reference-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+    /* 정보 조회 진행 */
+    .investigate-progress { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); margin: var(--space-2) 0; }
+    .investigate-progress__header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); margin-bottom: var(--space-2); }
+    .investigate-step { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--font-size-sm); }
+    .investigate-step--done { color: var(--color-success); }
+    .investigate-step--active { color: var(--color-accent); }
+    .investigate-step__source { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-left: var(--space-1); }
   </style>
 </head>
 <body>
@@ -75,6 +90,8 @@
     <button class="case-switcher__btn" onclick="showCase('stopped')">13. 중단 상태</button>
     <button class="case-switcher__btn" onclick="showCase('auth-required')">14. 인증 요구</button>
     <button class="case-switcher__btn" onclick="showCase('service-select')">15. 서비스 선택</button>
+    <button class="case-switcher__btn" onclick="showCase('investigating')">16. 정보 조회 중</button>
+    <button class="case-switcher__btn" onclick="showCase('references')">17. 참고 자료</button>
   </div>
 
   <!-- ═══ Case 1: 첫 접속 ═══ -->
@@ -838,6 +855,93 @@
             <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
           </div>
           <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div style="padding: var(--space-6); text-align: center;"><p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary);">서비스를 선택하면 레시피가 표시됩니다</p></div></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 16: 정보 조회 중 ═══ -->
+  <div id="case-investigating" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">회원가입 정책 문의</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span><span class="sidebar-item__status">🔄</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">회원가입 정책 문의</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 시 약관 동의 정책이 어떻게 돼?</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>정책을 확인하기 위해 관련 자료를 조회하고 있습니다.</p></div>
+                  <div class="investigate-progress">
+                    <div class="investigate-progress__header">🔍 정보 조회 중</div>
+                    <div class="investigate-step investigate-step--done"><span>✓</span> API 스펙 확인 <span class="investigate-step__source">api_spec: 회원가입</span></div>
+                    <div class="investigate-step investigate-step--active"><span class="spinner"></span> Jira 조회 중 <span class="investigate-step__source">jira: 회원가입 약관</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="typing-indicator"><div class="avatar avatar--ai">⚡</div><div class="typing-dots"><span></span><span></span><span></span></div></div>
+            </div>
+            <div class="chat-input chat-input--disabled"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="조회 중에는 입력할 수 없습니다" rows="1" disabled></textarea><button class="chat-input__send" disabled>↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 17: 참고 자료 (조회 완료 답변) ═══ -->
+  <div id="case-references" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">회원가입 정책 문의</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">회원가입 정책 문의</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 시 약관 동의 정책이 어떻게 돼?</p></div></div></div>
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div>
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content">
+                    <p>회원가입 시 약관 동의는 <strong>필수</strong>이며, 만 14세 미만은 보호자 동의가 추가로 필요합니다. 필수 약관(이용약관, 개인정보 처리방침)과 선택 약관(마케팅 수신)으로 구분됩니다.</p>
+                  </div>
+                  <!-- 참고 자료 카드 -->
+                  <div class="references">
+                    <div class="references__label">참고한 자료</div>
+                    <div class="references__list">
+                      <button class="reference-btn">🎫 PROJ-1234 회원가입 약관 정책</button>
+                      <button class="reference-btn">📋 POST /api/v1/users</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"></div></div></aside>
         </div>
       </main>
     </div>

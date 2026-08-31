@@ -11,6 +11,7 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 - [채팅 인터페이스 구조](../../specs/chat/overview.md)
 - [액션 피커 상세](../../specs/chat/action-picker.md)
 - [카드 UI 유형](../../specs/chat/card-ui.md)
+- [정보 조회 루프](../../specs/chat/scenarios/investigation.md)
 
 ## 레이아웃 구조
 
@@ -40,6 +41,10 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 | 13 | 중단 상태 | 중지 후 상태 + [이어서 실행] [처음부터 다시] |
 | 14 | 인증 요구 카드 | 로그인 필요 시 인증 카드 + progress 대기 |
 | 15 | 서비스 선택 | 서비스 미지정 시 서비스 선택 버튼 |
+| 16 | 정보 조회 중 | investigate 진행 상태 (API 스펙 → Jira 조회) |
+| 17 | 참고 자료 | 조회 완료 답변 + 출처 버튼 리스트 |
+
+> **참고**: 정보 조회 실패/타임아웃(최대 5회 도달, 120초 초과)은 별도 케이스로 만들지 않고 **Case 6(에러) 패턴을 재사용**한다 (alert + 재시도 버튼). 상세 종료 조건은 [investigation.md](../../specs/chat/scenarios/investigation.md) 참조.
 
 ## 케이스 상세
 
