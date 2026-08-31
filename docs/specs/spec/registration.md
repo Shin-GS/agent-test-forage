@@ -102,11 +102,59 @@ ai-test-forge:
         loginPageUrl: "https://example.com/login"
 ```
 
+## CORS 자동 허용
+
+레시피 실행 시 **FE 브라우저가 외부 서버 API를 직접 호출**하므로, 외부 서버가 ai-test-forge 도메인을 CORS 허용해야 한다. client-spring 라이브러리가 이를 자동 설정한다.
+
+```yaml
+# 외부 서버 application.yml
+ai-test-forge:
+  server-url: "https://ai-test-forge.example.com"  # CORS allowed-origin에 자동 등록
+```
+
+라이브러리 자동 설정 내용:
+- `allowedOrigins`: 위 `server-url`
+- `allowCredentials: true` (쿠키 세션 전달용)
+- OPTIONS 프리플라이트 허용
+
+### 전제조건 (외부 서버 소관)
+
+FE가 쿠키 인증으로 API를 호출하려면 아래 조건이 필요하다. 라이브러리로 강제할 수 없고 외부 서버가 충족해야 한다.
+
+| 조건 | 이유 |
+|------|------|
+| 세션 쿠키 `SameSite=None; Secure` | 크로스 도메인에서 쿠키 전송되려면 필수 |
+| HTTPS | `SameSite=None`은 `Secure` 필수 |
+| FE `fetch(credentials: 'include')` | 쿠키 포함 요청 (FE 구현 시 처리) |
+
+- 위 조건 미충족 시 401 로그인 플로우가 동작하지 않음
+- 로컬 개발 환경은 https 또는 예외 처리 별도 안내
+
+## Jira 연결 (정보 조회용)
+
+`investigate` 툴의 Jira 커넥터가 조회할 프로젝트를 서비스에 연결한다. 상세: [정보 조회 루프](../chat/scenarios/investigation.md)
+
+```yaml
+# 외부 서버 application.yml
+ai-test-forge:
+  jira:
+    projectKey: "RECRUIT"   # 이 서비스와 연관된 Jira 프로젝트 키
+```
+
+| 항목 | 위치 | 이유 |
+|------|------|------|
+| Jira 프로젝트 키 (`projectKey`) | 서비스별 (yml / 관리자 수정) | 서비스마다 다름 |
+| Jira 인스턴스 baseUrl + API 토큰 | **ai-test-forge 서버 환경변수 (시크릿)** | 민감정보. 조직당 보통 1개 인스턴스 |
+
+- **호출 주체는 ai-test-forge 서버(BE)**. FE가 아님 (토큰이 시크릿이므로)
+- projectKey도 서비스 설명과 동일하게 관리자 우선 정책 적용
+
 ## 스펙 상태
 
 | 상태 | 설명 |
 |------|------|
-| REGISTERING | 비동기 파싱 중 (5MB+ 스펙) |
 | ACTIVE | 정상 |
 | STALE | 5분 이상 heartbeat 없음 |
 | (삭제) | 30분 이상 heartbeat 없음 → 자동 삭제 |
+
+> 프로토타입에서는 스펙 파싱을 **동기 처리**한다. 대형 스펙(5MB+) 비동기 파싱(REGISTERING 상태)은 추후 필요 시 도입.
