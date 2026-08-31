@@ -35,6 +35,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
   - [레시피 실행](chat/scenarios/recipe-execution.md)
   - [AI 필드 생성](chat/scenarios/ai-generation.md)
   - [결과 요약](chat/scenarios/result-summary.md)
+  - [정보 조회 루프](chat/scenarios/investigation.md) — investigate 툴, 커넥터, agentic loop
 
 ### 레시피
 - [레시피 구조](recipe/structure.md) — 스텝 타입, 조건 분기, 변수
@@ -48,7 +49,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 - [작업 히스토리](panel/history.md)
 
 ### 스펙
-- [스펙 등록 방식](spec/registration.md) — 어노테이션, 인증 프로필
+- [스펙 등록 방식](spec/registration.md) — 어노테이션, 인증 프로필, 서비스 설명
 
 ### 별도 페이지
 - [레시피 편집](pages/recipe-editor.md)
@@ -83,4 +84,6 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 | 대화를 통한 레시피 생성 기능 | 추후 고도화 시 구현 |
 | 레시피 공유/승인 프로세스 | 추후 고도화 시 구현 |
 | 알림 기능 | 추후 고도화. 현재는 채팅 목록 갱신 정도 |
-| 외부 SaaS 커넥터 연동 (Jira, Slack 등) | 추후 고도화. 커넥터 개념으로 외부 API를 레시피에서 호출 가능하게 확장 |
+| Figma 커넥터 (정보 조회) | 추후. API key 확보 + Jira 커넥터 사용성 검증 완료 후 추가 |
+| 정보 조회 커넥터 확장 (Confluence, Notion 등) | 추후. 커넥터 인터페이스로 조회 소스 확장 |
+| 외부 SaaS 레시피 연동 (Slack 등) | 추후 고도화. 커넥터 개념으로 외부 API를 레시피에서 호출 가능하게 확장 |
