@@ -79,6 +79,7 @@ last-updated: 2026-08-27
 | `auth_required` | 인증 필요 | `loginPageUrl`, `executionId` |
 | `candidates` | 유사 레시피 후보 | `recipes: [{ id, name, description }]` |
 | `service_select` | 서비스 선택 | `services: [{ name, label }]` |
+| `references` | 정보 조회 참고 자료 (investigate 출처 인용) | `references: [{ source, label, url }]` |
 
 ---
 

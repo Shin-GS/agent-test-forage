@@ -33,6 +33,16 @@ DB 저장 → 레시피 작성 시 API 목록으로 활용
 - 등록은 앱 기동을 블로킹하지 않음. 실패 시 최대 3회 재시도 후 로그만 남기고 계속 진행 (외부 서버는 정상 기동)
 - 등록 완료 시 콘솔에 배너 로그 출력 (예: `AI Test Forge: 스펙 등록 완료 — demo-shop (42개 API)`)
 
+### 등록 계약 버저닝
+
+여러 언어/버전의 라이브러리가 하나의 ai-test-forge 서버로 등록하므로, 등록 요청 body에 버전을 명시한다.
+
+- `schemaVersion`: 등록 계약(body 구조) 버전. **서버가 이 값으로 파싱을 분기**하여 여러 버전 요청을 흡수한다 (호환 관리 주체 = 서버).
+- `client`: 라이브러리 언어/버전 (진단용).
+- 라이브러리는 자기 schemaVersion을 명시해서 전송.
+- 계약이 하위호환 불가하게 바뀌면 API 경로를 `/api/v2/`로 승격.
+- 상세 계약: [db/spec.md](../../db/spec.md)
+
 ## 서비스 식별 (name / baseUrl)
 
 - `name`: 사용자에게 보이는 **서비스 이름**. 채팅 매칭/사이드바 태그/AI 컨텍스트에 노출 (중복 허용)
@@ -110,9 +120,11 @@ public void deleteUser(...) { ... }
 
 ## 인증 프로필
 
-- 외부 서버 설정에서 `loginPageUrl` 정의
+- 외부 서버 설정에서 `login-page-url` 정의
 - 스펙 등록 시 함께 전송/저장
 - 레시피 실행 중 401/403 발생 시 해당 URL을 사용자에게 제공
+
+> 표기 규칙: **yml 설정 키는 kebab-case**(`login-page-url`, `project-key`, `server-url`), Spring이 relaxed binding으로 프로퍼티에 매핑한다. 등록 **요청 body의 JSON 필드**는 camelCase(`loginPageUrl`, `serviceInfo`, `authProfiles`) — 서로 다른 레이어다.
 
 ```yaml
 # 외부 서버 application.yml
@@ -120,9 +132,9 @@ ai-test-forge:
   auth:
     profiles:
       - name: "관리자"
-        loginPageUrl: "https://example.com/admin/login"
+        login-page-url: "https://example.com/admin/login"
       - name: "일반 사용자"
-        loginPageUrl: "https://example.com/login"
+        login-page-url: "https://example.com/login"
 ```
 
 ## CORS 자동 허용
@@ -161,12 +173,12 @@ FE가 쿠키 인증으로 API를 호출하려면 아래 조건이 필요하다. 
 # 외부 서버 application.yml
 ai-test-forge:
   jira:
-    projectKey: "SHOP"   # 이 서비스와 연관된 Jira 프로젝트 키
+    project-key: "SHOP"   # 이 서비스와 연관된 Jira 프로젝트 키
 ```
 
 | 항목 | 위치 | 이유 |
 |------|------|------|
-| Jira 프로젝트 키 (`projectKey`) | 서비스별 (yml / 관리자 수정) | 서비스마다 다름 |
+| Jira 프로젝트 키 (`project-key`) | 서비스별 (yml / 관리자 수정) | 서비스마다 다름 |
 | Jira 인스턴스 baseUrl + API 토큰 | **ai-test-forge 서버 환경변수 (시크릿)** | 민감정보. 조직당 보통 1개 인스턴스 |
 
 - **호출 주체는 ai-test-forge 서버(BE)**. FE가 아님 (토큰이 시크릿이므로)
@@ -179,7 +191,7 @@ ai-test-forge:
 | ACTIVE | 정상 | heartbeat 유지 |
 | STALE | 5분 이상 heartbeat 없음 | heartbeat 재수신 시 ACTIVE 복귀 |
 | INACTIVE | 관리자가 수동 비활성 | 관리자만 ACTIVE 복귀 (자동 삭제 제외) |
-| (삭제) | 30분 이상 heartbeat 없음 → 소프트 삭제 | INACTIVE는 대상 아님 |
+| (삭제) | 24시간 이상 heartbeat 없음 → 소프트 삭제 | INACTIVE는 대상 아님. 초기 버전 기준(공격적 삭제 방지) |
 
 > 프로토타입에서는 스펙 파싱을 **동기 처리**한다. 대형 스펙(5MB+) 비동기 파싱(REGISTERING 상태)은 추후 필요 시 도입.
 

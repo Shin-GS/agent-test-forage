@@ -44,38 +44,39 @@ const SPEC_TESTS = {
     },
     {
       id: "SPEC-004",
-      title: "STALE → 자동 삭제 (30분)",
+      title: "STALE → 자동 소프트 삭제 (24시간)",
       precondition: "스펙이 STALE 상태",
       steps: [
-        "STALE 상태 30분 경과 대기",
-        "스펙이 자동 삭제되는지 확인",
+        "STALE 상태 24시간 경과 대기",
+        "스펙이 자동 소프트 삭제되는지 확인 (DELETED_AT 설정)",
         "삭제 후 목록에서 제거 확인"
       ],
-      expected: "STALE 30분 경과 후 스펙 자동 삭제, 목록에서 제거"
+      expected: "STALE 24시간 경과 후 스펙 자동 소프트 삭제, 목록에서 제거"
     },
-    // === 수동 업로드 ===
+    // === 관리자 수동 관리 ===
     {
       id: "SPEC-005",
-      title: "수동 업로드 등록 — OpenAPI JSON",
-      precondition: "OpenAPI 3.0 JSON 파일 준비",
+      title: "스펙 수동 비활성화 (INACTIVE)",
+      precondition: "ACTIVE 또는 STALE 스펙 존재",
       steps: [
-        "스펙 등록 페이지에서 '수동 업로드' 선택",
-        "OpenAPI JSON 파일 업로드",
-        "파싱 결과 미리보기 확인",
-        "등록 확인 클릭"
+        "스펙 상세에서 [비활성화] 토글 클릭",
+        "STATUS가 INACTIVE로 변경되는지 확인",
+        "AI 매칭/실행 대상에서 제외되는지 확인",
+        "INACTIVE는 자동 삭제 대상에서 제외되는지 확인"
       ],
-      expected: "JSON 파일이 파싱되어 API 엔드포인트 목록 표시, 등록 완료"
+      expected: "INACTIVE로 전환, AI 매칭/실행 제외, 자동 삭제 대상 아님"
     },
     {
       id: "SPEC-006",
-      title: "수동 업로드 — 잘못된 파일 형식",
-      precondition: "비정상 JSON 또는 OpenAPI 미준수 파일",
+      title: "좀비 스펙 정리 — baseUrl 변경",
+      precondition: "서버 URL 변경으로 구 baseUrl 스펙이 STALE로 남음",
       steps: [
-        "잘못된 형식 파일 업로드 시도",
-        "파싱 에러 메시지 표시 확인",
-        "등록이 차단되는지 확인"
+        "구 baseUrl 스펙이 heartbeat 끊겨 STALE 표시 확인",
+        "관리자가 구 스펙을 수동 INACTIVE 또는 삭제",
+        "신규 baseUrl 스펙이 별도로 ACTIVE 등록됨 확인",
+        "목록이 신규 스펙만 유효 상태로 정리되는지 확인"
       ],
-      expected: "파싱 에러 메시지 표시, 등록 불가"
+      expected: "구 baseUrl 좀비 스펙을 관리자가 수동 정리, 신규 스펙만 유효"
     },
     // === API 엔드포인트 ===
     {
@@ -101,29 +102,29 @@ const SPEC_TESTS = {
       ],
       expected: "키워드 및 메서드 기준으로 엔드포인트 필터링"
     },
-    // === 인증 프로필 ===
+    // === 인증 프로필 (name + loginPageUrl) ===
     {
       id: "SPEC-009",
       title: "인증 프로필 정보 표시",
-      precondition: "인증이 필요한 스펙 등록됨",
+      precondition: "인증 프로필이 등록된 스펙 존재",
       steps: [
         "스펙 상세에서 인증 프로필 섹션 확인",
-        "인증 타입 (Bearer, Basic, API Key 등) 표시",
-        "인증 설정 상태 표시"
+        "프로필 이름(name) 표시 확인",
+        "로그인 페이지 URL(loginPageUrl) 표시 확인"
       ],
-      expected: "인증 프로필 정보가 올바르게 표시됨"
+      expected: "인증 프로필의 name과 loginPageUrl이 표시됨 (토큰/키 저장 없음)"
     },
     {
       id: "SPEC-010",
-      title: "인증 프로필 설정 변경",
-      precondition: "인증 프로필 존재",
+      title: "레시피 실행 시 인증 필요 → 새 탭 로그인",
+      precondition: "인증 프로필이 연결된 레시피, 미인증 상태",
       steps: [
-        "인증 프로필 편집 클릭",
-        "인증 정보 수정 (토큰, 키 등)",
-        "저장 클릭",
-        "변경 사항 반영 확인"
+        "레시피 실행 시 401 발생 확인",
+        "채팅에 [로그인] 안내 카드 표시 확인",
+        "loginPageUrl이 새 탭으로 열리는지 확인",
+        "외부 서버에서 로그인 완료 후 [로그인 완료] 클릭 → 실행 재개 확인"
       ],
-      expected: "인증 프로필 수정 후 레시피 실행 시 새 인증 정보 사용"
+      expected: "인증 필요 시 새 탭 loginPageUrl 이동, 쿠키 세션 획득 후 실행 재개"
     },
     // === 삭제 ===
     {

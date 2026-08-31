@@ -12,19 +12,25 @@
   <script type="module">
     import TestRenderer from './shared/test-renderer.js';
     import CHAT_TESTS from './web/chat.js';
+    import PANEL_TESTS from './web/panel.js';
     import RECIPE_EDITOR_TESTS from './web/recipe-editor.js';
     import LOGIN_TESTS from './web/login.js';
     import SPEC_TESTS from './web/spec.js';
     import SETTINGS_TESTS from './web/settings.js';
+    import HISTORY_TESTS from './web/history.js';
+    import ADMIN_TESTS from './web/admin.js';
 
     const renderer = new TestRenderer('app');
 
     // 모듈 등록
     renderer.registerModule(CHAT_TESTS);
+    renderer.registerModule(PANEL_TESTS);
     renderer.registerModule(RECIPE_EDITOR_TESTS);
     renderer.registerModule(LOGIN_TESTS);
     renderer.registerModule(SPEC_TESTS);
     renderer.registerModule(SETTINGS_TESTS);
+    renderer.registerModule(HISTORY_TESTS);
+    renderer.registerModule(ADMIN_TESTS);
 
     // 초기 렌더링
     renderer.render();

@@ -78,4 +78,6 @@ cd packages/library/java/21
 
 - 기획: `docs/specs/README.md`
 - 디자인: `docs/design/README.md`
+- DB 설계: `docs/db/README.md`
+- 라이브러리 가이드: `docs/library/README.md`
 - QA: `docs/test/README.md`

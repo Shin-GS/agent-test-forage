@@ -33,7 +33,7 @@
 
 .btn--primary {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-on-accent);
 }
 .btn--primary:hover {
   background: var(--color-accent-hover);
@@ -63,10 +63,10 @@
 
 .btn--danger {
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-text-on-accent);
 }
 .btn--danger:hover {
-  background: #dc2626;
+  background: var(--color-error-hover);
 }
 
 .btn--sm {
@@ -564,25 +564,25 @@
 
 .alert--error {
   background: var(--color-error-subtle);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid var(--color-error-border);
   color: var(--color-error);
 }
 
 .alert--warning {
   background: var(--color-warning-subtle);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  border: 1px solid var(--color-warning-border);
   color: var(--color-warning);
 }
 
 .alert--info {
   background: var(--color-info-subtle);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid var(--color-info-border);
   color: var(--color-info);
 }
 
 .alert--success {
   background: var(--color-success-subtle);
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  border: 1px solid var(--color-success-border);
   color: var(--color-success);
 }
 
@@ -967,7 +967,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-on-accent);
   border-radius: var(--radius-full);
   flex-shrink: 0;
   transition: all var(--transition-fast);

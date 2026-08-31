@@ -23,9 +23,13 @@ repositories {
 
 dependencies {
     // 외부 서버(Spring Boot)에 탑재되는 라이브러리.
-    // compileOnly로 두어 호스트 앱의 스프링 버전을 따르게 한다.
+    // compileOnly로 두어 호스트 앱의 스프링/springdoc 버전을 따르게 한다.
+    // (버전은 컴파일 기준일 뿐, 런타임엔 호스트 앱 버전 사용)
     compileOnly("org.springframework.boot:spring-boot-autoconfigure:3.4.0")
     compileOnly("org.springframework:spring-web:6.2.0")
+    compileOnly("org.springframework:spring-context:6.2.0")
+    // OpenAPI 어노테이션 커스터마이저용 (springdoc). 호스트 앱에 있을 때만 동작.
+    compileOnly("org.springdoc:springdoc-openapi-starter-webmvc-api:2.7.0")
 
     testImplementation(platform("org.junit:junit-bom:5.11.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")

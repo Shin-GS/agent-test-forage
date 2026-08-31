@@ -1,24 +1,25 @@
 ---
 status: draft
-last-updated: 2026-08-27
+last-updated: 2026-08-28
 ---
 
 # 시나리오: 플랜 제안
 
 ## 트리거
 
-의도 분류에서 `intent: plan`으로 판단된 경우.
+AI가 [Tool Use 호출](intent-classification.md)에서 `propose_plan` tool을 선택한 경우
+(여러 레시피를 순서대로 실행하는 복합 작업).
 
 ## 전체 흐름
 
 ```
-intent-classification에서 plan 판단
+Tool Use에서 propose_plan 호출 (recipeIds: [1, 3, 5])
     │
     ▼
-BE: 플랜에 포함된 레시피 상세 조회 (이름, 설명, 사용자 입력 변수)
+BE: recipeIds로 레시피 상세 조회 (이름, 설명, 사용자 입력 변수)
     │
     ▼
-채팅: AI message ("이 작업을 완료하려면...")
+채팅: FE 고정 템플릿 (레시피 이름 순서로 구성)
 액션 피커: 플랜 제안 UI
     │
     ├─ 사용자: 수정 (스킵/순서변경/제거/추가/값 지정)
@@ -28,16 +29,26 @@ BE: 플랜에 포함된 레시피 상세 조회 (이름, 설명, 사용자 입�
 
 ---
 
-## AI 출력 (intent-classification에서 받은 것)
+## AI 응답 (tool call)
 
 ```json
 {
-  "intent": "plan",
-  "plan": [1, 3, 5],
-  "extractedValues": { "positionId": "1" },
-  "message": "이 작업을 완료하려면 이력서 작성 → 포지션 탐색 → 입사지원 순서로 진행해야 해요."
+  "toolCalls": [
+    {
+      "function": {
+        "name": "propose_plan",
+        "arguments": {
+          "recipeIds": [1, 3, 5],
+          "extractedValues": { "positionId": "1" }
+        }
+      }
+    }
+  ]
 }
 ```
+
+- `propose_plan`은 **message를 생성하지 않는다.** 안내 문구는 FE가 `recipeIds`로 레시피 상세를 조회해 고정 템플릿으로 구성한다.
+- 플랜 모드는 항상 `AUTO`로 고정 (MODE 선택 없음).
 
 ---
 
@@ -45,7 +56,7 @@ BE: 플랜에 포함된 레시피 상세 조회 (이름, 설명, 사용자 입�
 
 | 영역 | 동작 |
 |------|------|
-| 채팅 | AI message 표시 |
+| 채팅 | FE 고정 템플릿 (레시피 이름 순서) |
 | 액션 피커 | 플랜 제안 UI (아래 참조) |
 | 사이드 패널 | 변화 없음 |
 | 대화방 상태 | 🟡 입력 대기 |
@@ -107,5 +118,5 @@ BE: 플랜에 포함된 레시피 상세 조회 (이름, 설명, 사용자 입�
 
 ## 프롬프트
 
-플랜 제안 자체는 intent-classification 단계에서 이미 결정됨.
-별도 AI 호출 없음 (BE가 plan 배열로 레시피 상세를 조회하여 FE에 전달).
+플랜 제안 자체는 Tool Use 호출(`propose_plan`) 단계에서 이미 결정됨.
+별도 AI 호출 없음 (BE가 `recipeIds` 배열로 레시피 상세를 조회하여 FE에 전달).

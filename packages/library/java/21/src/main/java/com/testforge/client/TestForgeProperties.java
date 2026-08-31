@@ -1,5 +1,8 @@
 package com.testforge.client;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -7,31 +10,74 @@ import java.util.List;
  *
  * <pre>
  * ai-test-forge:
+ *   enabled: true
  *   server-url: https://ai-test-forge.example.com
+ *   register-token: ${TESTFORGE_TOKEN}
+ *   name: "demo-shop"
+ *   base-url: https://shop-api.example.com
+ *   docs-url: /v3/api-docs
+ *   heartbeat-interval: 30000
  *   service:
- *     description: "채용 서비스"
- *     domain: "채용"
- *     capabilities: ["회원가입", "공고등록"]
+ *     description: "온라인 쇼핑몰 API"
+ *     domain: "커머스"
+ *     capabilities: ["회원가입", "상품등록"]
+ *     notes: "스테이징"
  *   jira:
- *     project-key: "RECRUIT"
+ *     project-key: "SHOP"
+ *   auth:
+ *     profiles:
+ *       - name: "일반"
+ *         login-page-url: "https://.../login"
  * </pre>
  */
+@ConfigurationProperties(prefix = "ai-test-forge")
 public class TestForgeProperties {
 
-    /** ai-test-forge 서버 URL. CORS 자동 허용 대상. */
+    /** 라이브러리 활성화 여부 (기본 true) */
+    private boolean enabled = true;
+
+    /** ai-test-forge 서버 URL. 스펙 등록 대상 + CORS 자동 허용 대상 */
     private String serverUrl;
+
+    /** 등록 보안 토큰 (X-TestForge-Token 헤더로 전송) */
+    private String registerToken;
+
+    /** 사용자에게 보이는 서비스 이름 (AI/사이드바 노출) */
+    private String name;
+
+    /** 이 서버의 baseUrl. 시스템 식별 키. 미지정 시 등록 스킵 */
+    private String baseUrl;
+
+    /** OpenAPI 문서 경로 (기본 /v3/api-docs) */
+    private String docsUrl = "/v3/api-docs";
+
+    /** heartbeat 주기 ms (기본 30초) */
+    private long heartbeatInterval = 30000L;
 
     private Service service = new Service();
     private Jira jira = new Jira();
+    private Auth auth = new Auth();
 
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getServerUrl() { return serverUrl; }
     public void setServerUrl(String serverUrl) { this.serverUrl = serverUrl; }
-
+    public String getRegisterToken() { return registerToken; }
+    public void setRegisterToken(String registerToken) { this.registerToken = registerToken; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getBaseUrl() { return baseUrl; }
+    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+    public String getDocsUrl() { return docsUrl; }
+    public void setDocsUrl(String docsUrl) { this.docsUrl = docsUrl; }
+    public long getHeartbeatInterval() { return heartbeatInterval; }
+    public void setHeartbeatInterval(long heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
     public Service getService() { return service; }
     public void setService(Service service) { this.service = service; }
-
     public Jira getJira() { return jira; }
     public void setJira(Jira jira) { this.jira = jira; }
+    public Auth getAuth() { return auth; }
+    public void setAuth(Auth auth) { this.auth = auth; }
 
     /** 서비스 설명 메타 (AI 매칭 컨텍스트) */
     public static class Service {
@@ -56,5 +102,23 @@ public class TestForgeProperties {
 
         public String getProjectKey() { return projectKey; }
         public void setProjectKey(String projectKey) { this.projectKey = projectKey; }
+    }
+
+    /** 인증 프로필 목록 (401/403 시 안내할 로그인 URL) */
+    public static class Auth {
+        private List<Profile> profiles = new ArrayList<>();
+
+        public List<Profile> getProfiles() { return profiles; }
+        public void setProfiles(List<Profile> profiles) { this.profiles = profiles; }
+
+        public static class Profile {
+            private String name;
+            private String loginPageUrl;
+
+            public String getName() { return name; }
+            public void setName(String name) { this.name = name; }
+            public String getLoginPageUrl() { return loginPageUrl; }
+            public void setLoginPageUrl(String loginPageUrl) { this.loginPageUrl = loginPageUrl; }
+        }
     }
 }

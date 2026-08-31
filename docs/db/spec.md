@@ -67,7 +67,7 @@ ref: docs/specs/spec/registration.md
 | STALE | 5분 이상 heartbeat 없음 | heartbeat 재수신 시 ACTIVE 복귀 |
 | INACTIVE | 관리자가 수동 비활성 | 관리자만 ACTIVE로 복귀 |
 
-- 30분 이상 heartbeat 없음 → 소프트 삭제 (`DELETED_AT`). **INACTIVE는 자동 삭제 제외**
+- 24시간 이상 heartbeat 없음 → 소프트 삭제 (`DELETED_AT`). **INACTIVE는 자동 삭제 제외** (초기 버전 기준, 공격적 삭제 방지)
 - INACTIVE/삭제 스펙은 AI 매칭/실행 제외. 참조 레시피는 유효성 검증에서 경고
 - 프로토타입에 REGISTERING(비동기 파싱) 상태 없음 (동기 처리)
 
@@ -155,6 +155,8 @@ ref: docs/specs/spec/registration.md
 
 ```json
 {
+  "schemaVersion": "1",
+  "client": { "lang": "java", "version": "0.0.1" },
   "name": "demo-shop",
   "baseUrl": "https://shop-api.example.com",
   "specJson": "{...OpenAPI JSON...}",
@@ -174,12 +176,27 @@ ref: docs/specs/spec/registration.md
 
 응답: `200` + `{ "specId": 123, "status": "ACTIVE" }`
 
+### 등록 계약 버저닝
+
+여러 언어/버전의 라이브러리가 하나의 ai-test-forge 서버로 등록한다. 등록 요청 body 구조가 라이브러리 진화에 따라 바뀔 수 있으므로 버전을 명시한다.
+
+| 필드 | 설명 |
+|------|------|
+| `schemaVersion` | **등록 계약(body 구조) 버전.** 서버가 이 값으로 파싱 로직을 분기 |
+| `client.lang` / `client.version` | 어떤 라이브러리가 보냈는지 (진단/호환용) |
+
+- **호환 흡수 주체 = 서버.** 서버가 schemaVersion별 파서를 두어 여러 버전 요청을 내부 표준 모델로 정규화
+- 라이브러리는 자기 `schemaVersion`을 정직하게 명시해서 전송
+- OpenAPI 스펙 버전(3.0/3.1)은 `specJson` 내부 `openapi` 필드에 이미 존재 → 서버가 그걸로 파싱
+- 계약이 하위호환 불가하게 깨지면 API 경로도 승격 (`/api/v2/specs/register`)
+
 ### Heartbeat (해시만)
 
 `POST /api/v1/specs/heartbeat`
 
 ```json
 {
+  "schemaVersion": "1",
   "baseUrl": "https://shop-api.example.com",
   "specHash": "sha256..."
 }

@@ -12,7 +12,7 @@ const SETTINGS_TESTS = {
       precondition: "설정 페이지 진입, AI 설정 섹션",
       steps: [
         "AI Provider 드롭다운 클릭",
-        "다른 Provider 선택 (예: OpenAI → Anthropic)",
+        "다른 Provider 선택 (예: OpenAI → Claude)",
         "저장 버튼 클릭",
         "변경 반영 확인"
       ],
