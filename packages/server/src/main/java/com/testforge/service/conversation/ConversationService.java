@@ -2,6 +2,7 @@ package com.testforge.service.conversation;
 
 import com.testforge.common.error.ApiException;
 import com.testforge.dto.common.StatusView;
+import com.testforge.dto.conversation.AssistantMessageDraft;
 import com.testforge.dto.conversation.ConversationDetailResponse;
 import com.testforge.dto.conversation.ConversationListSnapshot;
 import com.testforge.dto.conversation.ConversationStartRequest;
@@ -27,7 +28,9 @@ import com.testforge.utils.ConversationTitleUtil;
 import com.testforge.utils.RecipeJsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -43,8 +46,9 @@ import java.util.List;
  * 하나도 없는 orphan 대화방을 원천 차단한다.
  *
  * <p>CRUD + 저장에 더해, 대화방 단위 락(동시성 제어), 상태 전이(session_status)와 SSE 발행,
- * 취소/중지, 서버 기동 복구를 담당한다. AI 처리/실행 엔진(ai_responding/executing 세분 전이,
- * 락 장기 점유)은 다음 조각에서 추가하며 관련 지점은 TODO로 표시했다.
+ * 취소/중지, 서버 기동 복구를 담당한다. 메시지 접수 시 락을 장기 점유하고 {@code ai_responding}으로
+ * 전이한 뒤 {@link ChatRequestedEvent}를 발행하며, AI 처리 종결({@link #completeAssistantTurn})
+ * 시점에 {@code idle} 전이 + 락 해제를 수행한다. 실제 tool 분기/컨텍스트 조립은 ChatProcessor가 담당한다.
  * metadata JSON은 문자열로 저장하고 응답에서 다시 객체로 파싱해 내린다
  * (RecipeService/SpecQueryService와 동일한 로컬 Jackson 헬퍼 패턴).
  */
@@ -57,15 +61,18 @@ public class ConversationService {
     private final MessageRepository messageRepository;
     private final SseEventPublisher ssePublisher;
     private final ConversationLock conversationLock;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ConversationService(ConversationRepository conversationRepository,
                                MessageRepository messageRepository,
                                SseEventPublisher ssePublisher,
-                               ConversationLock conversationLock) {
+                               ConversationLock conversationLock,
+                               ApplicationEventPublisher eventPublisher) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.ssePublisher = ssePublisher;
         this.conversationLock = conversationLock;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -96,22 +103,35 @@ public class ConversationService {
         message.setMetadataJson(RecipeJsonUtil.toJsonString(request.metadata()));
         Message savedMessage = messageRepository.save(message);
 
-        // 3) 목록 최신순 정렬 + 안 읽음 판정 기준 갱신
+        // 3) 대화방 선점 + 처리 중 상태 전이(ai_responding). 방금 생성한 대화방이라 락 경합은 없어
+        //    tryLock 반환값을 검사하지 않는다. AI 처리 종결(completeAssistantTurn) 시점까지 점유를 유지한다.
+        //    sendMessage와 달리 예외 시 unlock을 두지 않는 이유: 이 지점 이후 남은 코드는 상태 변경/저장/
+        //    이벤트 등록뿐이라 예외 지점이 사실상 없고, save 실패 시엔 트랜잭션이 롤백되어 대화방 자체가
+        //    사라지므로 그 ID로 다시 요청이 올 수 없다(인메모리 락이 남아도 충돌 불가).
+        Long conversationId = savedConversation.getId();
+        conversationLock.tryLock(conversationId);
+        savedConversation.setStatus(ConversationStatus.AI_RESPONDING);
+
+        // 목록 최신순 정렬 + 안 읽음 판정 기준 갱신
         savedConversation.setLastMessageAt(savedMessage.getCreatedAt());
         conversationRepository.save(savedConversation);
 
-        // SSE: 첫 메시지 도착(message_new) + 대화방 목록에 추가(session_list_update upsert).
+        // SSE: 첫 메시지 도착(message_new) + 처리중 상태(session_status) + 목록에 추가(session_list_update upsert).
         // 커밋 후 발행하여 확정 데이터로 내보내고, 발행 실패가 트랜잭션을 깨지 않게 한다.
         Long ownerId = savedConversation.getUserId();
         MessageResponse messageView = toMessage(savedMessage);
         ConversationListSnapshot snapshot = toListSnapshot(savedConversation);
-        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, savedConversation.getId(), messageView);
-        publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, savedConversation.getId(),
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+        publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                SessionStatusPayload.of(conversationId, ConversationStatus.AI_RESPONDING));
+        publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
                 SessionListUpdatePayload.upsert(snapshot));
 
-        // TODO: AI 처리 트리거 + session_status 전이(ai_responding 등) — 다음 조각(chat 실행 엔진)에서 추가
+        // AI 처리 트리거: 커밋 후 비동기로 ChatProcessor 구동(ChatRequestedListener). 락 유지 → 종결 시 해제.
+        eventPublisher.publishEvent(new ChatRequestedEvent(conversationId, ownerId));
+
         log.info("Conversation started with first message: conversationId={}, messageId={}",
-                savedConversation.getId(), savedMessage.getId());
+                conversationId, savedMessage.getId());
 
         return new ConversationStartResponse(true, toDetail(savedConversation), messageView);
     }
@@ -206,10 +226,13 @@ public class ConversationService {
     @Transactional
     public MessageSendResponse sendMessage(Long conversationId, MessageSendRequest request) {
         // 대화방 선점. 이미 처리 중이면(락 경합) 이중 전송이므로 409로 거절한다.
-        // 인메모리 락은 트랜잭션 자원이 아니므로 트랜잭션 안에서 잡고 finally로 해제해도 안전하다.
+        // 인메모리 락은 트랜잭션 자원이 아니므로 트랜잭션 안에서 잡아도 안전하다.
         if (!conversationLock.tryLock(conversationId)) {
             throw ApiException.conversationBusy(conversationId);
         }
+        // 접수 처리 중 예외가 나면(저장 실패/검증 실패 등) 락을 해제해야 영구 잠금을 막는다.
+        // 정상 접수 시에는 락을 유지하고, AI 처리가 종결(completeAssistantTurn)될 때 해제한다.
+        boolean accepted = false;
         try {
             Conversation conversation = getActiveOrThrow(conversationId);
 
@@ -226,26 +249,103 @@ public class ConversationService {
 
             Message saved = messageRepository.save(message);
 
-            // 목록 최신순 정렬 + 안 읽음 판정 기준 갱신
+            // 처리 중 상태로 전이(ai_responding): 모든 탭 입력 잠금. 목록 최신순/안 읽음 기준도 갱신.
+            conversation.setStatus(ConversationStatus.AI_RESPONDING);
             conversation.setLastMessageAt(saved.getCreatedAt());
             conversationRepository.save(conversation);
 
-            // SSE: 새 메시지 도착(message_new) + 목록 한 줄 갱신(lastMessageAt 반영)
+            // SSE: 새 메시지(message_new) + 처리중 상태(session_status ai_responding) + 목록 한 줄 갱신
             Long ownerId = conversation.getUserId();
             MessageResponse messageView = toMessage(saved);
             publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+            publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                    SessionStatusPayload.of(conversationId, ConversationStatus.AI_RESPONDING));
             publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
                     SessionListUpdatePayload.upsert(toListSnapshot(conversation)));
 
-            // TODO: AI 처리 트리거 + session_status 전이(ai_responding 등) — 다음 조각(chat 실행 엔진)에서 추가.
-            //       그 단계에서는 여기서 락을 해제하지 않고 처리 완료(종결 이벤트) 시점까지 점유를 유지한다.
+            // AI 처리 트리거: 커밋 후 비동기로 ChatProcessor가 구동된다(ChatRequestedListener).
+            // 락은 유지한 채로 넘기고, 처리 종결 시 completeAssistantTurn이 idle 전이 + 락 해제를 수행한다.
+            eventPublisher.publishEvent(new ChatRequestedEvent(conversationId, ownerId));
+            accepted = true;
+
             log.info("Message accepted: conversationId={}, messageId={}, seq={}",
                     conversationId, saved.getId(), saved.getSeq());
 
             return new MessageSendResponse(true, conversationId, messageView);
         } finally {
-            // 지금은 저장 즉시 처리가 끝나므로 커밋과 무관하게 락을 해제한다(짧은 점유).
-            // AI 조각에서는 이 해제를 처리 완료(종결 이벤트) 시점으로 미룬다.
+            // 정상 접수면 락을 유지(AI 종결 시 해제), 예외로 미접수면 즉시 해제해 영구 잠금을 막는다.
+            if (!accepted) {
+                conversationLock.unlock(conversationId);
+            }
+        }
+    }
+
+    /**
+     * AI 처리 결과(assistant 턴)를 확정 메시지로 남기고 대화방을 종결한다.
+     * ChatProcessor가 tool 결과를 {@link AssistantMessageDraft}로 만들어 넘기면, 여기서
+     * seq 발번 + 메시지 저장 + {@code message_new} + {@code session_status: idle} +
+     * {@code session_list_update} 발행 + 대화방 락 해제를 한 트랜잭션으로 처리한다
+     * (messaging.md 종결 보장: AI 응답 완료 message_new + idle 전파).
+     *
+     * <p><b>취소/중지 경쟁 방어(messaging.md "취소=전체 폐기"):</b> AI 처리는 비동기라, 처리 도중
+     * 사용자가 [취소]/[중지]를 눌러 대화방이 이미 {@code IDLE}로 풀렸을 수 있다. 이때 지각 도착한 AI
+     * 결과를 그대로 저장/발행하면 취소했는데도 응답이 뒤늦게 나타난다. 그래서 상태가 여전히
+     * {@code AI_RESPONDING}일 때만 확정하고, 아니면 <b>결과를 버린다</b>(no-op, null 반환).
+     * 삭제된 대화방({@code getActiveOrThrow} 404)도 마찬가지로 버린다.
+     *
+     * <p><b>락 소유권:</b> 락 해제는 "이 처리가 유효할 때"(AI_RESPONDING)만 수행한다. 취소가 이미
+     * 락을 풀었거나(그 사이 다른 요청이 락을 잡았을 수 있음) 상태가 바뀐 경우엔 락을 건드리지 않아,
+     * 지각 처리가 남의 락을 해제하는 것을 막는다.
+     *
+     * <p>발행은 커밋 후로 미뤄 확정 데이터로 내보낸다.
+     *
+     * <p><b>전파 = REQUIRES_NEW:</b> 이 메서드는 메시지 접수 트랜잭션의 {@code AFTER_COMMIT} 리스너
+     * (ChatRequestedListener)에서 호출된다. 그 시점엔 접수 트랜잭션이 이미 커밋돼 종료 중이라, 기본 전파로는
+     * 새 쓰기가 커밋되지 않고 StaleState가 발생한다. 따라서 독립 트랜잭션을 새로 열어 assistant 턴을
+     * 확실히 커밋한다.
+     *
+     * @return 확정된 assistant 메시지. 취소/중지/삭제로 결과를 버렸으면 {@code null}.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public MessageResponse completeAssistantTurn(Long conversationId, AssistantMessageDraft draft) {
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElse(null);
+
+        // 대화방이 사라졌거나(삭제) 이미 처리 중이 아니면(취소/중지로 idle 등) 지각 결과를 버린다.
+        // 이 경우 락은 취소 경로가 이미 해제했으므로 여기서 건드리지 않는다(남의 락 해제 방지).
+        if (conversation == null || conversation.getStatus() != ConversationStatus.AI_RESPONDING) {
+            log.info("Assistant turn discarded (conversation not in AI_RESPONDING): conversationId={}, status={}",
+                    conversationId, conversation == null ? "DELETED" : conversation.getStatus());
+            return null;
+        }
+
+        try {
+            Long ownerId = conversation.getUserId();
+
+            long nextSeq = nextSeq(conversationId);
+            Message message = new Message(conversationId, nextSeq,
+                    MessageRole.ASSISTANT, draft.type(), MessageStatus.COMPLETED);
+            message.setContent(draft.content());
+            message.setMetadataJson(draft.metadataJson());
+            Message saved = messageRepository.save(message);
+
+            // 종결: ai_responding → idle 전이 + 목록 최신순 기준 갱신
+            conversation.setStatus(ConversationStatus.IDLE);
+            conversation.setLastMessageAt(saved.getCreatedAt());
+            Conversation savedConversation = conversationRepository.save(conversation);
+
+            MessageResponse messageView = toMessage(saved);
+            publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+            publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                    SessionStatusPayload.of(conversationId, ConversationStatus.IDLE));
+            publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
+                    SessionListUpdatePayload.upsert(toListSnapshot(savedConversation)));
+
+            log.info("Assistant turn completed: conversationId={}, messageId={}, type={}",
+                    conversationId, saved.getId(), draft.type());
+            return messageView;
+        } finally {
+            // 이 처리가 유효했을 때만(위에서 AI_RESPONDING 확인됨) 잡았던 락을 해제한다.
             conversationLock.unlock(conversationId);
         }
     }

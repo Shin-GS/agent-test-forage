@@ -8,11 +8,13 @@ import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.service.conversation.ConversationService;
 import com.testforge.sse.SseEvent;
 import com.testforge.sse.SseEventPublisher;
+import com.testforge.support.SyncChatExecutorTestConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -44,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(SyncChatExecutorTestConfig.class)
 class ConversationLockAndStatusIntegrationTest {
 
     @Autowired
@@ -96,7 +99,7 @@ class ConversationLockAndStatusIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_BUSY"));
 
-        // 점유 해제 후에는 정상 접수
+        // 점유 해제 후에는 정상 접수 (접수 메시지는 USER seq=1)
         conversationLock.unlock(id);
         mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -104,8 +107,13 @@ class ConversationLockAndStatusIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message.seq").value(1));
 
-        // 정상 접수 후 락은 해제된 상태여야 함(짧은 점유)
+        // 접수 시 잡은 락은 AI 처리 종결(completeAssistantTurn) 시점에 해제된다.
+        // 테스트는 AI 처리를 동기로 태우므로(SyncChatExecutorTestConfig), 이 시점엔 이미 해제됨.
         assertThat(conversationLock.isLocked(id)).isFalse();
+        // 처리 종결로 대화방은 IDLE, assistant 응답 메시지가 이어 붙어 총 2건
+        assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.IDLE);
+        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(2);
     }
 
     // ── 취소: 진행 중 → IDLE 전이 + session_status(idle) 발행 + 재호출 멱등(no-op) ──
@@ -180,6 +188,63 @@ class ConversationLockAndStatusIntegrationTest {
 
         conversationService.transitionStatus(id, ConversationStatus.IDLE);
 
+        assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.IDLE);
+    }
+
+    // ── sendMessage → AI 처리 종결: message_new + session_status(idle)가 SSE로 발행된다 ──
+    @Test
+    void sendMessage_afterAiProcessing_publishesMessageNewAndIdle() throws Exception {
+        Long id = newConversation(ConversationStatus.IDLE);
+
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":" + USER_ID + ",\"content\":\"안녕하세요\"}"))
+                .andExpect(status().isCreated());
+
+        // 접수(message_new/ai_responding) + AI 종결(message_new/idle)이 모두 발행됨
+        ArgumentCaptor<SseEvent> captor = ArgumentCaptor.forClass(SseEvent.class);
+        verify(ssePublisher, atLeastOnce()).toUser(eq(USER_ID), captor.capture());
+        List<SseEvent> events = captor.getAllValues();
+
+        // assistant 응답 도착(message_new)
+        assertThat(events).anyMatch(e -> "message_new".equals(e.type()));
+        // 종결 상태(session_status)가 idle로 발행됨 (마지막 상태 전이)
+        assertThat(events).anyMatch(e -> "session_status".equals(e.type()));
+        // 처리 종결로 대화방은 IDLE, user+assistant 2건
+        assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.IDLE);
+        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(2);
+    }
+
+    // ── completeAssistantTurn: AI_RESPONDING이면 저장 + idle 전이 ──
+    @Test
+    void completeAssistantTurn_whenAiResponding_savesAndReturnsToIdle() {
+        Long id = newConversation(ConversationStatus.AI_RESPONDING);
+        conversationLock.tryLock(id);
+
+        var view = conversationService.completeAssistantTurn(id,
+                com.testforge.dto.conversation.AssistantMessageDraft.text("응답입니다"));
+
+        assertThat(view).isNotNull();
+        assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.IDLE);
+        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(1);
+        // 유효 처리였으므로 락도 해제됨
+        assertThat(conversationLock.isLocked(id)).isFalse();
+    }
+
+    // ── completeAssistantTurn: 취소로 이미 IDLE이면 지각 결과를 버린다(저장/발행 없음) ──
+    @Test
+    void completeAssistantTurn_whenAlreadyIdle_discardsLateResult() {
+        Long id = newConversation(ConversationStatus.IDLE);
+
+        var view = conversationService.completeAssistantTurn(id,
+                com.testforge.dto.conversation.AssistantMessageDraft.text("취소 후 지각 응답"));
+
+        // 버려짐: null 반환 + 메시지 미저장 + 상태 그대로 IDLE
+        assertThat(view).isNull();
+        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).isEmpty();
         assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
                 .isEqualTo(ConversationStatus.IDLE);
     }

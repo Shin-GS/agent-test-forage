@@ -1,4 +1,7 @@
 spring:
+  main:
+    # 테스트에서 chatTaskExecutor를 동기 실행기로 오버라이드하기 위해 허용
+    allow-bean-definition-overriding: true
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL
     username: sa

@@ -3,10 +3,12 @@ package com.testforge;
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
+import com.testforge.support.SyncChatExecutorTestConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,10 +30,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 첫 메시지로 방 생성(seq=1·제목 파생/절단)/목록(삭제제외·정렬·unread)/상세404/이름변경/
  * 읽음처리(lastReadAt 갱신)/소프트삭제/이어서 메시지 전송(seq 증가·lastMessageAt 갱신)/
  * 목록(seq순)/없는 방 404를 검증한다.
- * (SSE·락·AI 처리는 이번 스코프 아님 — 저장까지만 검증)
+ *
+ * <p>메시지 접수는 AI 처리(목 resolver)를 동기로 태운다({@link SyncChatExecutorTestConfig}).
+ * 따라서 각 사용자 메시지 뒤에는 assistant 응답 메시지가 1건 이어 붙고, 대화방은 처리 종결 후
+ * {@code IDLE}로 돌아온다. 이 검증들은 "AI 처리까지 마친 최종 상태"를 기준으로 한다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(SyncChatExecutorTestConfig.class)
 class ConversationIntegrationTest {
 
     @Autowired
@@ -65,8 +71,9 @@ class ConversationIntegrationTest {
                 .andExpect(jsonPath("$.accepted").value(true))
                 .andExpect(jsonPath("$.conversation.title").value("회원가입 테스트"))
                 .andExpect(jsonPath("$.conversation.apiSpecId").value(10))
-                .andExpect(jsonPath("$.conversation.status.code").value("IDLE"))
-                .andExpect(jsonPath("$.conversation.status.description").value("유휴"))
+                // 접수 응답 시점 상태는 처리 중(AI_RESPONDING). 커밋 후 AI 처리가 idle로 되돌린다.
+                .andExpect(jsonPath("$.conversation.status.code").value("AI_RESPONDING"))
+                .andExpect(jsonPath("$.conversation.status.description").value("AI 응답 중"))
                 // 첫 메시지가 방금 생겼고 아직 안 읽음(lastReadAt=null) → unread=true
                 .andExpect(jsonPath("$.conversation.unread").value(true))
                 .andExpect(jsonPath("$.message.seq").value(1))
@@ -77,6 +84,12 @@ class ConversationIntegrationTest {
         // 대화방이 lastMessageAt와 함께 생성됨 (빈 방 없음)
         assertThat(conversationRepository.findAll()).hasSize(1);
         assertThat(conversationRepository.findAll().get(0).getLastMessageAt()).isNotNull();
+        // AI 처리(동기)까지 마친 뒤 대화방은 IDLE로 종결된다
+        assertThat(conversationRepository.findAll().get(0).getStatus())
+                .isEqualTo(com.testforge.entity.conversation.enums.ConversationStatus.IDLE);
+        // "안녕하세요"는 목 resolver가 chat으로 응답 → assistant 텍스트 메시지가 seq=2로 이어 붙는다
+        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(
+                conversationRepository.findAll().get(0).getId())).hasSize(2);
     }
 
     // ── start: title 미지정 → 첫 메시지 앞부분으로 임시 제목 파생 ──
@@ -234,13 +247,13 @@ class ConversationIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    // ── sendMessage: 저장 + seq 증가 + lastMessageAt 갱신 ──
+    // ── sendMessage: 저장 + seq 증가 + lastMessageAt 갱신 (사용자 메시지 사이에 assistant 응답이 낀다) ──
     @Test
     void sendMessage_storesUserMessageWithIncrementingSeq() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
         assertThat(conversationRepository.findById(id).orElseThrow().getLastMessageAt()).isNull();
 
-        // 첫 메시지 → seq 1
+        // 첫 사용자 메시지 → seq 1 (그 뒤 assistant 응답이 seq 2로 저장됨)
         mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"안녕하세요\"}"))
@@ -252,15 +265,20 @@ class ConversationIntegrationTest {
                 .andExpect(jsonPath("$.message.status.code").value("COMPLETED"))
                 .andExpect(jsonPath("$.message.content").value("안녕하세요"));
 
-        // 둘째 메시지 → seq 2
+        // 둘째 사용자 메시지 → seq 3 (앞의 assistant 응답이 seq 2를 차지했으므로)
         mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"두번째\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message.seq").value(2));
+                .andExpect(jsonPath("$.message.seq").value(3));
 
-        // lastMessageAt 갱신됨
-        assertThat(conversationRepository.findById(id).orElseThrow().getLastMessageAt()).isNotNull();
+        // lastMessageAt 갱신됨 + 처리 종결로 IDLE 복귀
+        Conversation after = conversationRepository.findById(id).orElseThrow();
+        assertThat(after.getLastMessageAt()).isNotNull();
+        assertThat(after.getStatus())
+                .isEqualTo(com.testforge.entity.conversation.enums.ConversationStatus.IDLE);
+        // user 2건 + assistant 2건 = 4건
+        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(4);
     }
 
     // ── sendMessage: 빈 내용 → 400 ──
@@ -285,7 +303,7 @@ class ConversationIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }
 
-    // ── listMessages: seq 오름차순 ──
+    // ── listMessages: seq 오름차순 (각 사용자 메시지 뒤에 assistant 응답이 낀다) ──
     @Test
     void listMessages_returnsInSeqOrder() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
@@ -297,14 +315,19 @@ class ConversationIntegrationTest {
                     .andExpect(status().isCreated());
         }
 
+        // user 3건 + assistant 3건 = 6건. 사용자 메시지는 seq 1/3/5(홀수)에 위치.
         mockMvc.perform(get("/api/v1/conversations/{id}/messages", id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$.length()").value(6))
                 .andExpect(jsonPath("$[0].seq").value(1))
+                .andExpect(jsonPath("$[0].role.code").value("USER"))
                 .andExpect(jsonPath("$[0].content").value("첫째"))
                 .andExpect(jsonPath("$[1].seq").value(2))
+                .andExpect(jsonPath("$[1].role.code").value("ASSISTANT"))
                 .andExpect(jsonPath("$[2].seq").value(3))
-                .andExpect(jsonPath("$[2].content").value("셋째"));
+                .andExpect(jsonPath("$[2].content").value("둘째"))
+                .andExpect(jsonPath("$[4].seq").value(5))
+                .andExpect(jsonPath("$[4].content").value("셋째"));
     }
 
     // ── listMessages: 없는 대화방 → 404 ──

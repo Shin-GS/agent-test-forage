@@ -26,7 +26,8 @@ import java.util.List;
 /**
  * 대화방/메시지 CRUD + 대화방 단위 락(동시성) + 취소/중지 API.
  * 채팅 인터페이스(사이드바 대화 목록 + 대화 영역)가 소비하며, 상태 변경은 SSE로 모든 탭에 전파된다.
- * AI 처리/실행 엔진(ai_responding/executing 세분 전이, 락 장기 점유)은 다음 조각에서 다룬다.
+ * 메시지 접수 시 대화방을 ai_responding으로 전이하고 AI 처리(ChatProcessor)를 비동기로 구동한다.
+ * 레시피/플랜 실행 엔진(executing 전이, 실제 스텝 실행)은 다음 조각에서 다룬다.
  *
  * <p>TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 접근). 현재 userId는
  * 요청 파라미터/바디로 받되 소유권 검증은 하지 않는다.
@@ -97,8 +98,9 @@ public class ConversationController {
     }
 
     /**
-     * 메시지 전송(동기 접수). 사용자 메시지를 저장하고 lastMessageAt을 갱신한다.
-     * 대화방이 이미 처리 중이면(락 경합) 409 CONVERSATION_BUSY. AI 처리는 다음 조각.
+     * 메시지 전송(동기 접수). 사용자 메시지를 저장하고 ai_responding으로 전이한 뒤 AI 처리를 비동기로
+     * 트리거한다. 접수 자체는 거의 즉시 리턴하며(낙관적 UI), AI 응답은 SSE(message_new)로 도착한다.
+     * 대화방이 이미 처리 중이면(락 경합) 409 CONVERSATION_BUSY.
      */
     @PostMapping("/{id}/messages")
     public ResponseEntity<MessageSendResponse> sendMessage(@PathVariable Long id,
