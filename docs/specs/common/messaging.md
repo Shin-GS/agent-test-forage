@@ -133,8 +133,8 @@ last-updated: 2026-09-01
 |-------|----------|--------|------|-----------|
 | `message_new` | CHAT | DATA | 새 메시지 도착 | 메시지 JSON 전체 |
 | `message_update` | CHAT | DATA | 기존 메시지 업데이트 (진행 상태, 추후 토큰 스트리밍) | `{ sessionId, messageId, message: {...} }` |
-| `session_status` | SESSION | SIGNAL | 대화방 처리 상태 변경 (탭 간 동기화) | `{ sessionId, status }` (아래 상태값) |
-| `session_list_update` | SESSION | SIGNAL | 대화방 목록 갱신 (이름/서비스 변경 등) | `{ sessionId, title, service, updatedAt }` |
+| `session_status` | SESSION | SIGNAL | 대화방 **처리 상태** 변경 (입력 영역 구동, 고빈도) | `{ sessionId, status }` (아래 상태값) |
+| `session_list_update` | SESSION | SIGNAL | 대화방 **목록 한 줄** 갱신 (추가/삭제/이름·서비스·읽음·상태 전부 흡수) | `{ op, conversation }` (아래) |
 | `execution_progress` | EXECUTION | SIGNAL | 레시피 실행 스텝 진행 | `{ sessionId, executionId, stepIndex, status, summary }` |
 | `execution_complete` | EXECUTION | DATA | 레시피 실행 종료 (결과/사유 포함) | `{ sessionId, executionId, outcome, retriable, failedStepIndex }` (아래 outcome) |
 | `heartbeat` | SYSTEM | SIGNAL | 연결 유지용 | `{}` |
@@ -166,6 +166,36 @@ last-updated: 2026-09-01
 
 - 상태 전이는 요청을 시작한 탭뿐 아니라 **모든 탭(같은 사용자 Global SSE)**에 전달됨
 - 입력 잠금 이유를 입력 지점에 명시(옵션 2). 실행 상세는 채팅 영역의 진행 블록(execution_progress)으로 별도 표시
+
+### 대화방 목록 갱신 (session_list_update)
+
+대화방 목록 한 줄을 그리는 데 필요한 변경(추가/삭제/이름변경/서비스변경/읽음/상태)을 **하나의 이벤트로 통합**한다. 별도 read/rename 이벤트를 두지 않아 파편화를 막고, FE는 "이 대화방 한 줄을 통째로 교체(없으면 추가)/제거"만 하면 된다.
+
+```json
+{
+  "op": "upsert | removed",
+  "conversation": {
+    "id": 123,
+    "title": "회원가입 테스트",
+    "apiSpecId": 1,
+    "status": "idle | ai_responding | executing | input_waiting",
+    "lastMessageAt": "2026-09-01T10:00:00",
+    "unread": true,
+    "updatedAt": "2026-09-01T10:00:00"
+  }
+}
+```
+
+| op | 의미 | conversation |
+|----|------|--------------|
+| `upsert` | 추가·갱신 통합 (생성/이름변경/서비스변경/읽음/상태변경) | 목록 한 줄 전체 스냅샷 |
+| `removed` | 삭제 | `{ id }`만 |
+
+**발행 시점 / 규칙**
+- **추가(upsert)**: 대화방 row 생성 순간이 아니라 **첫 메시지 전송 시점**에 발행 (빈 대화는 목록에 안 쌓임 — overview.md)
+- **읽음**: 대화방 진입 시 읽음 API → `LAST_READ_AT` 갱신 → `upsert`(unread=false)로 모든 탭 뱃지 동기화
+- **삭제(removed)**: 모든 탭 목록에서 제거. **다른 탭이 방금 삭제된 대화방을 보고 있으면** "이 대화는 삭제되었습니다" 안내 + 목록으로 이동
+- `session_status`(고빈도 처리상태)는 목록 이벤트와 **분리 유지** — 입력 영역 구동용. 목록 뱃지는 session_list_update의 `status`로 반영. 성격(저빈도 목록 vs 고빈도 상태)이 달라 분리
 
 ### 상태 해제 (취소 / 중지 / 완료)
 
@@ -204,7 +234,7 @@ last-updated: 2026-09-01
 | `message_new` | 채팅에 즉시 렌더링 | 상태 뱃지(🔵) 업데이트 |
 | `message_update` | 해당 메시지 즉시 갱신 | 무시 (진입 시 로드) |
 | `session_status` | **입력 영역 상태 반영** (idle/ai_responding/executing/input_waiting) | 목록 뱃지 업데이트 |
-| `session_list_update` | — | 대화 목록 반영 |
+| `session_list_update` | 보고 있는 방이 removed면 "삭제됨" 안내 후 목록 이동 | 목록에 upsert(교체/추가)/removed(제거) 반영 |
 | `execution_progress` | 진행 상태 블록 갱신 | 무시 |
 | `execution_complete` | 완료 메시지 + 카드 UI | 상태 뱃지(🔵) |
 
