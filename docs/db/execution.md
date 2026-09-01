@@ -12,7 +12,7 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 
 - **실행은 정규화** — 스텝별 상태/결과를 조회·재개해야 하므로 (execution.md: "스텝별 상태 저장 → 이어서 실행")
 - **모든 실행은 내부적으로 플랜** (plan.md: "단일 레시피 = 레시피 1개짜리 플랜"). 표시만 구분
-- **히스토리는 대화와 독립** (history.md: "대화방 삭제해도 히스토리 유지") → 대화 FK를 NULL 허용 + soft 참조
+- **히스토리는 대화와 독립** (history.md: "대화방 삭제해도 히스토리 유지") → 히스토리 조회는 `USER_ID` 기준이라 대화 삭제와 무관하게 유지된다. 대화방은 **소프트 삭제**(row 유지)이므로 `CONVERSATION_ID`는 **연결을 그대로 유지**한다(FK를 끊지 않음). 연결을 남겨 "이 실행이 나온 대화" 추적/복구가 가능하다.
 - context(extract 변수)는 재개에 필요 → 저장
 - **정보 조회(investigate)는 실행이 아님** → 여기 저장하지 않음. 1회성 조회이며 결과는 채팅 메시지로만 남음 (investigation.md)
 
@@ -36,7 +36,7 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 |------|------|------|
 | `ID` | BIGINT PK | |
 | `USER_ID` | BIGINT FK | 실행한 사용자 |
-| `CONVERSATION_ID` | BIGINT FK NULL | 실행된 대화방. **대화 삭제 시 NULL로 (히스토리 독립 유지)** |
+| `CONVERSATION_ID` | BIGINT FK NULL | 실행된 대화방. 대화방은 소프트 삭제라 **연결 유지**(끊지 않음). 히스토리 독립성은 USER_ID 기준 조회로 확보. NULL은 대화 없이 시작된 실행(추후) 대비 |
 | `API_SPEC_ID` | BIGINT FK NULL | 대상 서비스 (참조용, 스펙 삭제 대비 NULL 허용) |
 | `TYPE` | VARCHAR(20) | SINGLE(단일 레시피) / PLAN(복합) |
 | `TITLE` | VARCHAR(200) | 표시명 (예: "회원가입 × 5", "플랜: 입사지원") |
@@ -141,8 +141,8 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 
 ## 히스토리 독립성 (history.md)
 
-- 대화방 삭제 시 `EXECUTION.CONVERSATION_ID = NULL` (실행 기록은 유지)
-- 히스토리 조회는 `USER_ID` 기준 (대화 무관)
+- 히스토리 조회는 `USER_ID` 기준 (대화 무관) → 대화방을 삭제해도 실행 기록은 그대로 조회된다
+- 대화방은 **소프트 삭제**(row 유지)이므로 `EXECUTION.CONVERSATION_ID` 연결을 **끊지 않는다**. 연결을 남겨 "이 실행이 나온 대화" 추적/복구가 가능하다 (프로젝트 원칙: 소프트 삭제 기준, FK 유지)
 - 플랜 히스토리: `EXECUTION(TYPE=PLAN)` + `EXECUTION_RECIPE` 펼쳐서 표시
 
 ---

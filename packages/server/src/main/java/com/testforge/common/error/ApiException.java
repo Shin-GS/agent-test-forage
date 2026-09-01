@@ -77,6 +77,12 @@ public class ApiException extends RuntimeException {
                 "Conversation is busy: " + conversationId);
     }
 
+    /** 존재하지 않는 실행 (404) */
+    public static ApiException executionNotFound(Long executionId) {
+        return new ApiException(ErrorCode.EXECUTION_NOT_FOUND, HttpStatus.NOT_FOUND,
+                "Execution not found: " + executionId);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

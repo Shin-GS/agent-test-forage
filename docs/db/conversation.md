@@ -96,7 +96,7 @@ ref: docs/specs/chat/overview.md, docs/specs/common/messaging.md
 ## 대화-실행 연결
 
 - 대화에서 레시피 실행 → `EXECUTION.CONVERSATION_ID`로 연결 (execution.md)
-- 대화 삭제(soft): `CONVERSATION.DELETED_AT` 설정 + 연결된 `EXECUTION.CONVERSATION_ID = NULL` (히스토리 독립)
+- 대화 삭제(soft): `CONVERSATION.DELETED_AT`만 설정. 연결된 `EXECUTION.CONVERSATION_ID`는 **그대로 유지**(FK를 끊지 않음). 대화방 row가 남으므로 무결성이 유지되고, 히스토리는 `USER_ID` 기준 조회라 대화 삭제와 무관하게 독립적으로 유지된다 (프로젝트 원칙: 소프트 삭제 기준, 연결 유지)
 - 실행 중 대화 삭제: 차단 or 중지 확인 (execution.md)
 
 ---

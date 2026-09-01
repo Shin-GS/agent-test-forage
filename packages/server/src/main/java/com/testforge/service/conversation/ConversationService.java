@@ -189,18 +189,27 @@ public class ConversationService {
         return toDetail(saved);
     }
 
-    /** 소프트 삭제 (DELETED_AT = now). 없거나 이미 삭제 시 404. */
+    /**
+     * 소프트 삭제 (DELETED_AT = now). 없거나 이미 삭제 시 404.
+     *
+     * <p><b>TODO (다음 조각: 중지/이어서 실행):</b> execution.md는 "실행 중 대화방 삭제 = 삭제 차단 또는
+     * 중지 확인"을 요구한다. 현재는 대화방 상태가 EXECUTING이어도 그대로 삭제한다. 실행 중이면 삭제를
+     * 막거나(409) 중지 후 삭제하도록, RUNNING 실행 종료 처리와 함께 연결해야 한다.
+     */
     @Transactional
     public void softDelete(Long id) {
         Conversation conversation = getActiveOrThrow(id);
         conversation.setDeletedAt(LocalDateTime.now());
         conversationRepository.save(conversation);
 
+        // 대화방은 소프트 삭제라 row가 그대로 남는다. 연결된 실행(EXECUTION.CONVERSATION_ID)은
+        // 그대로 유지한다 — 히스토리는 USER_ID 기준 조회라 대화 삭제와 무관하게 독립적으로 유지되고
+        // (history.md), 연결을 남겨 두면 "이 실행이 나온 대화" 추적/복구가 가능하다. FK를 끊지 않는다.
+
         // SSE: 목록에서 제거 (모든 탭). 보고 있던 탭은 "삭제됨" 안내 후 목록 이동
         publishAfterCommit(conversation.getUserId(), SseEventType.SESSION_LIST_UPDATE, id,
                 SessionListUpdatePayload.removed(id));
 
-        // TODO: 대화 삭제 시 연결된 EXECUTION.CONVERSATION_ID = NULL (히스토리 독립, execution.md) — execution 도메인 구현 후
         log.info("Conversation soft-deleted: conversationId={}", id);
     }
 
@@ -380,6 +389,11 @@ public class ConversationService {
      * 액션 피커 [취소]. 대기/락을 해제하고 대화방을 IDLE로 되돌린 뒤 "취소되었습니다" 시스템 메시지를
      * 남긴다(messaging.md 상태 해제). 이미 IDLE이면 <b>멱등 no-op</b>(에러 아님).
      * 취소/중지는 반드시 API 경유이며 상태 해제는 모든 탭에 전파된다.
+     *
+     * <p><b>TODO (다음 조각: 중지/이어서 실행):</b> stop과 마찬가지로 EXECUTION 레코드는 아직 건드리지
+     * 않는다. 취소는 messaging.md에서 "전체 폐기, 재개 없음"(outcome CANCELLED)이므로, 실행 중 취소 시
+     * 해당 {@code Execution}을 폐기 상태로 종결하는 처리를 ExecutionService와 연결해야 한다.
+     * (stop=STOPPED/재개 가능 vs cancel=폐기/재개 없음의 구분도 그때 반영)
      */
     @Transactional
     public ConversationDetailResponse cancel(Long conversationId) {
@@ -387,9 +401,14 @@ public class ConversationService {
     }
 
     /**
-     * 실행 [중지]. 지금은 실행 엔진이 없어 취소와 동일하게 대화방을 IDLE로 되돌리고 락을 해제한다.
-     * 실행 엔진 도입 후에는 현재 스텝까지 저장 + {@code execution_complete}(STOPPED) 발행이 추가된다.
-     * 이미 IDLE이면 <b>멱등 no-op</b>.
+     * 실행 [중지]. 대화방을 IDLE로 되돌리고 락을 해제한다. 이미 IDLE이면 <b>멱등 no-op</b>.
+     *
+     * <p><b>TODO (다음 조각: 중지/이어서 실행):</b> 현재는 대화방 상태만 해제하고 EXECUTION 레코드는
+     * 건드리지 않는다. 그래서 실행 중([EXECUTING]) 중지 시 해당 {@code Execution}이 RUNNING으로
+     * 남는 갭이 있다(유령 RUNNING 레코드). 다음 조각에서 이 대화방의 RUNNING 실행을 STOPPED로 종료
+     * (현재 스텝까지 결과 보존 + {@code execution_complete}(STOPPED) 발행)하도록 ExecutionService와
+     * 연결해야 한다. "현재 스텝까지 저장"은 스텝 보고 API가 선행되어야 의미가 있으므로 이번 조각에서는
+     * 미룬다(messaging.md 중지 정책: STOPPED, 이어서 실행 가능).
      */
     @Transactional
     public ConversationDetailResponse stop(Long conversationId) {

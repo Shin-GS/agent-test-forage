@@ -24,7 +24,7 @@ API_SPEC ──┬── API_SPEC_DOCUMENT (1:1)
            ├── API_ENDPOINT (1:N)   ← 레시피 스텝이 논리 참조
            └── AUTH_PROFILE (1:N)
 
-CONVERSATION ──(NULL 허용)── EXECUTION   (대화 삭제 시 NULL, 히스토리 독립)
+CONVERSATION ──── EXECUTION   (연결 유지, 히스토리는 USER_ID 기준 독립)
 RECIPE       ──(스냅샷)──── EXECUTION_RECIPE  (실행 시점 통째 복사)
 API_SPEC     ──── RECIPE / CONVERSATION       (대상 서비스)
 ```
@@ -35,10 +35,10 @@ API_SPEC     ──── RECIPE / CONVERSATION       (대상 서비스)
 |------|------|
 | JSON 컬럼 | 구조가 자유롭거나 자주 바뀌는 것 (스텝, operation, 스냅샷, 메타데이터) |
 | 정규화 | 조회·필터·재개가 필요한 것 (API 엔드포인트, 실행 스텝, 메시지) |
-| Soft delete | 참조/이력이 중요한 것 (`DELETED_AT`) — 스펙, 레시피, 대화 |
+| Soft delete | 모든 삭제는 소프트 삭제 (`DELETED_AT`). FK 연결은 끊지 않음 — row가 남아 무결성 유지 |
 | 공통 audit | 모든 테이블 `CREATED_AT`/`UPDATED_AT` (`@MappedSuperclass BaseEntity`) |
 | 스냅샷 | 실행 히스토리는 실행 시점 레시피를 통째 저장 (원본 독립) |
-| 히스토리 독립 | 대화 삭제해도 실행 기록 유지 (CONVERSATION_ID NULL) |
+| 히스토리 독립 | 대화 삭제해도 실행 기록 유지 — 조회가 `USER_ID` 기준이라 독립 (연결은 유지) |
 
 ## 규칙
 
