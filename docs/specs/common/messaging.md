@@ -49,6 +49,10 @@ last-updated: 2026-09-01
 
 - `referenceId`: 참조 태그로 전달되는 레시피/도구 ID (nullable)
 - 전송 API는 **동기 접수**로 거의 즉시 리턴하고(무거운 처리는 async), 응답에 최소 `{ accepted: true, sessionId }`를 준다. FE는 이 성공 응답을 받은 뒤에만 낙관적 임시 메시지를 렌더한다(아래 낙관적 UI).
+- **첫 메시지 = 대화방 생성 겸함**: 대화방 ID 없이 첫 메시지를 보내면 서버가 대화방+메시지를 함께 생성하고 새 대화방 정보를 응답에 포함(+ `session_list_update` upsert 발행). 이후 메시지는 대화방 ID로 전송.
+  - `POST /api/v1/conversations/messages` — 방 없이 첫 메시지 (방 생성 겸함). 응답에 `conversation` 포함
+  - `POST /api/v1/conversations/{id}/messages` — 기존 방에 이어서 전송
+  - 빈 대화방을 미리 만들지 않아 orphan을 원천 차단 (overview.md)
 
 ---
 

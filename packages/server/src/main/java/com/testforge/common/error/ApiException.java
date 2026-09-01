@@ -65,6 +65,12 @@ public class ApiException extends RuntimeException {
         return new ApiException(ErrorCode.RECIPE_CYCLE, HttpStatus.BAD_REQUEST, detail);
     }
 
+    /** 존재하지 않거나 삭제된 대화방 (404) */
+    public static ApiException conversationNotFound(Long conversationId) {
+        return new ApiException(ErrorCode.CONVERSATION_NOT_FOUND, HttpStatus.NOT_FOUND,
+                "Conversation not found: " + conversationId);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

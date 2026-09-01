@@ -26,6 +26,8 @@ public enum ErrorCode implements EnumColumn {
     INVALID_RECIPE("유효하지 않은 레시피"),
     /** 서브레시피 순환 참조 (A→B→A) — 저장 거부 */
     RECIPE_CYCLE("레시피 순환 참조"),
+    /** 존재하지 않거나 삭제된 대화방 조회 */
+    CONVERSATION_NOT_FOUND("대화방을 찾을 수 없음"),
     /** 서버 내부 오류 */
     INTERNAL_ERROR("서버 내부 오류");
 

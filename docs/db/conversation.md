@@ -62,7 +62,9 @@ ref: docs/specs/chat/overview.md, docs/specs/common/messaging.md
 - 대화방 진입 시 읽음 API → `LAST_READ_AT = now` → `session_list_update`(upsert, unread=false)로 **모든 탭 뱃지 동기화**
 - 안 읽음 판정: `LAST_MESSAGE_AT > LAST_READ_AT`
 - 다중 사용자 공유 대화방이 생기면 `CONVERSATION_READ(USER_ID, CONVERSATION_ID, LAST_READ_AT)` 테이블로 승격 (현재는 대화방 소유자 1명이라 컬럼으로 충분)
-- 빈 대화(메시지 0건)는 목록에 안 쌓임 → 첫 메시지 전송 시 실제 생성 + `session_list_update`(upsert) 발행 (overview.md)
+- **빈 대화방은 서버에 생성하지 않음.** 첫 메시지 전송 시 대화방 + 메시지를 함께 생성(트랜잭션) + `session_list_update`(upsert) 발행 → orphan 방지 (overview.md)
+- 첫 메시지 시 제목은 임시(첫 메시지 앞 20자 이내 절단), AI 요약 후 교체 (overview.md)
+- 따라서 `LAST_MESSAGE_AT`이 NULL인 대화방은 존재하지 않음 (생성 시 첫 메시지가 항상 있음)
 
 ---
 
