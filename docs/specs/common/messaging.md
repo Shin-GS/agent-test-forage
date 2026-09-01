@@ -228,7 +228,8 @@ last-updated: 2026-09-01
 
 ### Heartbeat
 
-- 30초마다 heartbeat 이벤트 전송
+- 30초마다 heartbeat 전송
+- **heartbeat는 SSE comment(`: ...` 라인)로 보낸다.** id/event 필드가 없어 `Last-Event-ID`를 오염시키지 않으며(데이터 이벤트 replay 기준점 보호), replay 버퍼에도 쌓지 않는다
 - 클라이언트가 60초 이상 heartbeat 미수신 시 연결 끊김으로 판단 → 재연결
 
 ### FE 이벤트 처리 전략
