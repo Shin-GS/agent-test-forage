@@ -1,5 +1,6 @@
-package com.testforge.entity;
+package com.testforge.entity.spec;
 
+import com.testforge.entity.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

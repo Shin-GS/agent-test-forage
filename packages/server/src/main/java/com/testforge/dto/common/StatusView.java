@@ -1,4 +1,4 @@
-package com.testforge.dto;
+package com.testforge.dto.common;
 
 import com.testforge.common.EnumColumn;
 

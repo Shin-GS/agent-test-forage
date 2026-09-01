@@ -1,4 +1,4 @@
-package com.testforge.dto;
+package com.testforge.dto.spec;
 
 /**
  * Heartbeat 응답: { "action": "none" | "resend" }

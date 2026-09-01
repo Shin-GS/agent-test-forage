@@ -1,11 +1,11 @@
-package com.testforge.controller;
+package com.testforge.controller.spec;
 
-import com.testforge.dto.HeartbeatRequest;
-import com.testforge.dto.HeartbeatResponse;
-import com.testforge.dto.RegisterRequest;
-import com.testforge.dto.RegisterResponse;
-import com.testforge.service.HeartbeatService;
-import com.testforge.service.SpecRegistrationService;
+import com.testforge.dto.spec.HeartbeatRequest;
+import com.testforge.dto.spec.HeartbeatResponse;
+import com.testforge.dto.spec.RegisterRequest;
+import com.testforge.dto.spec.RegisterResponse;
+import com.testforge.service.spec.HeartbeatService;
+import com.testforge.service.spec.SpecRegistrationService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

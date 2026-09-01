@@ -1,7 +1,7 @@
-package com.testforge.repository;
+package com.testforge.repository.spec;
 
-import com.testforge.entity.ApiSpec;
-import com.testforge.entity.SpecStatus;
+import com.testforge.entity.spec.ApiSpec;
+import com.testforge.entity.spec.enums.SpecStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;

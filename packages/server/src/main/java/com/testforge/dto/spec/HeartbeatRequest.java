@@ -1,4 +1,4 @@
-package com.testforge.dto;
+package com.testforge.dto.spec;
 
 /**
  * Heartbeat 요청 본문 (해시만 전송).

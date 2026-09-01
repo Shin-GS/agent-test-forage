@@ -1,5 +1,7 @@
-package com.testforge.entity;
+package com.testforge.entity.spec;
 
+import com.testforge.entity.common.BaseEntity;
+import com.testforge.entity.spec.enums.SpecStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

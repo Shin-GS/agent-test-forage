@@ -1,8 +1,8 @@
-package com.testforge.controller;
+package com.testforge.controller.spec;
 
-import com.testforge.dto.SpecDetailResponse;
-import com.testforge.dto.SpecSummaryResponse;
-import com.testforge.service.SpecQueryService;
+import com.testforge.dto.spec.SpecDetailResponse;
+import com.testforge.dto.spec.SpecSummaryResponse;
+import com.testforge.service.spec.SpecQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;

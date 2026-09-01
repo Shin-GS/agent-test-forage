@@ -1,4 +1,4 @@
-package com.testforge.dto;
+package com.testforge.dto.spec;
 
 import java.util.List;
 

@@ -1,6 +1,6 @@
-package com.testforge.repository;
+package com.testforge.repository.spec;
 
-import com.testforge.entity.ApiSpecDocument;
+import com.testforge.entity.spec.ApiSpecDocument;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package com.testforge.dto;
+package com.testforge.dto.spec;
 
 /**
  * 스펙 등록 응답: { "specId": 123, "status": "ACTIVE" }

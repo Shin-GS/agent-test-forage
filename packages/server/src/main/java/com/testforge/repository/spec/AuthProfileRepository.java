@@ -1,6 +1,6 @@
-package com.testforge.repository;
+package com.testforge.repository.spec;
 
-import com.testforge.entity.AuthProfile;
+import com.testforge.entity.spec.AuthProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.transaction.annotation.Transactional;
 

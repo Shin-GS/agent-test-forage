@@ -1,4 +1,4 @@
-package com.testforge.entity;
+package com.testforge.entity.spec.enums;
 
 import com.testforge.common.EnumColumn;
 

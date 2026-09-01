@@ -1,4 +1,4 @@
-package com.testforge.controller;
+package com.testforge.controller.spec;
 
 import com.testforge.common.error.ApiException;
 import com.testforge.config.TestForgeServerProperties;

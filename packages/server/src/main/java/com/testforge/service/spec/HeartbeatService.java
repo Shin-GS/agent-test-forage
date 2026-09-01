@@ -1,10 +1,10 @@
-package com.testforge.service;
+package com.testforge.service.spec;
 
-import com.testforge.dto.HeartbeatRequest;
-import com.testforge.dto.HeartbeatResponse;
-import com.testforge.entity.ApiSpec;
-import com.testforge.entity.SpecStatus;
-import com.testforge.repository.ApiSpecRepository;
+import com.testforge.dto.spec.HeartbeatRequest;
+import com.testforge.dto.spec.HeartbeatResponse;
+import com.testforge.entity.spec.ApiSpec;
+import com.testforge.entity.spec.enums.SpecStatus;
+import com.testforge.repository.spec.ApiSpecRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

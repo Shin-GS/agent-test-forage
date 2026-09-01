@@ -1,4 +1,6 @@
-package com.testforge.dto;
+package com.testforge.dto.spec;
+
+import com.testforge.dto.common.StatusView;
 
 import java.time.LocalDateTime;
 
