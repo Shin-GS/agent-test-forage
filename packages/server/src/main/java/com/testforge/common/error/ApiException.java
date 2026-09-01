@@ -43,6 +43,12 @@ public class ApiException extends RuntimeException {
         return new ApiException(ErrorCode.INVALID_REQUEST, HttpStatus.BAD_REQUEST, detail);
     }
 
+    /** 존재하지 않거나 삭제된 스펙 (404) */
+    public static ApiException specNotFound(Long specId) {
+        return new ApiException(ErrorCode.SPEC_NOT_FOUND, HttpStatus.NOT_FOUND,
+                "Spec not found: " + specId);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

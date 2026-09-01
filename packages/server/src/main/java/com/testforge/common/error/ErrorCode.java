@@ -12,6 +12,8 @@ public enum ErrorCode {
     UNAUTHORIZED,
     /** 요청 형식/필수값 오류 */
     INVALID_REQUEST,
+    /** 존재하지 않거나 삭제된 스펙 조회 */
+    SPEC_NOT_FOUND,
     /** 서버 내부 오류 */
     INTERNAL_ERROR
 }
