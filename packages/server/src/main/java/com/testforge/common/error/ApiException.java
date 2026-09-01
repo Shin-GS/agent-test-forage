@@ -71,6 +71,12 @@ public class ApiException extends RuntimeException {
                 "Conversation not found: " + conversationId);
     }
 
+    /** 대화방이 이미 처리 중이라 새 요청을 받을 수 없음 (409) */
+    public static ApiException conversationBusy(Long conversationId) {
+        return new ApiException(ErrorCode.CONVERSATION_BUSY, HttpStatus.CONFLICT,
+                "Conversation is busy: " + conversationId);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

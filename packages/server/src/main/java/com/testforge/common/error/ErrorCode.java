@@ -28,6 +28,8 @@ public enum ErrorCode implements EnumColumn {
     RECIPE_CYCLE("레시피 순환 참조"),
     /** 존재하지 않거나 삭제된 대화방 조회 */
     CONVERSATION_NOT_FOUND("대화방을 찾을 수 없음"),
+    /** 대화방이 이미 처리 중이라 새 요청을 받을 수 없음 (대화방 단위 락 경합) */
+    CONVERSATION_BUSY("대화방이 처리 중"),
     /** 서버 내부 오류 */
     INTERNAL_ERROR("서버 내부 오류");
 

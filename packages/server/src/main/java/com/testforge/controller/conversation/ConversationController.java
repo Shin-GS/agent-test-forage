@@ -24,8 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 대화방/메시지 CRUD API. (SSE·대화방 락·AI 처리는 이번 스코프 제외 — 다음 조각)
- * 채팅 인터페이스(사이드바 대화 목록 + 대화 영역)가 소비한다.
+ * 대화방/메시지 CRUD + 대화방 단위 락(동시성) + 취소/중지 API.
+ * 채팅 인터페이스(사이드바 대화 목록 + 대화 영역)가 소비하며, 상태 변경은 SSE로 모든 탭에 전파된다.
+ * AI 처리/실행 엔진(ai_responding/executing 세분 전이, 락 장기 점유)은 다음 조각에서 다룬다.
  *
  * <p>TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 접근). 현재 userId는
  * 요청 파라미터/바디로 받되 소유권 검증은 하지 않는다.
@@ -97,7 +98,7 @@ public class ConversationController {
 
     /**
      * 메시지 전송(동기 접수). 사용자 메시지를 저장하고 lastMessageAt을 갱신한다.
-     * AI 처리/SSE 발행은 이번 스코프가 아니다(다음 조각).
+     * 대화방이 이미 처리 중이면(락 경합) 409 CONVERSATION_BUSY. AI 처리는 다음 조각.
      */
     @PostMapping("/{id}/messages")
     public ResponseEntity<MessageSendResponse> sendMessage(@PathVariable Long id,
@@ -105,5 +106,25 @@ public class ConversationController {
         // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 전송)
         MessageSendResponse response = conversationService.sendMessage(id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * 액션 피커 [취소]. 대기/락을 해제하고 대화방을 IDLE로 되돌린다(session_status idle 전파).
+     * 이미 IDLE이면 멱등 no-op(200). 없거나 삭제된 대화방이면 404.
+     */
+    @PostMapping("/{id}/cancel")
+    public ConversationDetailResponse cancel(@PathVariable Long id) {
+        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 취소)
+        return conversationService.cancel(id);
+    }
+
+    /**
+     * 실행 [중지]. 실행 중지 후 대화방을 IDLE로 되돌린다(session_status idle 전파).
+     * 이미 IDLE이면 멱등 no-op(200). 없거나 삭제된 대화방이면 404.
+     */
+    @PostMapping("/{id}/stop")
+    public ConversationDetailResponse stop(@PathVariable Long id) {
+        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 중지)
+        return conversationService.stop(id);
     }
 }

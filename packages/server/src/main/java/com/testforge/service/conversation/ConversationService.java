@@ -11,11 +11,14 @@ import com.testforge.dto.conversation.MessageResponse;
 import com.testforge.dto.conversation.MessageSendRequest;
 import com.testforge.dto.conversation.MessageSendResponse;
 import com.testforge.dto.conversation.SessionListUpdatePayload;
+import com.testforge.dto.conversation.SessionStatusPayload;
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.conversation.Message;
+import com.testforge.entity.conversation.enums.ConversationStatus;
 import com.testforge.entity.conversation.enums.MessageRole;
 import com.testforge.entity.conversation.enums.MessageStatus;
 import com.testforge.entity.conversation.enums.MessageType;
+import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.sse.SseEventPublisher;
@@ -39,8 +42,9 @@ import java.util.List;
  * 이후 메시지는 기존 대화방에 이어서 전송한다(sendMessage). 이렇게 하여 메시지가
  * 하나도 없는 orphan 대화방을 원천 차단한다.
  *
- * <p>이번 스코프는 순수 CRUD + 저장까지만이다. SSE 발행, 대화방 단위 락,
- * AI 처리/상태 전이(AI_RESPONDING 등)는 다음 조각에서 다루며 여기서는 다루지 않는다.
+ * <p>CRUD + 저장에 더해, 대화방 단위 락(동시성 제어), 상태 전이(session_status)와 SSE 발행,
+ * 취소/중지, 서버 기동 복구를 담당한다. AI 처리/실행 엔진(ai_responding/executing 세분 전이,
+ * 락 장기 점유)은 다음 조각에서 추가하며 관련 지점은 TODO로 표시했다.
  * metadata JSON은 문자열로 저장하고 응답에서 다시 객체로 파싱해 내린다
  * (RecipeService/SpecQueryService와 동일한 로컬 Jackson 헬퍼 패턴).
  */
@@ -52,13 +56,16 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
     private final SseEventPublisher ssePublisher;
+    private final ConversationLock conversationLock;
 
     public ConversationService(ConversationRepository conversationRepository,
                                MessageRepository messageRepository,
-                               SseEventPublisher ssePublisher) {
+                               SseEventPublisher ssePublisher,
+                               ConversationLock conversationLock) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.ssePublisher = ssePublisher;
+        this.conversationLock = conversationLock;
     }
 
     /**
@@ -189,41 +196,168 @@ public class ConversationService {
 
     /**
      * 메시지 전송(동기 접수). 사용자 메시지를 저장하고 lastMessageAt을 갱신한다.
-     * SEQ는 대화방 내 max+1로 발번한다. AI 처리/SSE 발행은 이번 스코프가 아니다.
+     * SEQ는 대화방 내 max+1로 발번한다.
+     *
+     * <p><b>대화방 단위 락:</b> 진입 시 {@link ConversationLock#tryLock}으로 대화방을 선점한다.
+     * 이미 처리 중이면(락 경합) 409 {@code CONVERSATION_BUSY}로 이중 전송을 막는다. 지금은 AI 처리가
+     * 없어 저장 즉시 처리가 끝나므로 락은 저장 트랜잭션 동안만 짧게 잡고 커밋 후 해제한다. 실제 장기
+     * 점유(AI 응답 중 락 유지 + {@code AI_RESPONDING} 전이)는 다음 조각(chat 실행 엔진)에서 다룬다.
      */
     @Transactional
     public MessageSendResponse sendMessage(Long conversationId, MessageSendRequest request) {
+        // 대화방 선점. 이미 처리 중이면(락 경합) 이중 전송이므로 409로 거절한다.
+        // 인메모리 락은 트랜잭션 자원이 아니므로 트랜잭션 안에서 잡고 finally로 해제해도 안전하다.
+        if (!conversationLock.tryLock(conversationId)) {
+            throw ApiException.conversationBusy(conversationId);
+        }
+        try {
+            Conversation conversation = getActiveOrThrow(conversationId);
+
+            if (request.content() == null || request.content().isBlank()) {
+                throw ApiException.invalidRequest("content is required");
+            }
+
+            long nextSeq = nextSeq(conversationId);
+            Message message = new Message(conversationId, nextSeq,
+                    MessageRole.USER, MessageType.TEXT, MessageStatus.COMPLETED);
+            message.setContent(request.content());
+            message.setReferenceId(request.referenceId());
+            message.setMetadataJson(RecipeJsonUtil.toJsonString(request.metadata()));
+
+            Message saved = messageRepository.save(message);
+
+            // 목록 최신순 정렬 + 안 읽음 판정 기준 갱신
+            conversation.setLastMessageAt(saved.getCreatedAt());
+            conversationRepository.save(conversation);
+
+            // SSE: 새 메시지 도착(message_new) + 목록 한 줄 갱신(lastMessageAt 반영)
+            Long ownerId = conversation.getUserId();
+            MessageResponse messageView = toMessage(saved);
+            publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+            publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
+                    SessionListUpdatePayload.upsert(toListSnapshot(conversation)));
+
+            // TODO: AI 처리 트리거 + session_status 전이(ai_responding 등) — 다음 조각(chat 실행 엔진)에서 추가.
+            //       그 단계에서는 여기서 락을 해제하지 않고 처리 완료(종결 이벤트) 시점까지 점유를 유지한다.
+            log.info("Message accepted: conversationId={}, messageId={}, seq={}",
+                    conversationId, saved.getId(), saved.getSeq());
+
+            return new MessageSendResponse(true, conversationId, messageView);
+        } finally {
+            // 지금은 저장 즉시 처리가 끝나므로 커밋과 무관하게 락을 해제한다(짧은 점유).
+            // AI 조각에서는 이 해제를 처리 완료(종결 이벤트) 시점으로 미룬다.
+            conversationLock.unlock(conversationId);
+        }
+    }
+
+    /**
+     * 대화방 처리 상태를 전이하고 {@code session_status} SSE를 발행한다(모든 탭 동기화).
+     * 상태 변경이 실제로 있을 때만(같은 값이면 no-op) 저장/발행한다. 커밋 후 발행하여 확정 데이터로 내보낸다.
+     *
+     * @return 변경 후 대화방 상세
+     */
+    @Transactional
+    public ConversationDetailResponse transitionStatus(Long conversationId, ConversationStatus status) {
+        if (status == null) {
+            throw ApiException.invalidRequest("status is required");
+        }
+        Conversation conversation = getActiveOrThrow(conversationId);
+        if (conversation.getStatus() == status) {
+            // 멱등: 같은 상태로의 전이는 발행 없이 그대로 반환
+            return toDetail(conversation);
+        }
+        conversation.setStatus(status);
+        Conversation saved = conversationRepository.save(conversation);
+
+        publishAfterCommit(saved.getUserId(), SseEventType.SESSION_STATUS, saved.getId(),
+                SessionStatusPayload.of(saved.getId(), status));
+
+        log.info("Conversation status transitioned: conversationId={}, status={}", conversationId, status);
+        return toDetail(saved);
+    }
+
+    /**
+     * 액션 피커 [취소]. 대기/락을 해제하고 대화방을 IDLE로 되돌린 뒤 "취소되었습니다" 시스템 메시지를
+     * 남긴다(messaging.md 상태 해제). 이미 IDLE이면 <b>멱등 no-op</b>(에러 아님).
+     * 취소/중지는 반드시 API 경유이며 상태 해제는 모든 탭에 전파된다.
+     */
+    @Transactional
+    public ConversationDetailResponse cancel(Long conversationId) {
+        return releaseToIdle(conversationId, "취소되었습니다.");
+    }
+
+    /**
+     * 실행 [중지]. 지금은 실행 엔진이 없어 취소와 동일하게 대화방을 IDLE로 되돌리고 락을 해제한다.
+     * 실행 엔진 도입 후에는 현재 스텝까지 저장 + {@code execution_complete}(STOPPED) 발행이 추가된다.
+     * 이미 IDLE이면 <b>멱등 no-op</b>.
+     */
+    @Transactional
+    public ConversationDetailResponse stop(Long conversationId) {
+        return releaseToIdle(conversationId, "실행이 중지되었습니다.");
+    }
+
+    /**
+     * 대화방을 IDLE로 해제하는 공통 경로(취소/중지). 락 해제는 상태와 무관하게 항상 수행하고(멱등),
+     * 상태가 이미 IDLE이면 안내 메시지/발행 없이 no-op 반환한다. 상태 변경이 있을 때만 IDLE 전이 +
+     * 시스템 안내 메시지 저장 + SSE 발행(session_status idle, message_new, session_list_update)을 수행한다.
+     */
+    private ConversationDetailResponse releaseToIdle(Long conversationId, String systemNotice) {
         Conversation conversation = getActiveOrThrow(conversationId);
 
-        if (request.content() == null || request.content().isBlank()) {
-            throw ApiException.invalidRequest("content is required");
+        // 락은 상태와 무관하게 항상 해제(인메모리 락이 남아있을 수 있음). unlock은 멱등.
+        conversationLock.unlock(conversationId);
+
+        if (conversation.getStatus() == ConversationStatus.IDLE) {
+            // 멱등: 이미 유휴면 상태 발행/안내 메시지 없이 종료
+            log.info("Conversation release is no-op (already idle): conversationId={}", conversationId);
+            return toDetail(conversation);
         }
 
-        long nextSeq = nextSeq(conversationId);
-        Message message = new Message(conversationId, nextSeq,
-                MessageRole.USER, MessageType.TEXT, MessageStatus.COMPLETED);
-        message.setContent(request.content());
-        message.setReferenceId(request.referenceId());
-        message.setMetadataJson(RecipeJsonUtil.toJsonString(request.metadata()));
-
-        Message saved = messageRepository.save(message);
-
-        // 목록 최신순 정렬 + 안 읽음 판정 기준 갱신
-        conversation.setLastMessageAt(saved.getCreatedAt());
-        conversationRepository.save(conversation);
-
-        // SSE: 새 메시지 도착(message_new) + 목록 한 줄 갱신(lastMessageAt 반영)
         Long ownerId = conversation.getUserId();
-        MessageResponse messageView = toMessage(saved);
-        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+        conversation.setStatus(ConversationStatus.IDLE);
+
+        // "취소/중지되었습니다" 시스템 안내 메시지 (ASSISTANT/SYSTEM). seq는 max+1.
+        long nextSeq = nextSeq(conversationId);
+        Message notice = new Message(conversationId, nextSeq,
+                MessageRole.ASSISTANT, MessageType.SYSTEM, MessageStatus.COMPLETED);
+        notice.setContent(systemNotice);
+        Message savedNotice = messageRepository.save(notice);
+
+        conversation.setLastMessageAt(savedNotice.getCreatedAt());
+        Conversation saved = conversationRepository.save(conversation);
+
+        MessageResponse noticeView = toMessage(savedNotice);
+        // session_status: idle (모든 탭 입력 잠금 해제) + 안내 메시지(message_new) + 목록 한 줄 갱신
+        publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                SessionStatusPayload.of(conversationId, ConversationStatus.IDLE));
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, noticeView);
         publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
-                SessionListUpdatePayload.upsert(toListSnapshot(conversation)));
+                SessionListUpdatePayload.upsert(toListSnapshot(saved)));
 
-        // TODO: AI 처리 트리거 + session_status 전이(ai_responding 등) — 다음 조각(chat 실행 엔진)에서 추가
-        log.info("Message accepted: conversationId={}, messageId={}, seq={}",
-                conversationId, saved.getId(), saved.getSeq());
+        log.info("Conversation released to idle: conversationId={}, noticeMessageId={}",
+                conversationId, savedNotice.getId());
+        return toDetail(saved);
+    }
 
-        return new MessageSendResponse(true, conversationId, messageView);
+    /**
+     * 서버 기동 복구: {@code AI_RESPONDING}/{@code EXECUTING}로 남은 미삭제 대화방을 IDLE로 정리한다.
+     * 인메모리 락은 재시작 시 이미 사라졌으므로, 상태만 남아 영구 잠금처럼 보이는 것을 방지한다
+     * (messaging.md 종결 보장). 상태 신호는 SSE로 발행하지 않는다(기동 시점엔 구독자가 없음).
+     *
+     * @return 복구한 대화방 수
+     */
+    @Transactional
+    public int recoverInProgressConversations() {
+        List<Conversation> stuck = conversationRepository.findByStatusInAndDeletedAtIsNull(
+                List.of(ConversationStatus.AI_RESPONDING, ConversationStatus.EXECUTING));
+        for (Conversation conversation : stuck) {
+            conversation.setStatus(ConversationStatus.IDLE);
+            conversationRepository.save(conversation);
+        }
+        if (!stuck.isEmpty()) {
+            log.info("Recovered {} in-progress conversation(s) to IDLE on startup", stuck.size());
+        }
+        return stuck.size();
     }
 
     // ── helpers ──
