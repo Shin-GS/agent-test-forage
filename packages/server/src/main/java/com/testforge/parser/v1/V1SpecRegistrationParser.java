@@ -1,7 +1,7 @@
 package com.testforge.parser.v1;
 
 import com.testforge.common.error.ApiException;
-import com.testforge.dto.RegisterRequest;
+import com.testforge.dto.spec.RegisterRequest;
 import com.testforge.parser.NormalizedSpec;
 import com.testforge.parser.SpecRegistrationParser;
 import io.swagger.v3.core.util.Json;

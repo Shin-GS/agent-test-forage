@@ -1,12 +1,12 @@
 package com.testforge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.testforge.entity.ApiEndpoint;
-import com.testforge.entity.ApiSpec;
-import com.testforge.entity.EndpointStatus;
-import com.testforge.entity.SpecStatus;
-import com.testforge.repository.ApiEndpointRepository;
-import com.testforge.repository.ApiSpecRepository;
+import com.testforge.entity.spec.ApiEndpoint;
+import com.testforge.entity.spec.ApiSpec;
+import com.testforge.entity.spec.enums.EndpointStatus;
+import com.testforge.entity.spec.enums.SpecStatus;
+import com.testforge.repository.spec.ApiEndpointRepository;
+import com.testforge.repository.spec.ApiSpecRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

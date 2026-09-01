@@ -1,9 +1,9 @@
 package com.testforge.scheduler;
 
 import com.testforge.config.TestForgeServerProperties;
-import com.testforge.entity.ApiSpec;
-import com.testforge.entity.SpecStatus;
-import com.testforge.repository.ApiSpecRepository;
+import com.testforge.entity.spec.ApiSpec;
+import com.testforge.entity.spec.enums.SpecStatus;
+import com.testforge.repository.spec.ApiSpecRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

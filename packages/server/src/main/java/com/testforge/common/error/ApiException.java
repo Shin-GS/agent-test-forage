@@ -49,6 +49,22 @@ public class ApiException extends RuntimeException {
                 "Spec not found: " + specId);
     }
 
+    /** 존재하지 않거나 삭제된 레시피 (404) */
+    public static ApiException recipeNotFound(Long recipeId) {
+        return new ApiException(ErrorCode.RECIPE_NOT_FOUND, HttpStatus.NOT_FOUND,
+                "Recipe not found: " + recipeId);
+    }
+
+    /** 레시피 스텝 정의가 유효하지 않음 (400) */
+    public static ApiException invalidRecipe(String detail) {
+        return new ApiException(ErrorCode.INVALID_RECIPE, HttpStatus.BAD_REQUEST, detail);
+    }
+
+    /** 서브레시피 순환 참조로 저장 거부 (400) */
+    public static ApiException recipeCycle(String detail) {
+        return new ApiException(ErrorCode.RECIPE_CYCLE, HttpStatus.BAD_REQUEST, detail);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

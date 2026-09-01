@@ -1,6 +1,6 @@
 package com.testforge.parser;
 
-import com.testforge.dto.RegisterRequest;
+import com.testforge.dto.spec.RegisterRequest;
 
 /**
  * 버전이 있는 {@link RegisterRequest}를 내부 {@link NormalizedSpec} 모델로
