@@ -37,3 +37,9 @@ logs/
 
 # === Temp ===
 temp/
+
+# === 대회 자료 빌드 아티팩트 (PPT 생성 도구/의존성/슬라이드 조각) ===
+docs/competition/_build/
+
+# === Playwright MCP (브라우저 자동화 로그/스냅샷) ===
+.playwright-mcp/

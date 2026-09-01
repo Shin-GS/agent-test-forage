@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 대회 참가 자료 — 대화로 만드는 QA 테스트 데이터</title>
+<style>
+  :root {
+    /* ── 다크 프리미엄 팔레트 (발표용) ── */
+    --bg:        #0b1020;   /* 깊은 남색 배경 */
+    --bg-soft:   #111832;   /* 카드 배경 */
+    --bg-soft-2: #16203f;   /* 강조 카드 */
+    --line:      #26304f;   /* 테두리 */
+    --line-2:    #33406a;
+
+    --text:   #f4f7fc;      /* 거의 흰색 */
+    --text-2: #b8c2da;      /* 보조 텍스트 */
+    --text-3: #7d88a6;      /* 흐린 텍스트 */
+
+    --accent:      #7c8bff; /* 인디고 (단일 강조) */
+    --accent-2:    #9aa6ff;
+    --accent-soft: rgba(124,139,255,0.14);
+    --accent-line: rgba(124,139,255,0.4);
+
+    --ok:      #34d399;     /* 성공/결과 전용 */
+    --ok-soft: rgba(52,211,153,0.14);
+    --ok-line: rgba(52,211,153,0.35);
+
+    --font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+    --mono: 'JetBrains Mono', 'Consolas', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* 한국어 어절 단위 줄바꿈 (단어 중간 안 깨짐) */
+  h1, h2, h3, p, li, span, div { word-break: keep-all; overflow-wrap: break-word; }
+
+  body {
+    background: #05070f;
+    font-family: var(--font);
+    color: var(--text);
+    line-height: 1.55;
+    padding: 32px 0;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 16:9 슬라이드 */
+  .slide {
+    width: 1280px;
+    height: 720px;
+    margin: 0 auto 28px;
+    background:
+      radial-gradient(1200px 500px at 78% -10%, rgba(124,139,255,0.10), transparent 60%),
+      var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .slide-inner {
+    flex: 1;
+    padding: 52px 60px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .brandbar { position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+  .kicker { display: inline-flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--accent-2); text-transform: uppercase; }
+  .kicker::before { content: ""; width: 24px; height: 2px; background: var(--accent-2); display: inline-block; }
+
+  h1 { font-size: 50px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.14; }
+  h2 { font-size: 34px; font-weight: 800; letter-spacing: -0.015em; line-height: 1.2; }
+  h3 { font-size: 19px; font-weight: 700; }
+
+  .muted { color: var(--text-2); }
+  .accent { color: var(--accent-2); }
+  .ok { color: var(--ok); }
+
+  .page-no { position: absolute; bottom: 24px; right: 32px; font-size: 12px; color: var(--text-3); font-family: var(--mono); }
+  .foot-brand { position: absolute; bottom: 24px; left: 32px; font-size: 12px; color: var(--text-3); letter-spacing: 0.02em; }
+
+  /* ── 표지 ── */
+  .cover { justify-content: center; }
+  .logo-mark { width: 68px; height: 68px; border-radius: 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center; font-size: 36px;
+    margin-bottom: 32px; box-shadow: 0 16px 40px rgba(124,139,255,0.4); }
+  .cover h1 { font-size: 58px; margin-bottom: 22px; max-width: 940px; }
+  .cover .lead { font-size: 21px; color: var(--text-2); max-width: 800px; margin-bottom: 46px; line-height: 1.6; }
+  .meta-row { display: flex; gap: 48px; }
+  .meta-item .label { font-size: 12px; color: var(--text-3); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  .meta-item .val { font-size: 18px; font-weight: 700; }
+
+  /* ── 공용 헤더 ── */
+  .slide-head { margin-bottom: 30px; }
+  .slide-head h2 { margin-top: 12px; }
+
+  .cols { display: flex; gap: 44px; flex: 1; min-height: 0; }
+  .col { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+  /* 문제/해결 블록 */
+  .block { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 14px; padding: 24px 26px; }
+  .block + .block { margin-top: 18px; }
+  .block .tag { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
+  .tag.problem { color: var(--text-3); }
+  .tag.solve { color: var(--accent-2); }
+  .block p { color: var(--text-2); font-size: 16px; line-height: 1.65; }
+  .block p strong { color: var(--text); font-weight: 700; }
+  .block.emph { background: var(--bg-soft-2); border-color: var(--accent-line); }
+
+  /* 스크린샷 프레임 */
+  .shot { border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden;
+    background: var(--bg-soft); box-shadow: 0 20px 50px rgba(0,0,0,0.55); }
+  .shot img { width: 100%; display: block; }
+  .shot-cap { font-size: 13px; color: var(--text-3); margin-top: 14px; text-align: center; line-height: 1.5; }
+  .shot-wrap { margin: auto 0; }
+
+  /* 시나리오 */
+  .scenario { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 16px; padding: 28px 32px; display: flex; flex-direction: column; }
+  .scenario .say { background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 12px;
+    padding: 18px 22px; font-size: 20px; font-weight: 700; margin-bottom: 26px; color: var(--text); line-height: 1.5; }
+  .scenario .say .q { color: var(--accent-2); }
+  .flow { display: flex; flex-direction: column; gap: 14px; }
+  .server-label { font-size: 13px; font-weight: 800; color: var(--accent-2); letter-spacing: 0.04em; margin: 10px 0 2px; }
+  .step { display: flex; align-items: center; gap: 16px; font-size: 17px; color: var(--text-2); }
+  .step .n { flex: none; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--bg-soft-2); border: 1px solid var(--line-2);
+    display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent-2); font-family: var(--mono); }
+  .result-line { margin-top: 22px; padding-top: 22px; border-top: 1px dashed var(--line-2); font-size: 18px; color: var(--text); font-weight: 600; }
+  .result-line .ok { font-weight: 800; }
+
+  /* PR 카드 그리드 (2 x 3, 여유있게) */
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 20px; flex: 1; }
+  .card { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 16px; padding: 26px 26px; display: flex; flex-direction: column; }
+  .card .ico { font-size: 26px; margin-bottom: 14px; }
+  .card h3 { margin-bottom: 10px; }
+  .card p { font-size: 15px; color: var(--text-2); line-height: 1.6; }
+  .card.highlight { border-color: var(--accent-line); background: linear-gradient(160deg, var(--accent-soft), var(--bg-soft)); }
+
+  /* 동작 원리 */
+  .prow { display: flex; align-items: stretch; gap: 18px; }
+  .pbadge { flex: none; width: 92px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; letter-spacing: 0.05em; color: var(--accent-2); text-transform: uppercase;
+    background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 12px; }
+  .pbody { flex: 1; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px; padding: 15px 20px; font-size: 15px; color: var(--text-2); line-height: 1.55; }
+  .pbody strong { color: var(--text); font-weight: 700; }
+
+  .ai-list { display: flex; flex-direction: column; gap: 13px; }
+  .ai-item { display: flex; gap: 15px; align-items: flex-start; }
+  .ai-item .dot { flex: none; width: 28px; height: 28px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-2); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; }
+  .ai-item .txt { font-size: 16px; color: var(--text-2); line-height: 1.5; }
+  .ai-item .txt strong { color: var(--text); font-weight: 700; }
+
+  .why { margin-top: 18px; border-left: 3px solid var(--accent); padding: 4px 0 4px 18px; }
+  .why .q { font-size: 12px; color: var(--accent-2); font-weight: 800; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .why p { font-size: 16px; color: var(--text); line-height: 1.55; }
+
+  .principle { display: flex; flex-direction: column; gap: 12px !important; margin-top: 18px !important; }
+  .note { margin-top: 16px; background: var(--ok-soft); border: 1px solid var(--ok-line); border-radius: 12px; padding: 14px 18px; font-size: 14px; color: var(--text-2); line-height: 1.55; }
+  .note strong { color: var(--ok); font-weight: 700; }
+
+  /* 비전 */
+  .vision-list { display: flex; flex-direction: column; gap: 12px; margin-top: 2px; }
+  .vitem { display: flex; gap: 18px; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 14px; padding: 16px 24px; align-items: flex-start; }
+  .vitem .vn { flex: none; font-family: var(--mono); font-size: 14px; color: var(--accent-2); font-weight: 800; width: 30px; padding-top: 2px; }
+  .vitem .vt h3 { margin-bottom: 3px; }
+  .vitem .vt p { font-size: 14px; color: var(--text-2); line-height: 1.5; }
+  .closing { margin-top: 18px; text-align: center; font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.5;
+    background: linear-gradient(160deg, var(--accent-soft), transparent);
+    border: 1px solid var(--accent-line); border-radius: 14px; padding: 20px; }
+  .closing span { color: var(--accent-2); }
+
+  /* 구조도 (참고: 원리 슬라이드에서 사용) */
+
+  /* 인쇄 */
+  @page { size: A4 landscape; margin: 0; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .slide { margin: 0; border-radius: 0; border: none; width: 100%; height: 100vh;
+      page-break-after: always; break-after: page; }
+    .slide:last-child { page-break-after: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ───────── 1 : 표지 ───────── -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner cover">
+    <div class="logo-mark">⚡</div>
+    <div class="kicker">AI 활용 사내 대회 · 참가 자료</div>
+    <h1>대화로 만드는<br/>QA 테스트 데이터</h1>
+    <p class="lead">채팅으로 원하는 상황을 말하면, AI가 필요한 API를 골라 실제로 실행해 테스트 데이터를 만들어 줍니다.</p>
+    <div class="meta-row">
+      <div class="meta-item"><div class="label">참가부문</div><div class="val">업무 생산성 / 사내 AX</div></div>
+      <div class="meta-item"><div class="label">프로젝트</div><div class="val">테스트메이트</div></div>
+      <div class="meta-item"><div class="label">상태</div><div class="val">프로토타입 개발 중</div></div>
+    </div>
+  </div>
+  <div class="page-no">01 / 06</div>
+</section>
+
+<!-- ───────── 2 : 내용 (문제→해결) + 대표 이미지 ───────── -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head">
+      <span class="kicker">내용</span>
+      <h2>반복되는 테스트 데이터 준비를 대화 한 번으로</h2>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="block">
+          <span class="tag problem">문제</span>
+          <p>QA는 테스트마다 상황에 맞는 데이터를 직접 만듭니다. 어떤 <strong>API를 어떤 순서로</strong> 호출할지, 관련 정책이 무엇인지 알아야 하고, 경우의 수가 많아 매번 반복됩니다.</p>
+        </div>
+        <div class="block">
+          <span class="tag solve">해결</span>
+          <p>채팅으로 원하는 상황을 말하면 <strong>AI가 필요한 API를 골라 실행</strong>해 데이터를 만듭니다. <strong>DB를 직접 건드리지 않고 실제 API로만</strong> 만들기 때문에 현실과 같은 데이터가 안전하게 나옵니다.</p>
+        </div>
+        <div class="block emph">
+          <p><strong class="accent">핵심 —</strong> 미리 짜두는 게 아니라, <strong>처음 보는 요청도 그 자리에서 API를 조합</strong>해 실행합니다.</p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="shot-wrap">
+          <div class="shot"><img src="assets/shot-chat.png" alt="채팅으로 테스트 데이터 생성" /></div>
+          <div class="shot-cap">실제 화면 — “회원가입 테스트 데이터 3건 만들어줘” → AI가 레시피를 실행</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">02 / 06</div>
+</section>
+
+<!-- ───────── 3 : 예시 시나리오 ───────── -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head">
+      <span class="kicker">예시 시나리오</span>
+      <h2>여러 서버를 넘나들며, 한 문장으로 끝낸다</h2>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="scenario">
+          <div class="say"><span class="q">“</span> 운영 중인 공고 아무거나 골라서 지원하고, 서류 합격까지 만들어 줘 <span class="q">”</span></div>
+          <div class="flow">
+            <div class="server-label">사용자용 서버</div>
+            <div class="step"><span class="n">1</span> 회원가입 또는 기존 계정 로그인</div>
+            <div class="step"><span class="n">2</span> 메일 인증번호를 스크립트로 읽어 인증</div>
+            <div class="step"><span class="n">3</span> 운영 중인 공고 중 하나 탐색</div>
+            <div class="step"><span class="n">4</span> 해당 공고에 입사지원</div>
+            <div class="server-label">기업용 서버</div>
+            <div class="step"><span class="n">5</span> 방금 생성된 지원 건을 서류 합격 상태로 변경</div>
+          </div>
+          <div class="result-line"><span class="ok">결과 →</span> 지원자 계정 · 지원한 공고 · 서류 합격 상태까지 한 번에 준비</div>
+        </div>
+      </div>
+      <div class="col" style="flex:0.82;">
+        <div class="block" style="margin-top:2px;">
+          <span class="tag solve">이 시나리오가 보여주는 것</span>
+          <p><strong>하나의 서버로 끝나지 않습니다.</strong> 사용자용 서버와 기업용 서버를 넘나들며 순서대로 실행합니다. 사람이 하면 여러 화면을 오가야 하는 일을 <strong>한 문장</strong>으로 끝냅니다.</p>
+        </div>
+        <div class="block" style="margin-top:18px;">
+          <span class="tag solve">스크립트의 역할</span>
+          <p>2번의 <strong>메일 인증번호 읽기</strong>처럼, API 호출만으로는 막히는 중간 단계도 스크립트가 처리해 흐름이 끊기지 않습니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">03 / 06</div>
+</section>
+
+<!-- ───────── 4 : 주력 PR 포인트 ───────── -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head">
+      <span class="kicker">주력 PR 포인트</span>
+      <h2>왜 이 도구가 강력한가</h2>
+    </div>
+    <div class="grid">
+      <div class="card highlight">
+        <div class="ico">⚡</div>
+        <h3>즉석 조합</h3>
+        <p>처음 보는 요청도 필요한 API를 그 자리에서 조합해 실행합니다. 미리 짜둘 필요가 없습니다.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🛡️</div>
+        <h3>DB를 안 건드림</h3>
+        <p>실제 API로만 만들어 안전하고, 현실과 동일한 데이터가 나옵니다.</p>
+      </div>
+      <div class="card">
+        <div class="ico">✅</div>
+        <h3>지어내지 않음</h3>
+        <p>실제 API 목록과 Jira 문서를 근거로만 답하고 실행합니다. 위험한 작업은 실행 전 확인을 받습니다.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🧩</div>
+        <h3>블록처럼 조합</h3>
+        <p>API 호출 · 다른 레시피 · 스크립트를 묶습니다. 메일 인증 같은 중간 단계까지 이어집니다.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🔌</div>
+        <h3>붙이면 연동</h3>
+        <p>서버에 라이브러리만 추가하면 그 서버의 API 목록을 자동으로 수집·등록합니다.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🔑</div>
+        <h3>내 권한으로 실행</h3>
+        <p>브라우저가 직접 호출합니다. 시스템이 남의 인증 정보를 들고 있지 않습니다.</p>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">04 / 06</div>
+</section>
+
+<!-- ───────── 5 : AI 활용 + 동작 원리 + 결과 이미지 ───────── -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head">
+      <span class="kicker">AI 활용 내용 · 동작 원리</span>
+      <h2>왜 굳이 AI인가</h2>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="ai-list">
+          <div class="ai-item"><span class="dot">1</span><span class="txt"><strong>말을 이해해 실행</strong> — 요청을 이해해 필요한 API를 골라 순서대로 조합·실행합니다.</span></div>
+          <div class="ai-item"><span class="dot">2</span><span class="txt"><strong>스스로 찾아 보완</strong> — 부족한 정보는 실제 API 목록과 Jira 문서를 스스로 찾아 채웁니다.</span></div>
+        </div>
+        <div class="why">
+          <div class="q">WHY AI?</div>
+          <p>요청이 매번 다르고 상황 판단이 필요합니다. 정해진 규칙 기반 자동화로는 안 됩니다. 그때그때 이해하고 조합하는 일은 AI만 할 수 있습니다.</p>
+        </div>
+        <div class="principle">
+          <div class="prow">
+            <div class="pbadge">준비</div>
+            <div class="pbody">각 서버에 라이브러리를 붙이면 <strong>API 목록이 자동 등록</strong>됩니다. (개발·STG 환경에서만 전송)</div>
+          </div>
+          <div class="prow">
+            <div class="pbadge">사용</div>
+            <div class="pbody">사용자가 말함 → AI가 필요한 API 선택 <strong>(레시피 / 플랜)</strong> → <strong>브라우저에서 직접 호출</strong> → 결과 정리</div>
+          </div>
+        </div>
+        <div class="note"><strong>보안</strong> — 라이브러리를 설정 파일로 활성화해야 동작하고, API 목록은 개발·STG 환경에서만 전송하므로 운영 환경에는 영향을 주지 않습니다.</div>
+      </div>
+      <div class="col">
+        <div class="shot-wrap">
+          <div class="shot"><img src="assets/shot-result.png" alt="실행 결과 요약" /></div>
+          <div class="shot-cap">실행 결과 요약 — 스텝별 성공/실패까지 한눈에 정리</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">05 / 06</div>
+</section>
+
+<!-- ───────── 6 : 비전 ───────── -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head">
+      <span class="kicker">그 외 · 비전</span>
+      <h2>QA 데이터 생성은 시작점입니다</h2>
+    </div>
+    <div class="vision-list">
+      <div class="vitem"><div class="vn">01</div><div class="vt"><h3>이슈 / VOC 재현</h3><p>티켓이 올라오면 그 티켓을 재현할 데이터를 자동으로 만들어 둡니다. 개발자는 재현된 상태에서 바로 확인합니다.</p></div></div>
+      <div class="vitem"><div class="vn">02</div><div class="vt"><h3>미니앱형 통합 플랫폼</h3><p>사이드 패널 입력 폼을 갖추면 여러 서버를 한곳에서 다루는 통합 플랫폼으로 확장됩니다.</p></div></div>
+      <div class="vitem"><div class="vn">03</div><div class="vt"><h3>대화형 어드민</h3><p>관리자가 화면을 찾아다니지 않고 말로 조회·처리합니다.</p></div></div>
+      <div class="vitem"><div class="vn">04</div><div class="vt"><h3>확장 기능</h3><p>프로토타입 완성 후 데이터 되돌리기, 같은 상황 대량 생성, 레시피 공유 등으로 넓힐 수 있습니다.</p></div></div>
+    </div>
+    <div class="closing">지금은 QA 테스트 데이터 생성에 집중하지만,<br/>같은 구조를 <span>사내 여러 서버의 반복 업무</span>로 넓혀갈 수 있습니다.</div>
+  </div>
+  <div class="page-no">06 / 06</div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>테스트메이트 — 프로젝트 설명 문서 (인쇄용)</title>
+<style>
+  :root {
+    --bg:        #0b1020;
+    --bg-soft:   #111832;
+    --bg-soft-2: #16203f;
+    --line:      #26304f;
+    --line-2:    #33406a;
+    --text:   #f4f7fc;
+    --text-2: #c2cbe0;
+    --text-3: #8a94b0;
+    --accent:      #7c8bff;
+    --accent-2:    #9aa6ff;
+    --accent-soft: rgba(124,139,255,0.12);
+    --accent-line: rgba(124,139,255,0.4);
+    --ok:      #34d399;
+    --ok-soft: rgba(52,211,153,0.12);
+    --ok-line: rgba(52,211,153,0.35);
+    --font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+    --mono: 'JetBrains Mono', 'Consolas', monospace;
+
+    /* A4 세로. 내부 여백은 페이지 컨테이너 padding 으로 처리 (배경은 가장자리까지 꽉 채움) */
+    --page-w: 210mm;
+    --page-h: 297mm;
+    --page-pad-y: 16mm;
+    --page-pad-x: 16mm;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  h1,h2,h3,h4,p,li,span,div,td,th { word-break: keep-all; overflow-wrap: break-word; }
+
+  html, body { background: #2a2f3a; }
+  body {
+    font-family: var(--font); color: var(--text); line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    padding: 24px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+  }
+
+  /* ── A4 페이지 컨테이너 ── */
+  .page {
+    width: var(--page-w);
+    height: var(--page-h);
+    background:
+      radial-gradient(1000px 420px at 88% -4%, rgba(124,139,255,0.10), transparent 60%),
+      var(--bg);
+    padding: var(--page-pad-y) var(--page-pad-x);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column;
+  }
+  .brandbar { position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+  /* 페이지 번호 */
+  .page-num { position: absolute; bottom: 8mm; right: 16mm;
+    font-size: 11px; color: var(--text-3); font-family: var(--mono); letter-spacing: 0.04em; }
+
+  /* ── 헤더 ── */
+  .doc-head { display: flex; align-items: center; gap: 18px; margin-bottom: 10px; }
+  .logo { width: 54px; height: 54px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+    box-shadow: 0 10px 26px rgba(124,139,255,0.4); flex: none; }
+  .doc-title { font-size: 33px; font-weight: 800; letter-spacing: -0.02em; }
+  .doc-sub { color: var(--text-2); font-size: 16px; margin-top: 3px; }
+
+  .doc-meta { display: flex; gap: 34px; margin: 24px 0 8px; padding: 18px 22px;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px; }
+  .doc-meta .m .l { font-size: 11px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; }
+  .doc-meta .m .v { font-size: 15px; font-weight: 700; margin-top: 4px; }
+
+  h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin: 28px 0 13px;
+    padding-left: 14px; border-left: 4px solid var(--accent); }
+  .page > h2:first-of-type, .page-body > h2:first-child { margin-top: 6px; }
+  h3 { font-size: 16.5px; font-weight: 700; margin: 20px 0 8px; color: var(--text); }
+
+  p { font-size: 15px; color: var(--text-2); margin-bottom: 12px; }
+  p strong, li strong { color: var(--text); font-weight: 700; }
+  .lead { font-size: 16.5px; color: var(--text); line-height: 1.75; }
+
+  ul, ol { margin: 8px 0 14px; padding-left: 4px; list-style: none; }
+  li { font-size: 15px; color: var(--text-2); margin-bottom: 9px; padding-left: 24px; position: relative; }
+  li::before { content: ""; position: absolute; left: 4px; top: 11px; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--accent); }
+  ol { counter-reset: li; }
+  ol > li::before { content: counter(li); counter-increment: li; top: 1px; left: 0;
+    width: 21px; height: 21px; border-radius: 50%; background: var(--accent-soft);
+    color: var(--accent-2); font-size: 11px; font-weight: 800; font-family: var(--mono);
+    display: flex; align-items: center; justify-content: center; }
+  ol > li { padding-left: 32px; }
+
+  .callout { border-radius: 12px; padding: 15px 20px; margin: 15px 0; font-size: 14.5px; line-height: 1.65; }
+  .callout.key { background: var(--accent-soft); border: 1px solid var(--accent-line); }
+  .callout.key strong { color: var(--accent-2); }
+  .callout.ok { background: var(--ok-soft); border: 1px solid var(--ok-line); }
+  .callout.ok strong { color: var(--ok); }
+
+  table { width: 100%; border-collapse: collapse; margin: 13px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 15px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--accent-2); font-weight: 700; font-size: 13px; letter-spacing: 0.02em;
+    background: var(--bg-soft); border-bottom: 1px solid var(--line-2); }
+  td { color: var(--text-2); }
+  td strong { color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  table.bordered { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+
+  table.nested { margin: 10px 0 3px; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--bg); }
+  table.nested th { background: var(--bg-soft-2); color: var(--accent-2); font-size: 12px; padding: 8px 13px; }
+  table.nested td { font-size: 13.5px; padding: 8px 13px; }
+  table.nested th:first-child, table.nested td:first-child { width: 104px; }
+  .nested-intro { font-size: 14px; color: var(--text-2); margin-bottom: 3px; }
+
+  code { font-family: var(--mono); font-size: 13px; background: var(--bg-soft-2);
+    color: var(--accent-2); padding: 2px 7px; border-radius: 5px; }
+
+  .flow-box { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; margin: 14px 0; }
+  .flow-step { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 12px; }
+  .flow-step:last-child { margin-bottom: 0; }
+  .flow-step .fn { flex: none; width: 27px; height: 27px; border-radius: 8px; background: var(--accent-soft);
+    color: var(--accent-2); font-weight: 800; font-size: 13px; font-family: var(--mono);
+    display: flex; align-items: center; justify-content: center; }
+  .flow-step .ft { font-size: 15px; color: var(--text-2); padding-top: 2px; }
+  .flow-step .ft strong { color: var(--text); }
+  .arrow-down { color: var(--text-3); font-size: 14px; margin: -4px 0 6px 13px; }
+
+  .scenario-say { background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 10px;
+    padding: 14px 20px; font-size: 16px; font-weight: 700; color: var(--text); margin: 13px 0 15px; }
+  .scenario-say .q { color: var(--accent-2); }
+
+  .shot { border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; margin: 14px auto 8px;
+    background: var(--bg-soft); box-shadow: 0 14px 34px rgba(0,0,0,0.5); display: block; }
+  .shot img { width: 100%; display: block; }
+  .shot-cap { font-size: 13px; color: var(--text-3); text-align: center; margin-bottom: 6px; }
+
+  .doc-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--text-3); text-align: center; }
+
+  /* ── 인쇄: 페이지 컨테이너 = 물리 A4 1장, 여백 0 (배경 가장자리까지) ── */
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    html, body { background: #fff; }
+    body { padding: 0; gap: 0; display: block; }
+    .page {
+      box-shadow: none;
+      break-after: page;
+      page-break-after: always;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .page:last-child { break-after: auto; page-break-after: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PAGE 1 : 표지 + 개요 ══════════════ -->
+<section class="page">
+  <div class="brandbar"></div>
+
+  <div class="doc-head">
+    <div class="logo">⚡</div>
+    <div>
+      <div class="doc-title">테스트메이트</div>
+      <div class="doc-sub">대화로 만드는 QA 테스트 데이터 — 프로젝트 설명 문서</div>
+    </div>
+  </div>
+  <div class="doc-meta">
+    <div class="m"><div class="l">참가부문</div><div class="v">업무 생산성 / 사내 AX</div></div>
+    <div class="m"><div class="l">상태</div><div class="v">프로토타입 개발 중</div></div>
+  </div>
+
+  <h2>한눈에 보기</h2>
+  <p class="lead">테스트메이트는 <strong>채팅으로 원하는 상황을 말하면 AI가 필요한 API를 골라 실제로 실행해 테스트 데이터를 만들어 주는 도구</strong>입니다. QA가 테스트할 때 필요한 상황별 데이터(가입 직후 회원, 결제 완료 회원, 공고가 올라간 상태 등)를, 기능이나 정책을 몰라도 대화 한 번으로 준비할 수 있습니다.</p>
+
+  <h2>어떤 문제를 푸는가</h2>
+  <p>QA는 테스트마다 상황에 맞는 데이터를 직접 만들어야 합니다. 그러려면 어떤 API를 어떤 순서로 호출해야 하는지, 관련 정책이 무엇인지 알아야 합니다. 상황의 경우의 수가 많아 미리 다 만들어 둘 수 없고, 매번 반복되는 번거로운 일입니다.</p>
+  <p>또한 개발 단계에서 화면이 아직 없을 때는, 지금은 Swagger로 직접 API를 호출하거나 해당 파트를 만든 개발자에게 요청해야 합니다. 이런 준비 과정에 적지 않은 시간이 듭니다.</p>
+
+  <h2>어떻게 푸는가</h2>
+  <p>사용자는 방법을 몰라도 됩니다. <strong>원하는 상황만 말하면</strong>, AI가 등록된 작업(레시피)들 중 필요한 것을 골라 순서대로 실행합니다. 처음 보는 요청이라도 그 자리에서 필요한 API를 조합합니다.</p>
+  <div class="callout key">
+    <strong>가장 중요한 원칙 —</strong> 데이터베이스를 직접 건드리지 않습니다. 실제 서비스가 사용하는 <strong>API로만</strong> 데이터를 만듭니다. 실제 사용자가 거치는 절차를 그대로 밟기 때문에, 현실과 똑같은 데이터가 안전하게 만들어집니다.
+  </div>
+
+  <div class="page-num">1 / 6</div>
+</section>
+
+<!-- ══════════════ PAGE 2 : 실제 화면 + 핵심 용어 시작 ══════════════ -->
+<section class="page">
+  <div class="brandbar"></div>
+
+  <h2>실제 화면</h2>
+  <div class="shot"><img src="assets/shot-chat.png" alt="채팅으로 테스트 데이터를 생성하는 실제 화면" /></div>
+  <div class="shot-cap">“회원가입 테스트 데이터 3건 만들어줘”라고 말하면 AI가 레시피를 실행하고 API 응답을 보여준다</div>
+
+  <h2>핵심 용어</h2>
+  <p>테스트메이트를 이해하는 데 필요한 개념은 많지 않습니다. 아래 여섯 가지면 충분합니다.</p>
+  <table class="bordered">
+    <tr><th style="width:130px;">용어</th><th>뜻</th></tr>
+    <tr><td><strong>레시피</strong></td><td>작업의 실행 순서를 정의한 워크플로우. 순서대로 실행되는 여러 “스텝”의 묶음입니다. 한 번 만들어 저장하고 계속 재사용합니다. (예: “회원가입” 레시피)</td></tr>
+    <tr><td><strong>플랜</strong></td><td>AI가 여러 레시피를 조합해 만든 <strong>1회성 실행 계획</strong>. 저장하지 않습니다. 하나의 요청에 여러 작업이 필요할 때 AI가 그때그때 구성합니다.</td></tr>
+    <tr><td><strong>스펙</strong></td><td>외부 서버가 제공하는 API 목록의 원천(OpenAPI 스펙). 레시피가 호출할 수 있는 API가 여기서 나옵니다.</td></tr>
+    <tr><td><strong>라이브러리</strong></td><td>각 서버에 붙이는 작은 연동 모듈. 그 서버의 API 목록을 자동으로 수집해 테스트메이트에 등록합니다.</td></tr>
+    <tr><td><strong>정보 조회</strong></td><td>정책·기능 질문에 답하기 위해 AI가 API 설명과 Jira 문서를 스스로 찾아보는 과정.</td></tr>
+  </table>
+
+  <div class="page-num">2 / 6</div>
+</section>
+
+<!-- ══════════════ PAGE 3 : 스텝 상세 + 레시피/플랜 차이 ══════════════ -->
+<section class="page">
+  <div class="brandbar"></div>
+
+  <h2>핵심 용어 — 스텝</h2>
+  <p>레시피를 구성하는 개별 실행 단위가 <strong>스텝</strong>입니다. 네 가지 종류가 있습니다.</p>
+  <table class="bordered">
+    <tr><th style="width:150px;">종류</th><th>역할</th></tr>
+    <tr><td><strong>API 호출</strong></td><td>외부 서버의 API를 호출합니다.</td></tr>
+    <tr><td><strong>스크립트</strong></td><td>중간 처리(예: 메일 인증번호 읽기, Slack 메시지 해석)를 수행합니다.</td></tr>
+    <tr><td><strong>서브레시피</strong></td><td>이미 만들어 둔 다른 레시피를 불러 씁니다.</td></tr>
+    <tr><td><strong>사용자 입력</strong></td><td>실행 중 필요한 값을 사용자에게 물어봅니다.</td></tr>
+  </table>
+
+  <div class="callout key">
+    <strong>레시피와 플랜의 차이 —</strong> 레시피는 “저장해 두고 재사용하는 작업”, 플랜은 “AI가 이번 요청을 위해 레시피 여러 개를 즉석에서 엮은 계획”입니다. 레시피 하나로 끝나면 그냥 실행하고, 사전 작업이 더 필요하면 AI가 플랜을 제안합니다.
+  </div>
+
+  <h2>동작 원리</h2>
+  <p>크게 <strong>준비</strong> 단계와 <strong>사용</strong> 단계로 나뉩니다.</p>
+
+  <h3>준비 — 서버를 연결한다 (개발자가 1회 설정)</h3>
+  <div class="flow-box">
+    <div class="flow-step"><span class="fn">1</span><span class="ft">각 서버에 <strong>라이브러리</strong>를 의존성으로 추가합니다.</span></div>
+    <div class="flow-step"><span class="fn">2</span><span class="ft">서버가 기동되면 라이브러리가 그 서버의 <strong>API 목록(OpenAPI 스펙)을 자동으로 수집</strong>해 테스트메이트에 등록합니다. 사람이 API를 손으로 정리할 필요가 없습니다.</span></div>
+    <div class="flow-step"><span class="fn">3</span><span class="ft">이후 주기적으로 상태를 확인(heartbeat)하며, API가 바뀌면 자동으로 갱신합니다.</span></div>
+  </div>
+  <p>새 서버가 늘어도 똑같이 라이브러리만 붙이면 됩니다. 이 점이 뒤에 나오는 “여러 서버 통합” 비전의 기반이 됩니다.</p>
+
+  <div class="page-num">3 / 6</div>
+</section>
+
+<!-- ══════════════ PAGE 4 : 사용 플로우 ══════════════ -->
+<section class="page">
+  <div class="brandbar"></div>
+
+  <h2>동작 원리 — 사용</h2>
+  <h3>대화로 실행한다</h3>
+  <div class="flow-box">
+    <div class="flow-step"><span class="fn">1</span><span class="ft"><strong>사용자가 말합니다.</strong> “결제까지 끝낸 회원 데이터 만들어줘”처럼 원하는 상황을 자연어로 전달합니다.</span></div>
+    <div class="arrow-down">↓</div>
+    <div class="flow-step"><span class="fn">2</span><span class="ft"><strong>AI가 필요한 API를 고릅니다.</strong> 등록된 레시피 중 알맞은 것을 찾아 실행하거나, 여러 개가 필요하면 플랜으로 조합합니다.</span></div>
+    <div class="arrow-down">↓</div>
+    <div class="flow-step"><span class="fn">3</span><span class="ft"><strong>실행 전 사용자에게 확인받습니다.</strong> 구성된 계획을 먼저 보여주고, 사용자가 순서·값을 확인·수정한 뒤 실행합니다. 바로 실행하지 않습니다.</span></div>
+    <div class="arrow-down">↓</div>
+    <div class="flow-step"><span class="fn">4</span><span class="ft"><strong>브라우저에서 직접 실행합니다.</strong> API 호출은 서버가 대신하지 않고 사용자 브라우저에서 이뤄집니다. 그래서 평소 로그인한 그 권한 그대로 동작하고, 시스템이 남의 인증 정보를 보관할 필요가 없습니다. 이때도 DB를 직접 건드리지 않습니다.</span></div>
+    <div class="arrow-down">↓</div>
+    <div class="flow-step"><span class="fn">5</span><span class="ft"><strong>결과를 정리합니다.</strong> 만들어진 계정·데이터와 각 단계의 성공/실패를 보여줍니다.</span></div>
+  </div>
+  <div class="callout ok">
+    <strong>왜 “브라우저에서 직접 실행”이 중요한가 —</strong> 실제 사용자와 똑같은 조건(같은 로그인, 같은 권한)으로 실행되므로 결과가 현실과 일치합니다. 또한 서버가 사용자 인증 정보를 대신 들고 있지 않아 더 안전합니다.
+  </div>
+
+  <div class="page-num">4 / 6</div>
+</section>
+
+<!-- ══════════════ PAGE 5 : 왜 AI + 신뢰성 + 시나리오 ══════════════ -->
+<section class="page">
+  <div class="brandbar"></div>
+
+  <h2>왜 굳이 AI인가</h2>
+  <p>테스트 데이터 준비를 미리 짠 스크립트로 자동화할 수도 있습니다. 하지만 스크립트는 <strong>정해진 경우만</strong> 처리합니다. 상황이 조금만 달라지면 사람이 다시 짜야 합니다. QA 데이터는 상황의 경우의 수가 많아 이를 전부 미리 만들어 둘 수 없습니다.</p>
+  <p>테스트메이트의 핵심은 <strong>매번 다른 요청을 그때그때 이해하고, 필요한 API를 즉석에서 조합</strong>하는 데 있습니다. 이 “이해하고 조합하는” 판단은 규칙 기반 자동화로는 불가능하고, AI만 할 수 있습니다. AI가 장식이 아니라 핵심 동력인 이유입니다.</p>
+
+  <h2>신뢰성과 안전장치</h2>
+  <ul>
+    <li><strong>지어내지 않습니다.</strong> 실제로 등록된 API 목록과 Jira 문서를 근거로만 답하고 실행합니다. 근거가 없으면 되묻거나 “없다”고 답합니다.</li>
+    <li><strong>위험한 작업은 확인을 받습니다.</strong> 결제처럼 되돌릴 수 없는 API는 라이브러리 표시(<code>@TestForgeConfirm</code>)로 실행 전에 사용자 확인을 거칩니다. 내부·관리용 API는 아예 노출되지 않게(<code>@TestForgeExclude</code>) 막을 수 있습니다.</li>
+    <li><strong>운영 환경에 영향을 주지 않습니다.</strong> API 목록은 개발·스테이징 환경에서만 전송하도록 설정하며, 라이브러리를 설정 파일로 켜야만 동작합니다.</li>
+  </ul>
+
+  <h2>예시 시나리오</h2>
+  <div class="scenario-say"><span class="q">“</span> 운영 중인 공고 아무거나 골라서 지원하고, 서류 합격까지 만들어 줘 <span class="q">”</span></div>
+  <p>AI가 두 서버를 넘나들며 순서대로 실행합니다.</p>
+  <ol>
+    <li><strong>[사용자용 서버]</strong> 회원가입 또는 기존 계정 로그인</li>
+    <li><strong>[사용자용 서버]</strong> 메일 인증번호를 스크립트로 읽어 인증 처리</li>
+    <li><strong>[사용자용 서버]</strong> 운영 중인 공고 중 하나 탐색</li>
+    <li><strong>[사용자용 서버]</strong> 해당 공고에 입사지원</li>
+    <li><strong>[기업용 서버]</strong> 방금 생성된 지원 건을 서류 합격 상태로 변경</li>
+  </ol>
+
+  <div class="page-num">5 / 6</div>
+</section>
+
+<!-- ══════════════ PAGE 6 : 결과 화면 + 비전 ══════════════ -->
+<section class="page">
+  <div class="brandbar"></div>
+
+  <h2>실행 결과</h2>
+  <div class="callout ok"><strong>결과 —</strong> 지원자 계정, 지원한 공고, 서류 합격 상태까지 한 번에 준비됩니다. 사람이 하면 서버 두 개를 오가며 여러 화면을 거쳐야 하는 일을 한 문장으로 끝냅니다.</div>
+  <div class="shot"><img src="assets/shot-result.png" alt="실행 결과 요약 화면" /></div>
+  <div class="shot-cap">실행 결과 요약 — 스텝별 성공/실패를 한눈에 보여준다</div>
+
+  <h2>비전 — QA 데이터 생성은 시작점</h2>
+  <ul>
+    <li><strong>이슈 / VOC 재현</strong> — 티켓이 올라오면 그 티켓을 재현할 데이터를 자동으로 만들어 둡니다. 개발자는 재현된 상태에서 바로 확인합니다.</li>
+    <li><strong>미니앱형 통합 플랫폼</strong> — 입력 폼을 갖추면 여러 서버를 한곳에서 다루는 통합 플랫폼으로 확장됩니다.</li>
+    <li><strong>대화형 어드민</strong> — 관리자가 화면을 찾아다니지 않고 말로 조회·처리합니다.</li>
+    <li><strong>확장 기능</strong> — 데이터 되돌리기, 같은 상황 대량 생성, 레시피 공유 등.</li>
+  </ul>
+  <div class="callout key" style="text-align:center;font-size:15.5px;font-weight:700;">
+    지금은 QA 테스트 데이터 생성에 집중하지만,<br/>같은 구조를 <strong>사내 여러 서버의 반복 업무</strong>로 넓혀갈 수 있습니다.
+  </div>
+
+  <div class="doc-footer">테스트메이트 · 프로젝트 설명 문서</div>
+  <div class="page-num">6 / 6</div>
+</section>
+
+</body>
+</html>
