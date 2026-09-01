@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Test Forge — 문서 포털</title>
+  <link rel="stylesheet" href="design/shared/tokens.css">
+  <link rel="stylesheet" href="design/shared/base.css">
+  <style>
+    body {
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      font-family: var(--font-family);
+      min-height: 100vh;
+      height: auto;
+      overflow-y: auto;
+    }
+
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: var(--space-12) var(--space-6) var(--space-16);
+    }
+
+    .hero { margin-bottom: var(--space-10); }
+    .hero__eyebrow {
+      display: inline-block;
+      padding: var(--space-1) var(--space-3);
+      background: var(--color-accent-subtle);
+      color: var(--color-accent-hover);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      letter-spacing: 0.02em;
+      margin-bottom: var(--space-4);
+    }
+    .hero__title {
+      font-size: var(--font-size-3xl);
+      font-weight: var(--font-weight-bold);
+      line-height: var(--line-height-tight);
+      margin-bottom: var(--space-3);
+    }
+    .hero__desc {
+      font-size: var(--font-size-base);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-relaxed);
+      max-width: 620px;
+    }
+
+    .section { margin-top: var(--space-12); }
+    .section__title {
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      margin-bottom: var(--space-2);
+    }
+    .section__hint {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-tertiary);
+      margin-bottom: var(--space-5);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      transition: border-color var(--transition-fast), transform var(--transition-fast);
+    }
+    .card:hover {
+      border-color: var(--color-border-light);
+      transform: translateY(-2px);
+    }
+    .card__head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+    .card__icon {
+      flex-shrink: 0;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-md);
+      font-size: 20px;
+    }
+    .card__name {
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-semibold);
+    }
+    .card__badge {
+      margin-left: auto;
+      flex-shrink: 0;
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-xs);
+      white-space: nowrap;
+    }
+    .card__badge--live {
+      background: var(--color-success-subtle);
+      color: var(--color-success);
+      border: 1px solid var(--color-success-border);
+    }
+    .card__badge--doc {
+      background: var(--color-info-subtle);
+      color: var(--color-info);
+      border: 1px solid var(--color-info-border);
+    }
+    .card__desc {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-normal);
+      margin-bottom: var(--space-4);
+      flex: 1;
+    }
+    .card__links { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+    .btn-link {
+      flex: 1;
+      min-width: 120px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      text-decoration: none;
+      transition: background var(--transition-fast);
+    }
+    .btn-link--primary {
+      background: var(--color-accent);
+      color: var(--color-text-on-accent);
+    }
+    .btn-link--primary:hover { background: var(--color-accent-hover); }
+    .btn-link--ghost {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-secondary);
+    }
+    .btn-link--ghost:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+
+    .footer {
+      margin-top: var(--space-16);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-border);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+      line-height: var(--line-height-relaxed);
+    }
+    .footer a { color: var(--color-text-link); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <span class="hero__eyebrow">DOCS PORTAL</span>
+      <h1 class="hero__title">AI Test Forge 문서 포털</h1>
+      <p class="hero__desc">
+        AI 기반 API 워크플로우 실행 플랫폼의 프로젝트 문서 허브입니다.
+        디자인 명세와 QA 체크리스트는 렌더링된 화면으로 바로 확인하고,
+        기획·DB·라이브러리 문서는 GitHub에서 열람합니다.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 class="section__title">인터랙티브 명세</h2>
+      <p class="section__hint">브라우저에서 바로 렌더링되는 화면입니다.</p>
+      <div class="grid">
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__icon">🎨</span>
+            <span class="card__name">디자인 명세</span>
+            <span class="card__badge card__badge--live">LIVE</span>
+          </div>
+          <p class="card__desc">화면별 디자인 명세 7종. 케이스별 상태를 탭으로 전환하며 확인.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="design/index.html">열기</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__icon">✅</span>
+            <span class="card__name">QA 테스트</span>
+            <span class="card__badge card__badge--live">LIVE</span>
+          </div>
+          <p class="card__desc">수동 QA 수동 테스트 체크리스트. 기능별 필터와 상태 저장 지원.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="test/index.html">열기</a>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section__title">문서</h2>
+      <p class="section__hint">마크다운 문서는 GitHub에서 트리 탐색과 함께 열람합니다.</p>
+      <div class="grid">
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__icon">📋</span>
+            <span class="card__name">기획서</span>
+            <span class="card__badge card__badge--doc">DOCS</span>
+          </div>
+          <p class="card__desc">서비스 기획 문서. 채팅/레시피/패널/스펙 등 도메인별 명세와 시나리오.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--ghost" href="https://github.com/Shin-GS/agent-test-forage/blob/main/docs/specs/README.md">GitHub에서 보기</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__icon">🗄️</span>
+            <span class="card__name">DB 설계</span>
+            <span class="card__badge card__badge--doc">DOCS</span>
+          </div>
+          <p class="card__desc">데이터베이스 스키마 설계. 도메인별 테이블과 관계 정의.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--ghost" href="https://github.com/Shin-GS/agent-test-forage/blob/main/docs/db/README.md">GitHub에서 보기</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__icon">📦</span>
+            <span class="card__name">라이브러리</span>
+            <span class="card__badge card__badge--doc">DOCS</span>
+          </div>
+          <p class="card__desc">스펙 자동 등록 클라이언트 라이브러리. 언어·버전별 연동 가이드.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--ghost" href="https://github.com/Shin-GS/agent-test-forage/blob/main/docs/library/README.md">GitHub에서 보기</a>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <footer class="footer">
+      AI Test Forge · 프로젝트 문서 포털<br>
+      LIVE는 GitHub Pages에서 렌더링, DOCS는 GitHub 저장소에서 열람됩니다 ·
+      <a href="https://github.com/Shin-GS/agent-test-forage">저장소</a>
+    </footer>
+  </main>
+</body>
+</html>

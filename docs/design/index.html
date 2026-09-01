@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Test Forge — 디자인 명세</title>
+  <link rel="stylesheet" href="shared/tokens.css">
+  <link rel="stylesheet" href="shared/base.css">
+  <style>
+    body {
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      font-family: var(--font-family);
+      min-height: 100vh;
+      height: auto;
+      overflow-y: auto;
+    }
+
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: var(--space-12) var(--space-6) var(--space-16);
+    }
+
+    .hero {
+      margin-bottom: var(--space-10);
+    }
+    .hero__eyebrow {
+      display: inline-block;
+      padding: var(--space-1) var(--space-3);
+      background: var(--color-accent-subtle);
+      color: var(--color-accent-hover);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      letter-spacing: 0.02em;
+      margin-bottom: var(--space-4);
+    }
+    .hero__title {
+      font-size: var(--font-size-3xl);
+      font-weight: var(--font-weight-bold);
+      line-height: var(--line-height-tight);
+      margin-bottom: var(--space-3);
+    }
+    .hero__desc {
+      font-size: var(--font-size-base);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-relaxed);
+      max-width: 620px;
+    }
+
+    .section {
+      margin-top: var(--space-12);
+    }
+    .section__title {
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      margin-bottom: var(--space-2);
+    }
+    .section__hint {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-tertiary);
+      margin-bottom: var(--space-5);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      transition: border-color var(--transition-fast), transform var(--transition-fast);
+    }
+    .card:hover {
+      border-color: var(--color-border-light);
+      transform: translateY(-2px);
+    }
+    .card__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+    .card__name {
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-semibold);
+    }
+    .card__badge {
+      flex-shrink: 0;
+      padding: 2px var(--space-2);
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-secondary);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-xs);
+      white-space: nowrap;
+    }
+    .card__desc {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-normal);
+      margin-bottom: var(--space-4);
+      flex: 1;
+    }
+    .card__links {
+      display: flex;
+      gap: var(--space-2);
+    }
+    .btn-link {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      text-decoration: none;
+      transition: background var(--transition-fast);
+    }
+    .btn-link--primary {
+      background: var(--color-accent);
+      color: var(--color-text-on-accent);
+    }
+    .btn-link--primary:hover { background: var(--color-accent-hover); }
+    .btn-link--ghost {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-secondary);
+    }
+    .btn-link--ghost:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+
+    .footer {
+      margin-top: var(--space-16);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-border);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+    }
+    .footer a { color: var(--color-text-link); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <span class="hero__eyebrow">DESIGN SPEC</span>
+      <h1 class="hero__title">AI Test Forge 디자인 명세</h1>
+      <p class="hero__desc">
+        AI 기반 API 워크플로우 실행 플랫폼의 화면별 디자인 명세입니다.
+        각 화면은 케이스별 상태를 탭으로 전환하며 확인할 수 있고,
+        케이스 정의 문서에서 상세 시나리오를 볼 수 있습니다.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2 class="section__title">디자인 시스템</h2>
+      <p class="section__hint">토큰과 공통 컴포넌트의 기준이 되는 카탈로그입니다.</p>
+      <div class="grid">
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">컴포넌트 카탈로그</span>
+            <span class="card__badge">SYSTEM</span>
+          </div>
+          <p class="card__desc">버튼, 입력, 카드, 모달 등 공통 컴포넌트 모음과 디자인 토큰 확인.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="shared/system.html">카탈로그 보기</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section__title">화면 명세</h2>
+      <p class="section__hint">HTML 보기는 렌더링된 화면, 케이스 정의는 상태별 시나리오 문서입니다.</p>
+      <div class="grid">
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">로그인</span>
+            <span class="card__badge">4 케이스</span>
+          </div>
+          <p class="card__desc">로그인 화면. 기본, 검증 오류, 로딩, 에러 상태.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="web/login.html">HTML 보기</a>
+            <a class="btn-link btn-link--ghost" href="web/login.cases.md">케이스 정의</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">채팅 (메인)</span>
+            <span class="card__badge">17 케이스</span>
+          </div>
+          <p class="card__desc">메인 대화 화면. 액션 피커, 카드 UI, 실행 상태 등 핵심 인터페이스.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="web/chat.html">HTML 보기</a>
+            <a class="btn-link btn-link--ghost" href="web/chat.cases.md">케이스 정의</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">사이드 패널</span>
+            <span class="card__badge">5 케이스</span>
+          </div>
+          <p class="card__desc">우측 보조 영역. 레시피 목록, 히스토리, 실행 결과 뷰.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="web/panel.html">HTML 보기</a>
+            <a class="btn-link btn-link--ghost" href="web/panel.cases.md">케이스 정의</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">레시피 편집</span>
+            <span class="card__badge">7 케이스</span>
+          </div>
+          <p class="card__desc">레시피 편집 페이지. 스텝 구성, 조건, 변수 편집 UI.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="web/recipe-editor.html">HTML 보기</a>
+            <a class="btn-link btn-link--ghost" href="web/recipe-editor.cases.md">케이스 정의</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">설정</span>
+            <span class="card__badge">3 케이스</span>
+          </div>
+          <p class="card__desc">설정 페이지. 계정, 서비스, 환경 설정.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="web/settings.html">HTML 보기</a>
+            <a class="btn-link btn-link--ghost" href="web/settings.cases.md">케이스 정의</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">전체 히스토리</span>
+            <span class="card__badge">CASES</span>
+          </div>
+          <p class="card__desc">전체 작업 히스토리 페이지. 실행 이력 조회와 상세.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="web/history.html">HTML 보기</a>
+            <a class="btn-link btn-link--ghost" href="web/history.cases.md">케이스 정의</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card__head">
+            <span class="card__name">관리자</span>
+            <span class="card__badge">CASES</span>
+          </div>
+          <p class="card__desc">관리자 페이지. 사용자/서비스 관리 화면.</p>
+          <div class="card__links">
+            <a class="btn-link btn-link--primary" href="web/admin.html">HTML 보기</a>
+            <a class="btn-link btn-link--ghost" href="web/admin.cases.md">케이스 정의</a>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <footer class="footer">
+      AI Test Forge · 디자인 명세는 빌드 없이 브라우저에서 바로 확인됩니다 ·
+      <a href="README.md">README</a>
+    </footer>
+  </main>
+</body>
+</html>
