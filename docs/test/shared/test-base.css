@@ -1,23 +1,25 @@
 /* QA Test Checklist - 공통 스타일 */
 
 :root {
-  --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text: #1e293b;
-  --color-text-muted: #64748b;
+  /* 다크 테마 — 포털/디자인(docs/design/shared/tokens.css)과 색 통일 */
+  --color-bg: #0f1117;
+  --color-surface: #1a1d27;
+  --color-surface-hover: #242834;
+  --color-border: #2d3140;
+  --color-text: #f0f2f5;
+  --color-text-muted: #9ca3b4;
   --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
-  --color-pass: #10b981;
-  --color-pass-bg: #d1fae5;
+  --color-primary-hover: #818cf8;
+  --color-pass: #22c55e;
+  --color-pass-bg: rgba(34, 197, 94, 0.15);
   --color-fail: #ef4444;
-  --color-fail-bg: #fee2e2;
+  --color-fail-bg: rgba(239, 68, 68, 0.15);
   --color-skip: #f59e0b;
-  --color-skip-bg: #fef3c7;
-  --color-pending: #94a3b8;
-  --color-pending-bg: #f1f5f9;
+  --color-skip-bg: rgba(245, 158, 11, 0.15);
+  --color-pending: #6b7280;
+  --color-pending-bg: #242834;
   --radius: 8px;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,6 +34,19 @@ body {
   margin: 0 auto;
 }
 
+/* ─── Back to Portal ─── */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.back-link:hover { color: var(--color-text); }
+
 /* ─── Header ─── */
 .app-header {
   display: flex;
@@ -40,6 +55,12 @@ body {
   margin-bottom: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--color-border);
+}
+
+.app-header__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .app-header h1 {
@@ -63,10 +84,10 @@ body {
   font-weight: 500;
 }
 
-.stat-badge.pass { background: var(--color-pass-bg); color: #065f46; }
-.stat-badge.fail { background: var(--color-fail-bg); color: #991b1b; }
-.stat-badge.skip { background: var(--color-skip-bg); color: #92400e; }
-.stat-badge.pending { background: var(--color-pending-bg); color: #475569; }
+.stat-badge.pass { background: var(--color-pass-bg); color: var(--color-pass); }
+.stat-badge.fail { background: var(--color-fail-bg); color: var(--color-fail); }
+.stat-badge.skip { background: var(--color-skip-bg); color: var(--color-skip); }
+.stat-badge.pending { background: var(--color-pending-bg); color: var(--color-text-muted); }
 
 /* ─── Progress Bar (전체) ─── */
 .progress-section {
@@ -115,7 +136,7 @@ body {
 }
 
 .feature-item:hover { border-color: var(--color-primary); }
-.feature-item.active { border-color: var(--color-primary); background: #eef2ff; }
+.feature-item.active { border-color: var(--color-primary); background: rgba(99, 102, 241, 0.15); }
 
 .feature-item__name {
   font-size: 0.8rem;
@@ -186,7 +207,7 @@ body {
   transition: all 0.15s;
 }
 
-.btn-compact.active { border-color: var(--color-primary); color: var(--color-primary); background: #eef2ff; }
+.btn-compact.active { border-color: var(--color-primary); color: var(--color-primary-hover); background: rgba(99, 102, 241, 0.15); }
 
 /* ─── Case Cards ─── */
 .case-list {
@@ -258,10 +279,10 @@ body {
 .case-expected {
   font-size: 0.8rem;
   padding: 6px 10px;
-  background: #f0fdf4;
+  background: var(--color-pass-bg);
   border-radius: 4px;
   margin-top: 6px;
-  color: #166534;
+  color: var(--color-pass);
 }
 
 /* 상태 버튼 */

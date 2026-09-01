@@ -146,6 +146,7 @@ class TestRenderer {
 
     // 헤더
     html += `
+      <a class="back-link" href="../index.html">← 문서 포털</a>
       <div class="app-header">
         <h1>🧪 QA Test Checklist</h1>
         <div class="stats">
