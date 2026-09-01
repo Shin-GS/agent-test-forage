@@ -69,7 +69,10 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 - AI 메시지로 실행 시작 안내
 - progress 컴포넌트: 스텝 진행 (완료/활성/대기)
 - AI "..." 로딩 인디케이터 (타이핑 중 느낌)
-- input 영역 비활성 표시 (실행 중에는 추가 입력 불가 — 대화방 단위 락)
+- **입력 영역: 상태 배너로 잠금 이유 명시** ("⏳ 레시피 실행 중입니다" + [중지] 버튼)
+  - 단순 disabled가 아니라, 채팅이 막힌 이유를 입력 지점에 표시 (session_status 반영)
+  - AI 응답 생성 중이면 "⏳ 답변이 진행 중입니다" (중지 버튼 없음)
+- **여러 탭 동기화**: 같은 대화방을 연 다른 탭도 SSE `session_status`로 동일하게 입력 잠금 상태를 표시
 
 ### Case 4: 액션 피커 표시
 

@@ -33,6 +33,11 @@
 
     .action-picker-area { padding: var(--space-3) var(--space-4); background: var(--color-bg-primary); border-top: 1px solid var(--color-border); }
     .chat-input--disabled { opacity: 0.5; pointer-events: none; }
+    /* 입력 잠금 상태 배너: 채팅이 막힌 이유를 입력 지점에 명시 (session_status 반영) */
+    .input-status { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-bg-secondary); border-top: 1px solid var(--color-border); }
+    .input-status__label { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+    .input-status__spinner { width: 14px; height: 14px; border: 2px solid var(--color-border-light); border-top-color: var(--color-accent); border-radius: var(--radius-full); animation: input-status-spin 0.8s linear infinite; }
+    @keyframes input-status-spin { to { transform: rotate(360deg); } }
 
     .result-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); margin: var(--space-2) 0; }
     .result-card__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
@@ -293,7 +298,10 @@
               </div>
               <div class="typing-indicator"><div class="avatar avatar--ai">⚡</div><div class="typing-dots"><span></span><span></span><span></span></div></div>
             </div>
-            <div class="chat-input chat-input--disabled"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="실행 중에는 입력할 수 없습니다" rows="1" disabled></textarea><button class="chat-input__send" disabled>↑</button></div></div>
+            <div class="input-status">
+              <span class="input-status__label"><span class="input-status__spinner"></span> 레시피 실행 중입니다</span>
+              <button class="btn btn--secondary btn--sm">중지</button>
+            </div>
           </div>
           <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"><div class="card card--highlighted"><div class="card__header"><span class="card__title">회원가입</span><span class="badge badge--warning">실행 중</span></div><div class="card__body">Step 3/5 진행 중...</div></div></div></div></aside>
         </div>

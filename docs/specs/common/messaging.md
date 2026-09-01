@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-08-27
+last-updated: 2026-09-01
 ---
 
 # 메시징 및 SSE 이벤트 정의
@@ -22,14 +22,18 @@ last-updated: 2026-08-27
 {
   "id": "msg_123",
   "sessionId": 1,
+  "seq": 42,
   "role": "assistant",
   "type": "text | card | progress | action_picker | system",
   "content": "Markdown 텍스트",
   "format": "markdown",
   "metadata": { },
+  "clientMessageId": null,
   "createdAt": "2026-08-27T14:30:00"
 }
 ```
+
+- `seq`: 대화방 내 **서버 발번 정렬 순서**. FE는 SSE 도착 순서가 아니라 `seq`(동률 시 createdAt)로 메시지를 정렬한다. 낙관적 표시/SSE 순서 뒤바뀜에도 화면 순서가 안 꼬이게 하는 기준.
 
 ### 클라이언트 → 서버 (사용자 발화)
 
@@ -44,6 +48,7 @@ last-updated: 2026-08-27
 ```
 
 - `referenceId`: 참조 태그로 전달되는 레시피/도구 ID (nullable)
+- 전송 API는 **동기 접수**로 거의 즉시 리턴하고(무거운 처리는 async), 응답에 최소 `{ accepted: true, sessionId }`를 준다. FE는 이 성공 응답을 받은 뒤에만 낙관적 임시 메시지를 렌더한다(아래 낙관적 UI).
 
 ---
 
@@ -92,17 +97,92 @@ last-updated: 2026-08-27
 - 모든 대화방의 이벤트가 하나의 스트림으로 전달됨
 - FE가 `sessionId`로 현재 대화방 이벤트만 렌더링, 나머지는 상태만 업데이트
 
+### 이벤트 봉투 (envelope)
+
+모든 SSE 이벤트는 하나의 표준 봉투로 전달된다. `category`로 관심사를, `nature`로 성격을 구분한다.
+
+```json
+{
+  "eventId": 42,
+  "category": "CHAT",
+  "type": "message_new",
+  "nature": "DATA",
+  "sessionId": 123,
+  "data": { ... }
+}
+```
+
+- `category`: 이벤트가 속한 관심사 (아래 표). FE 렌더링 라우팅 기준
+- `nature`: `SIGNAL`(갱신 트리거, payload 최소, 유실 시 재조회로 복구) / `DATA`(콘텐츠 자체, 유실 시 손실 → replay 대상)
+- `type`이 `category`와 `nature`를 모두 보유 (발행 시 type만 지정, 봉투에 함께 직렬화)
+- `sessionId`: 대화방 이벤트면 지정, 전역(알림 등)이면 null
+
+### 카테고리 (category)
+
+| category | 의미 | 지금 사용 |
+|----------|------|-----------|
+| `CHAT` | 대화 메시지/카드 (액션 피커·인증 카드 포함) | ✅ |
+| `SESSION` | 대화방 상태/목록 | ✅ |
+| `EXECUTION` | 레시피 실행 진행/완료 | ✅ (발행은 실행 엔진 단계) |
+| `SYSTEM` | 시스템/연결 수준 신호 (heartbeat + 추후 공지/토큰만료) | ✅ |
+| `NOTIFICATION` | 알림센터 | ⬜ 예약 (추후) |
+
 ### 이벤트 타입
 
-| event | 설명 | data 구조 |
-|-------|------|-----------|
-| `message_new` | 새 메시지 도착 | 메시지 JSON 전체 |
-| `message_update` | 기존 메시지 업데이트 (진행 상태 등) | `{ sessionId, messageId, message: {...} }` |
-| `session_status` | 대화방 상태 변경 | `{ sessionId, status: "running" | "input_waiting" | "idle" }` |
-| `session_list_update` | 대화방 목록 갱신 (이름 변경, 서비스 변경 등) | `{ sessionId, title, service, updatedAt }` |
-| `execution_progress` | 레시피 실행 스텝 진행 | `{ sessionId, executionId, stepIndex, status, summary }` |
-| `execution_complete` | 레시피 실행 완료 | `{ sessionId, executionId, status: "success" | "failed" }` |
-| `heartbeat` | 연결 유지용 | `{}` |
+| event | category | nature | 설명 | data 구조 |
+|-------|----------|--------|------|-----------|
+| `message_new` | CHAT | DATA | 새 메시지 도착 | 메시지 JSON 전체 |
+| `message_update` | CHAT | DATA | 기존 메시지 업데이트 (진행 상태, 추후 토큰 스트리밍) | `{ sessionId, messageId, message: {...} }` |
+| `session_status` | SESSION | SIGNAL | 대화방 처리 상태 변경 (탭 간 동기화) | `{ sessionId, status }` (아래 상태값) |
+| `session_list_update` | SESSION | SIGNAL | 대화방 목록 갱신 (이름/서비스 변경 등) | `{ sessionId, title, service, updatedAt }` |
+| `execution_progress` | EXECUTION | SIGNAL | 레시피 실행 스텝 진행 | `{ sessionId, executionId, stepIndex, status, summary }` |
+| `execution_complete` | EXECUTION | DATA | 레시피 실행 종료 (결과/사유 포함) | `{ sessionId, executionId, outcome, retriable, failedStepIndex }` (아래 outcome) |
+| `heartbeat` | SYSTEM | SIGNAL | 연결 유지용 | `{}` |
+
+#### execution_complete.outcome (실행 종료 사유)
+
+`success`/`failed` 이분법으로는 "사용자 취소 vs 중지 vs 서버 오류"를 구분할 수 없어, 종료 사유를 명시한다. FE는 이 값으로 **후속 액션 버튼**을 결정한다.
+
+| outcome | 의미 | 유발 주체 | FE 액션 |
+|---------|------|----------|---------|
+| `SUCCESS` | 정상 완료 | 서버 | 완료 카드 ([결과 보기]) |
+| `STOPPED` | 사용자 중지 | 사용자([중지]) | 중단 카드 + [이어서 실행] (현재까지 결과 보존) |
+| `CANCELLED` | 사용자 취소 | 사용자([취소]) | "취소되었습니다" (전체 폐기, 재개 없음) |
+| `FAILED` | 실행 오류 | 시스템(스텝 실패/타임아웃 등) | 에러 카드 + `retriable`이면 [다시 실행] |
+
+- `retriable` (FAILED에만 의미): Transient 오류(타임아웃, 5xx 등)면 `true` → [다시 실행] 노출. 구조적 오류(스크립트 버그, 잘못된 레시피 정의)면 `false` → 재실행 버튼 숨김. 분류 기준: [error-handling.md](error-handling.md)
+- `failedStepIndex` (FAILED/STOPPED): 실패/중단된 스텝 위치. [다시 실행]/[이어서 실행]의 재개 지점
+
+### 대화방 처리 상태 (session_status.status)
+
+여러 탭에서 같은 대화방을 열었을 때, 한 탭의 처리 상태를 다른 탭도 즉시 반영하기 위한 값. FE는 이 값으로 **입력 영역**을 렌더링한다.
+
+| status | 의미 | 입력 영역 UI |
+|--------|------|-------------|
+| `idle` | 유휴 | 정상 입력 가능 |
+| `ai_responding` | AI 응답 생성 중 | "⏳ 답변이 진행 중입니다" + 입력 잠금 |
+| `executing` | 레시피/플랜 실행 중 | "⏳ 레시피 실행 중... [중지]" + 입력 잠금 |
+| `input_waiting` | 사용자 입력 대기 | 액션 피커만 활성, 자유 채팅 잠금 |
+
+- 상태 전이는 요청을 시작한 탭뿐 아니라 **모든 탭(같은 사용자 Global SSE)**에 전달됨
+- 입력 잠금 이유를 입력 지점에 명시(옵션 2). 실행 상세는 채팅 영역의 진행 블록(execution_progress)으로 별도 표시
+
+### 상태 해제 (취소 / 중지 / 완료)
+
+`ai_responding` / `executing` / `input_waiting`를 벗어나 `idle`로 돌아가는 것은 **항상 서버가 판단하고 SSE로 전파**한다. FE가 임의로 잠금을 풀지 않는다.
+
+| 트리거 | 경로 | 결과 |
+|--------|------|------|
+| 액션 피커 [취소] | **FE → 취소 API 호출** (`POST /api/v1/conversations/{id}/cancel`) | 서버가 대기/락 해제 → `session_status: idle` 전파 + "취소되었습니다" 메시지(message_new) |
+| 실행 중 [중지] | **FE → 중지 API 호출** (`POST /api/v1/conversations/{id}/stop`) | 현재 스텝까지 저장 후 중단 → `execution_complete`(status에 중단 반영) + `session_status: idle` 전파 |
+| 정상 완료 | 서버 내부 | `execution_complete` + `session_status: idle` 전파 |
+
+**원칙**
+- **취소/중지는 반드시 API 경유.** FE가 액션 피커만 닫으면 서버는 여전히 `input_waiting`이라, 다른 탭·새로고침 시 다시 잠긴 상태로 보인다.
+- 상태 해제 이벤트는 **모든 탭에 전파**되어 함께 입력 잠금이 풀린다.
+- **멱등**: 여러 탭에서 동시에 취소/중지를 호출해도 이미 `idle`이면 no-op으로 처리(에러 아님).
+- **서버 기동 복구**: 인메모리 락은 재시작 시 사라지므로, 기동 시 `ai_responding`/`executing`로 남은 대화방 상태를 `idle`로 정리한다(락과 상태 불일치 방지). `input_waiting`은 사용자가 이어서 입력하거나 취소로 해제.
+- **SSE 미연결 중 요청**: SSE가 끊긴 순간에도 메시지 전송/취소 등 REST 응답은 정상 동작하며, 상태 갱신은 재연결 후 `Last-Event-ID` replay로 복구된다.
 
 ### 재연결 정책
 
@@ -119,14 +199,45 @@ last-updated: 2026-08-27
 
 ### FE 이벤트 처리 전략
 
-| 이벤트 | 현재 보고 있는 대화방 | 다른 대화방 |
+| 이벤트 | 현재 보고 있는 대화방 | 다른 대화방 (같은 사용자 다른 탭 포함) |
 |--------|---------------------|------------|
 | `message_new` | 채팅에 즉시 렌더링 | 상태 뱃지(🔵) 업데이트 |
 | `message_update` | 해당 메시지 즉시 갱신 | 무시 (진입 시 로드) |
-| `session_status` | 입력 영역 상태 반영 | 목록 뱃지 업데이트 |
+| `session_status` | **입력 영역 상태 반영** (idle/ai_responding/executing/input_waiting) | 목록 뱃지 업데이트 |
 | `session_list_update` | — | 대화 목록 반영 |
 | `execution_progress` | 진행 상태 블록 갱신 | 무시 |
 | `execution_complete` | 완료 메시지 + 카드 UI | 상태 뱃지(🔵) |
+
+> **여러 탭 동기화**: 같은 대화방을 여러 탭에서 열어도 모두 같은 Global SSE로 `session_status`를 받으므로, 한 탭에서 실행/응답이 진행되면 **다른 탭의 입력 영역도 즉시 잠기고 이유가 표시된다.** (탭이 "현재 보고 있는 대화방"이면 입력 영역 반영, 아니면 목록 뱃지)
+
+### 낙관적 UI (사용자 발신 메시지)
+
+SSE 왕복을 기다리면 내 메시지가 화면에 늦게 뜨는 체감 지연이 있다. 전송 API는 거의 즉시 리턴하므로, **접수 성공 직후 임시 메시지를 표시**한다.
+
+1. 전송 → 전송 API가 **2xx(접수됨)** 리턴하면, FE가 **임시 사용자 메시지(id=null)를 렌더** + 즉시 입력 잠금
+2. 서버는 async 처리 → 확정 메시지를 `message_new`(실제 id/seq)로 SSE 발행
+3. FE는 `message_new` 도착 시 **해당 대화방의 임시(id=null) 메시지를 전부 제거하고 확정본을 렌더**
+   - 임시는 "확정본이 오면 대체될 자리 채우기"일 뿐이므로, 매칭 키 없이 null 전부 제거로 충분 (대화방 락이 "임시 최대 1개" 불변식 보장)
+4. 순서는 `seq`(동률 시 createdAt) 기준 정렬 — AI 응답이 먼저 도착해도 화면 순서 안 꼬임
+
+**적용 범위 / 예외**
+- 낙관적 표시는 **접수 성공한 본인 사용자 메시지에만.** AI 응답·다른 탭·다른 대화방 메시지는 SSE 도착 시 표시(낙관적 대상 아님)
+- **전송 API 실패**(4xx/5xx/네트워크): 임시 메시지를 아예 그리지 않음 → "전송 실패" 안내 + 입력 유지 (실패 임시 처리 문제가 원천 소거됨)
+- 이중 전송은 대화방 락(session_status)이 막고, 접수 성공 직후 입력을 선제 잠가 중복 클릭도 차단
+
+### 종결 보장 (termination guarantee)
+
+무한 로딩을 막기 위한 핵심 원칙.
+
+- **서버는 처리 결과가 성공이든 실패든 반드시 종결 이벤트를 SSE로 보낸다.** (AI 응답 완료 `message_new`, 실행 종료 `execution_complete`, 또는 오류 `system` 메시지) — 어떤 경우에도 대화방이 `ai_responding`/`executing`에 갇히지 않도록 마지막에 `session_status: idle`을 전파
+- 처리 중 서버 예외/크래시로 종결 이벤트를 못 보낸 경우를 대비해, **FE는 응답 지연 타임아웃**(예: 일정 시간 내 관련 SSE 없음)을 두고 "응답이 지연됩니다. 새로고침 해주세요" 안내 + 입력 잠금 해제 여부는 재조회로 결정
+- 서버 기동 시 `ai_responding`/`executing`로 남은 대화방을 `idle`로 정리(위 상태 해제 참조)
+
+> **구현/배포 주의 (추후):**
+> - heartbeat 전송 실패 시 해당 emitter를 즉시 제거 (좀비 커넥션·메모리 누수 방지)
+> - 브라우저는 도메인당 SSE 동시 연결 6개 제한(HTTP/1.1) — 배포 시 HTTP/2 권장
+> - 프록시(Nginx 등)는 `proxy_buffering off` + 유휴 타임아웃 상향 필요 (SSE 실시간성 보장)
+> - SSE 토큰이 URL 쿼리에 노출됨(EventSource 제약) — 필요 시 SSE 전용 단기 토큰 검토
 
 ---
 
