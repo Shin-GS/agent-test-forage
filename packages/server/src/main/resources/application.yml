@@ -49,3 +49,7 @@ ai-test-forge:
     fast-model: ${AI_MODEL_FAST:openai/gpt-4o-mini}
     history-limit: ${AI_HISTORY_LIMIT:15}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
+  # ── 레시피 실행 설정 (표시/권장 한도, 설정 파일로만 변경) ──
+  execution:
+    step-timeout-seconds: ${EXEC_STEP_TIMEOUT:30}
+    recipe-timeout-seconds: ${EXEC_RECIPE_TIMEOUT:300}
