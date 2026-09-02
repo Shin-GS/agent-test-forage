@@ -31,9 +31,10 @@ public class V1SpecRegistrationParser implements SpecRegistrationParser {
 
     private static final String SCHEMA_VERSION = "1";
 
-    private static final String EXT_EXCLUDE = "x-testforge-exclude";
-    private static final String EXT_CONFIRM = "x-testforge-confirm";
-    private static final String EXT_CONFIRM_MESSAGE = "x-testforge-confirm-message";
+    // 라이브러리 TestForgeOperationCustomizer가 만드는 확장 키와 정확히 일치해야 한다.
+    // exclude: reason 없으면 true, 있으면 {reason: ...}. confirm: {message: ...} 객체(존재 = 확인 필요).
+    private static final String EXT_EXCLUDE = "x-test-forge-exclude";
+    private static final String EXT_CONFIRM = "x-test-forge-confirm";
 
     @Override
     public boolean supports(String schemaVersion) {
@@ -133,11 +134,13 @@ public class V1SpecRegistrationParser implements SpecRegistrationParser {
 
         Map<String, Object> extensions = operation.getExtensions();
         if (extensions != null) {
-            excluded = toBoolean(extensions.get(EXT_EXCLUDE));
-            confirmRequired = toBoolean(extensions.get(EXT_CONFIRM));
-            Object msg = extensions.get(EXT_CONFIRM_MESSAGE);
-            if (msg != null) {
-                confirmMessage = String.valueOf(msg);
+            // exclude: true(boolean) 또는 {reason: ...}(객체) 둘 다 "제외"로 본다.
+            excluded = isPresentFlag(extensions.get(EXT_EXCLUDE));
+            // confirm: {message: ...} 객체의 존재 자체가 "확인 필요"를 의미한다.
+            Object confirm = extensions.get(EXT_CONFIRM);
+            if (confirm != null) {
+                confirmRequired = true;
+                confirmMessage = extractMessage(confirm);
             }
         }
 
@@ -156,11 +159,27 @@ public class V1SpecRegistrationParser implements SpecRegistrationParser {
         }
     }
 
-    /** 확장 필드 값을 boolean으로 안전 변환 */
-    private boolean toBoolean(Object value) {
+    /**
+     * 플래그성 확장 값 해석. {@code true}(boolean)이거나 값이 존재하는 객체({reason:...} 등)면
+     * "설정됨"으로 본다. 명시적 {@code false}만 미설정으로 취급한다.
+     */
+    private boolean isPresentFlag(Object value) {
+        if (value == null) {
+            return false;
+        }
         if (value instanceof Boolean b) {
             return b;
         }
-        return value != null && Boolean.parseBoolean(String.valueOf(value));
+        // 객체/문자열 등 값이 있으면 설정된 것으로 본다 (예: {reason: ...})
+        return true;
+    }
+
+    /** confirm 확장에서 message 추출. {@code {message: ...}} 객체 형태를 기대하되, 없으면 null. */
+    private String extractMessage(Object confirm) {
+        if (confirm instanceof Map<?, ?> map) {
+            Object msg = map.get("message");
+            return msg != null ? String.valueOf(msg) : null;
+        }
+        return null;
     }
 }

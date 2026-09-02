@@ -204,6 +204,42 @@ class SpecRegistrationIntegrationTest {
         assertThat(revived.getId()).isEqualTo(adminIdBefore);
     }
 
+    // ── extensions: @TestForgeConfirm / @TestForgeExclude 확장 파싱 ──
+    // 라이브러리(TestForgeOperationCustomizer)가 만드는 형식과 동일한 확장을 스펙에 넣어,
+    // 서버 파서가 confirmRequired/excluded로 매핑하는지 검증한다.
+    @Test
+    void register_parsesTestForgeExtensions() throws Exception {
+        // POST /pay: x-test-forge-confirm {message}, GET /admin: x-test-forge-exclude true
+        Map<String, Object> paths = new LinkedHashMap<>();
+        paths.put("/pay", Map.of("post", Map.of(
+                "summary", "pay",
+                "responses", Map.of("200", Map.of("description", "ok")),
+                "x-test-forge-confirm", Map.of("message", "실제 결제가 발생합니다"))));
+        paths.put("/admin", Map.of("get", Map.of(
+                "summary", "admin",
+                "responses", Map.of("200", Map.of("description", "ok")),
+                "x-test-forge-exclude", true)));
+        Map<String, Object> openapi = new LinkedHashMap<>();
+        openapi.put("openapi", "3.0.1");
+        openapi.put("info", Map.of("title", "demo", "version", "1.0.0"));
+        openapi.put("paths", paths);
+        String specJson = objectMapper.writeValueAsString(openapi);
+
+        register(registerBody(specJson));
+
+        ApiSpec spec = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
+        List<ApiEndpoint> endpoints = endpointRepository.findByApiSpecId(spec.getId());
+
+        ApiEndpoint pay = endpoints.stream()
+                .filter(e -> "/pay".equals(e.getPath())).findFirst().orElseThrow();
+        assertThat(pay.isConfirmRequired()).isTrue();
+        assertThat(pay.getConfirmMessage()).isEqualTo("실제 결제가 발생합니다");
+
+        ApiEndpoint admin = endpoints.stream()
+                .filter(e -> "/admin".equals(e.getPath())).findFirst().orElseThrow();
+        assertThat(admin.isExcluded()).isTrue();
+    }
+
     // ── token: invalid → 401 ──
     @Test
     void register_invalidToken_returns401() throws Exception {
