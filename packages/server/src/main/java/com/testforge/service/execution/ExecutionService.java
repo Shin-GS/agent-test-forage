@@ -11,6 +11,7 @@ import com.testforge.dto.execution.ExecutionRecipeView;
 import com.testforge.dto.execution.ExecutionResponse;
 import com.testforge.dto.execution.ExecutionStartRequest;
 import com.testforge.dto.execution.ExecutionStepView;
+import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.conversation.enums.ConversationStatus;
 import com.testforge.entity.execution.Execution;
@@ -181,8 +182,14 @@ public class ExecutionService {
      */
     @Transactional
     public ExecutionResponse complete(Long executionId, ExecutionCompleteRequest request) {
-        if (request.status() == null || request.status() == ExecutionStatus.RUNNING) {
-            throw ApiException.invalidRequest("terminal status is required (not RUNNING)");
+        // complete는 정상 완료 보고 전용(SUCCESS/PARTIAL/FAILED). 중지/취소(STOPPED/CANCELLED)는
+        // 반드시 stop/cancel API 경유여야 대화방 해제·안내 메시지·요약이 일관되게 처리되므로 거부한다.
+        if (request.status() == null
+                || request.status() == ExecutionStatus.RUNNING
+                || request.status() == ExecutionStatus.STOPPED
+                || request.status() == ExecutionStatus.CANCELLED) {
+            throw ApiException.invalidRequest(
+                    "complete accepts SUCCESS/PARTIAL/FAILED only; use stop/cancel for STOPPED/CANCELLED");
         }
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> ApiException.executionNotFound(executionId));
@@ -203,6 +210,10 @@ public class ExecutionService {
             execution.setDurationMs(Duration.between(execution.getStartedAt(), finishedAt).toMillis());
         }
         Execution saved = executionRepository.save(execution);
+
+        // 계층 정합: 아직 진행 중인 하위 레시피(EXECUTION_RECIPE)를 실행 최종 상태에 맞춰 종료한다.
+        // (단일 실행 기준. 플랜의 레시피별 세밀한 성공/실패 롤업은 플랜 조각에서 다룬다.)
+        finalizeRunningRecipes(executionId, request.status(), finishedAt);
 
         Long conversationId = saved.getConversationId();
         Long ownerId = resolveOwnerId(saved);
@@ -234,6 +245,137 @@ public class ExecutionService {
         return toResponse(execution);
     }
 
+    /**
+     * 대화방에서 진행 중(RUNNING)인 실행을 지정 종료 상태로 마감한다(취소/중지 모두 STOPPED).
+     * 대화방 상태 전이(idle)와 락 해제는 호출측(ConversationService.releaseToIdle)이 담당하므로,
+     * 여기서는 EXECUTION 레코드 종료 + {@code execution_complete} 발행만 수행한다.
+     *
+     * <p>RUNNING 실행이 없으면(이미 종료됐거나 실행이 없던 대화) no-op. FE의 별도 complete 호출과
+     * 겹쳐도 complete가 멱등이라 안전하다. 실행 중이던 스텝의 상태는 현재 값 그대로 보존한다
+     * (히스토리에 그대로 남는다). 중지=STOPPED / 취소=CANCELLED로 구분해 기록하며, 사용자가 히스토리에서
+     * 무엇이 있었는지 알 수 있도록 {@code resultSummary}를 "사유 · 완료/전체 스텝" 형식으로 자동 채운다.
+     *
+     * @param conversationId 대상 대화방
+     * @param terminalStatus 종료 상태 (STOPPED 또는 CANCELLED)
+     */
+    @Transactional
+    public void terminateRunningForConversation(Long conversationId, ExecutionStatus terminalStatus) {
+        if (conversationId == null) {
+            return;
+        }
+        List<Execution> running = executionRepository.findByConversationIdAndStatus(
+                conversationId, ExecutionStatus.RUNNING);
+        for (Execution execution : running) {
+            execution.setStatus(terminalStatus);
+            LocalDateTime finishedAt = LocalDateTime.now();
+            execution.setFinishedAt(finishedAt);
+            if (execution.getStartedAt() != null) {
+                execution.setDurationMs(Duration.between(execution.getStartedAt(), finishedAt).toMillis());
+            }
+            // 히스토리 표시용 요약 자동 생성 (예: "취소됨 · 1/3 스텝 완료"). 사용자가 이미 요약을
+            // 남겼다면(드묾) 덮어쓰지 않는다.
+            if (execution.getResultSummary() == null || execution.getResultSummary().isBlank()) {
+                execution.setResultSummary(buildTerminationSummary(execution.getId(), terminalStatus));
+            }
+            executionRepository.save(execution);
+
+            // 계층 정합: 진행 중인 하위 레시피도 같은 종료 상태로 맞춘다 (Execution만 종료되고
+            // ExecutionRecipe는 RUNNING으로 남는 불일치 방지)
+            finalizeRunningRecipes(execution.getId(), terminalStatus, finishedAt);
+
+            publishAfterCommit(execution.getUserId(), SseEventType.EXECUTION_COMPLETE, conversationId,
+                    ExecutionCompletePayload.of(conversationId, execution.getId(), terminalStatus));
+            log.info("Execution terminated by conversation control: executionId={}, status={}",
+                    execution.getId(), terminalStatus);
+        }
+    }
+
+    /**
+     * 중단(중지/취소) 시 히스토리 표시용 요약을 만든다. 사유(중지/취소)와 완료 스텝 수를 담아
+     * 사용자가 히스토리에서 "무슨 일이 있었나"를 바로 알 수 있게 한다.
+     * 예: {@code "취소됨 · 1/3 스텝 완료"}, {@code "중지됨 · 2/3 스텝 완료"}.
+     */
+    private String buildTerminationSummary(Long executionId, ExecutionStatus terminalStatus) {
+        int total = 0;
+        int done = 0;
+        for (ExecutionRecipe recipe : executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId)) {
+            for (ExecutionStep step : executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(recipe.getId())) {
+                total++;
+                if (step.getStatus() == ExecutionStepStatus.SUCCESS) {
+                    done++;
+                }
+            }
+        }
+        String reason = terminalStatus == ExecutionStatus.CANCELLED ? "취소됨" : "중지됨";
+        return reason + " · " + done + "/" + total + " 스텝 완료";
+    }
+
+    /** 원시 응답 저장 상한 (1MB 초과 시 절단, execution.md) */
+    private static final int RESPONSE_MAX_CHARS = 1_000_000;
+
+    /**
+     * 스텝 실행 결과 보고. FE가 한 스텝을 실행한 뒤 결과를 보고하면 EXECUTION_STEP을 갱신하고,
+     * {@code extractedValues}를 실행 전역 context(EXECUTION.CONTEXT_JSON)에 누적한 뒤
+     * {@code execution_progress}(stepIndex/status/summary)를 발행한다.
+     *
+     * <p>스텝은 {@code executionId}에 속해야 하며(경로 검증), 실행이 이미 종료됐으면 400
+     * (종료된 실행에 스텝 보고 불가). 스텝/실행이 없으면 404. 응답 본문은 상한을 넘으면 잘라 저장한다.
+     *
+     * @param executionId 소속 실행 (소유 검증용)
+     * @param stepId      보고 대상 스텝
+     */
+    @Transactional
+    public ExecutionStepView reportStep(Long executionId, Long stepId, StepReportRequest request) {
+        if (request.status() == null || request.status() == ExecutionStepStatus.PENDING) {
+            throw ApiException.invalidRequest("terminal step status is required (not PENDING)");
+        }
+
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> ApiException.executionNotFound(executionId));
+        if (execution.getStatus().isTerminal()) {
+            throw ApiException.invalidRequest("execution is already terminal: " + executionId);
+        }
+
+        ExecutionStep step = executionStepRepository.findById(stepId)
+                .orElseThrow(() -> ApiException.executionStepNotFound(stepId));
+
+        // 스텝이 이 실행에 속하는지 검증 (step → recipe → execution)
+        ExecutionRecipe recipe = executionRecipeRepository.findById(step.getExecutionRecipeId())
+                .orElseThrow(() -> ApiException.executionStepNotFound(stepId));
+        if (!recipe.getExecutionId().equals(executionId)) {
+            throw ApiException.invalidRequest(
+                    "step " + stepId + " does not belong to execution " + executionId);
+        }
+
+        // 스텝 결과 반영
+        step.setStatus(request.status());
+        step.setSummary(request.summary());
+        step.setUserInputJson(RecipeJsonUtil.toJsonString(request.userInput()));
+        step.setResponseJson(truncateResponse(RecipeJsonUtil.toJsonString(request.response())));
+        step.setErrorMessage(request.errorMessage());
+        step.setFinishedAt(LocalDateTime.now());
+        if (step.getStartedAt() == null) {
+            step.setStartedAt(step.getFinishedAt());
+        }
+        executionStepRepository.save(step);
+
+        // context 누적: 기존 context에 extractedValues를 병합
+        if (request.extractedValues() != null && !request.extractedValues().isEmpty()) {
+            execution.setContextJson(mergeContext(execution.getContextJson(), request.extractedValues()));
+            executionRepository.save(execution);
+        }
+
+        // SSE: 스텝 진행 발행
+        Long conversationId = execution.getConversationId();
+        publishAfterCommit(execution.getUserId(), SseEventType.EXECUTION_PROGRESS, conversationId,
+                new ExecutionProgressPayload(conversationId, executionId,
+                        step.getStepIndex(), request.status().getCode(), request.summary()));
+
+        log.info("Step reported: executionId={}, stepId={}, stepIndex={}, status={}",
+                executionId, stepId, step.getStepIndex(), request.status());
+        return toStepView(step);
+    }
+
     // ── helpers ──
 
     /** 레시피 전체 스냅샷 JSON (메타+스텝+변수+결과정의). 원본 독립 재현용 */
@@ -254,6 +396,66 @@ public class ExecutionService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to serialize recipe snapshot", e);
         }
+    }
+
+    /**
+     * 실행 종료 시 아직 진행 중(RUNNING)인 하위 EXECUTION_RECIPE를 실행 최종 상태에 대응하는 종료
+     * 상태로 맞춘다. Execution만 종료되고 ExecutionRecipe가 RUNNING으로 남아 계층 상태가 어긋나는
+     * 것을 막는다. (스텝(EXECUTION_STEP) 레벨의 세밀한 롤업은 플랜/재개 조각에서 다룬다.)
+     */
+    private void finalizeRunningRecipes(Long executionId, ExecutionStatus executionStatus,
+                                        LocalDateTime finishedAt) {
+        ExecutionRecipeStatus recipeStatus = toRecipeStatus(executionStatus);
+        List<ExecutionRecipe> recipes =
+                executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
+        for (ExecutionRecipe recipe : recipes) {
+            if (recipe.getStatus() == ExecutionRecipeStatus.RUNNING
+                    || recipe.getStatus() == ExecutionRecipeStatus.PENDING) {
+                recipe.setStatus(recipeStatus);
+                if (recipe.getFinishedAt() == null) {
+                    recipe.setFinishedAt(finishedAt);
+                }
+                executionRecipeRepository.save(recipe);
+            }
+        }
+    }
+
+    /** 실행 상태 → 레시피 실행 상태 매핑. PARTIAL은 레시피 레벨에 없어 FAILED로 수렴(단일 실행 기준) */
+    private ExecutionRecipeStatus toRecipeStatus(ExecutionStatus executionStatus) {
+        return switch (executionStatus) {
+            case SUCCESS -> ExecutionRecipeStatus.SUCCESS;
+            case STOPPED -> ExecutionRecipeStatus.STOPPED;
+            case CANCELLED -> ExecutionRecipeStatus.CANCELLED;
+            case FAILED, PARTIAL -> ExecutionRecipeStatus.FAILED;
+            case RUNNING -> ExecutionRecipeStatus.RUNNING; // 종료 경로에선 도달하지 않음
+        };
+    }
+
+    /** 원시 응답 문자열을 상한으로 절단 (1MB 초과 시, execution.md). null이면 null */
+    private String truncateResponse(String responseJson) {
+        if (responseJson == null) {
+            return null;
+        }
+        if (responseJson.length() <= RESPONSE_MAX_CHARS) {
+            return responseJson;
+        }
+        log.warn("Response truncated: {} chars -> {} chars", responseJson.length(), RESPONSE_MAX_CHARS);
+        return responseJson.substring(0, RESPONSE_MAX_CHARS);
+    }
+
+    /**
+     * 기존 context JSON에 새 추출값을 병합해 JSON 문자열로 돌려준다. 같은 키는 새 값으로 덮어쓴다.
+     * 기존 context가 없으면 새 값만으로 구성한다.
+     */
+    @SuppressWarnings("unchecked")
+    private String mergeContext(String currentContextJson, Map<String, Object> extractedValues) {
+        Map<String, Object> merged = new java.util.LinkedHashMap<>();
+        Object current = RecipeJsonUtil.toObject(currentContextJson);
+        if (current instanceof Map<?, ?> currentMap) {
+            merged.putAll((Map<String, Object>) currentMap);
+        }
+        merged.putAll(extractedValues);
+        return RecipeJsonUtil.toJsonString(merged);
     }
 
     /** 스텝 정의의 type 값을 StepType으로 매핑. 알 수 없으면 API로 간주(방어적 기본값) */

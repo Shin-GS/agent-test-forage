@@ -3,6 +3,8 @@ package com.testforge.controller.execution;
 import com.testforge.dto.execution.ExecutionCompleteRequest;
 import com.testforge.dto.execution.ExecutionResponse;
 import com.testforge.dto.execution.ExecutionStartRequest;
+import com.testforge.dto.execution.ExecutionStepView;
+import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.service.execution.ExecutionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,5 +59,17 @@ public class ExecutionController {
     @GetMapping("/executions/{executionId}")
     public ExecutionResponse detail(@PathVariable Long executionId) {
         return executionService.detail(executionId);
+    }
+
+    /**
+     * 스텝 결과 보고. FE가 한 스텝을 실행한 뒤 결과를 보고하면 EXECUTION_STEP을 갱신하고 context를
+     * 누적하며 execution_progress를 발행한다. 스텝이 실행에 속하지 않거나 종료된 실행이면 400,
+     * 실행/스텝 없으면 404.
+     */
+    @PostMapping("/executions/{executionId}/steps/{stepId}")
+    public ExecutionStepView reportStep(@PathVariable Long executionId,
+                                        @PathVariable Long stepId,
+                                        @RequestBody StepReportRequest request) {
+        return executionService.reportStep(executionId, stepId, request);
     }
 }

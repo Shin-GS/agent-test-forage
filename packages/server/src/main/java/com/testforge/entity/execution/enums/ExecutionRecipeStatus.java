@@ -19,7 +19,9 @@ public enum ExecutionRecipeStatus implements EnumColumn {
     /** 실패 */
     FAILED("실패"),
     /** 사용자 중지 */
-    STOPPED("중지됨");
+    STOPPED("중지됨"),
+    /** 사용자 취소 */
+    CANCELLED("취소됨");
 
     private final String description;
 

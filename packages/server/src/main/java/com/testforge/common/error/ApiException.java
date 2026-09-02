@@ -83,6 +83,18 @@ public class ApiException extends RuntimeException {
                 "Execution not found: " + executionId);
     }
 
+    /** 존재하지 않는 실행 스텝 (404) */
+    public static ApiException executionStepNotFound(Long stepId) {
+        return new ApiException(ErrorCode.EXECUTION_STEP_NOT_FOUND, HttpStatus.NOT_FOUND,
+                "Execution step not found: " + stepId);
+    }
+
+    /** 실행 중이라 요청을 수행할 수 없음 (409) */
+    public static ApiException conversationExecuting(Long conversationId) {
+        return new ApiException(ErrorCode.CONVERSATION_EXECUTING, HttpStatus.CONFLICT,
+                "Conversation is executing: " + conversationId);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

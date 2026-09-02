@@ -32,6 +32,10 @@ public enum ErrorCode implements EnumColumn {
     CONVERSATION_BUSY("대화방이 처리 중"),
     /** 존재하지 않는 실행 조회 */
     EXECUTION_NOT_FOUND("실행을 찾을 수 없음"),
+    /** 존재하지 않는 실행 스텝 조회 */
+    EXECUTION_STEP_NOT_FOUND("실행 스텝을 찾을 수 없음"),
+    /** 실행 중이라 요청을 수행할 수 없음 (예: 실행 중 대화방 삭제) */
+    CONVERSATION_EXECUTING("대화방이 실행 중"),
     /** 서버 내부 오류 */
     INTERNAL_ERROR("서버 내부 오류");
 

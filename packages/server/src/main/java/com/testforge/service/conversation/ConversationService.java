@@ -19,9 +19,11 @@ import com.testforge.entity.conversation.enums.ConversationStatus;
 import com.testforge.entity.conversation.enums.MessageRole;
 import com.testforge.entity.conversation.enums.MessageStatus;
 import com.testforge.entity.conversation.enums.MessageType;
+import com.testforge.entity.execution.enums.ExecutionStatus;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
+import com.testforge.service.execution.ExecutionService;
 import com.testforge.sse.SseEventPublisher;
 import com.testforge.sse.enums.SseEventType;
 import com.testforge.utils.ConversationTitleUtil;
@@ -62,17 +64,20 @@ public class ConversationService {
     private final SseEventPublisher ssePublisher;
     private final ConversationLock conversationLock;
     private final ApplicationEventPublisher eventPublisher;
+    private final ExecutionService executionService;
 
     public ConversationService(ConversationRepository conversationRepository,
                                MessageRepository messageRepository,
                                SseEventPublisher ssePublisher,
                                ConversationLock conversationLock,
-                               ApplicationEventPublisher eventPublisher) {
+                               ApplicationEventPublisher eventPublisher,
+                               ExecutionService executionService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.ssePublisher = ssePublisher;
         this.conversationLock = conversationLock;
         this.eventPublisher = eventPublisher;
+        this.executionService = executionService;
     }
 
     /**
@@ -192,13 +197,16 @@ public class ConversationService {
     /**
      * 소프트 삭제 (DELETED_AT = now). 없거나 이미 삭제 시 404.
      *
-     * <p><b>TODO (다음 조각: 중지/이어서 실행):</b> execution.md는 "실행 중 대화방 삭제 = 삭제 차단 또는
-     * 중지 확인"을 요구한다. 현재는 대화방 상태가 EXECUTING이어도 그대로 삭제한다. 실행 중이면 삭제를
-     * 막거나(409) 중지 후 삭제하도록, RUNNING 실행 종료 처리와 함께 연결해야 한다.
+     * <p>실행 중({@code EXECUTING})이면 삭제를 차단한다(409 {@code CONVERSATION_EXECUTING},
+     * execution.md "실행 중 대화방 삭제 = 삭제 차단"). FE는 "중지하고 삭제" 선택 시 중지 API를 먼저
+     * 호출해 idle로 만든 뒤 삭제한다. (AI 응답 중 등 다른 처리 상태는 짧게 끝나므로 차단하지 않는다.)
      */
     @Transactional
     public void softDelete(Long id) {
         Conversation conversation = getActiveOrThrow(id);
+        if (conversation.getStatus() == ConversationStatus.EXECUTING) {
+            throw ApiException.conversationExecuting(id);
+        }
         conversation.setDeletedAt(LocalDateTime.now());
         conversationRepository.save(conversation);
 
@@ -386,32 +394,32 @@ public class ConversationService {
     }
 
     /**
-     * 액션 피커 [취소]. 대기/락을 해제하고 대화방을 IDLE로 되돌린 뒤 "취소되었습니다" 시스템 메시지를
-     * 남긴다(messaging.md 상태 해제). 이미 IDLE이면 <b>멱등 no-op</b>(에러 아님).
-     * 취소/중지는 반드시 API 경유이며 상태 해제는 모든 탭에 전파된다.
+     * 액션 피커 [취소]. 대화방의 RUNNING 실행을 <b>CANCELLED</b>로 종료한 뒤, 대기/락을 해제하고 대화방을
+     * IDLE로 되돌리며 "취소되었습니다" 시스템 메시지를 남긴다(messaging.md 상태 해제).
+     * 이미 IDLE이면 <b>멱등 no-op</b>(에러 아님). 취소/중지는 반드시 API 경유이며 상태 해제는 모든 탭에 전파된다.
      *
-     * <p><b>TODO (다음 조각: 중지/이어서 실행):</b> stop과 마찬가지로 EXECUTION 레코드는 아직 건드리지
-     * 않는다. 취소는 messaging.md에서 "전체 폐기, 재개 없음"(outcome CANCELLED)이므로, 실행 중 취소 시
-     * 해당 {@code Execution}을 폐기 상태로 종결하는 처리를 ExecutionService와 연결해야 한다.
-     * (stop=STOPPED/재개 가능 vs cancel=폐기/재개 없음의 구분도 그때 반영)
+     * <p>취소(CANCELLED)와 중지(STOPPED)는 상태로 구분해 히스토리에 남긴다("무슨 일이 있었나"의 기록).
+     * 재개 로직의 세분은 재개 기능 도입 시 다룬다. execution 종료(상태 + 요약 + {@code execution_complete})는
+     * ExecutionService가, 대화방 상태/락/안내 메시지는 releaseToIdle이 담당한다.
      */
     @Transactional
     public ConversationDetailResponse cancel(Long conversationId) {
+        getActiveOrThrow(conversationId);
+        executionService.terminateRunningForConversation(conversationId, ExecutionStatus.CANCELLED);
         return releaseToIdle(conversationId, "취소되었습니다.");
     }
 
     /**
-     * 실행 [중지]. 대화방을 IDLE로 되돌리고 락을 해제한다. 이미 IDLE이면 <b>멱등 no-op</b>.
-     *
-     * <p><b>TODO (다음 조각: 중지/이어서 실행):</b> 현재는 대화방 상태만 해제하고 EXECUTION 레코드는
-     * 건드리지 않는다. 그래서 실행 중([EXECUTING]) 중지 시 해당 {@code Execution}이 RUNNING으로
-     * 남는 갭이 있다(유령 RUNNING 레코드). 다음 조각에서 이 대화방의 RUNNING 실행을 STOPPED로 종료
-     * (현재 스텝까지 결과 보존 + {@code execution_complete}(STOPPED) 발행)하도록 ExecutionService와
-     * 연결해야 한다. "현재 스텝까지 저장"은 스텝 보고 API가 선행되어야 의미가 있으므로 이번 조각에서는
-     * 미룬다(messaging.md 중지 정책: STOPPED, 이어서 실행 가능).
+     * 실행 [중지]. 대화방의 RUNNING 실행을 <b>STOPPED</b>로 종료(현재까지 진행분 보존)한 뒤,
+     * 대화방을 IDLE로 되돌리고 락을 해제한다. 이미 IDLE이면 <b>멱등 no-op</b>.
+     * execution 종료(EXECUTION 상태 + 요약 + {@code execution_complete})는 ExecutionService가, 대화방
+     * 상태/락/안내 메시지는 releaseToIdle이 담당한다. 취소(CANCELLED)와 구분해 히스토리에 남긴다.
      */
     @Transactional
     public ConversationDetailResponse stop(Long conversationId) {
+        // 존재/삭제 검증 (없으면 404). execution 종료를 먼저 처리한 뒤 대화방을 해제한다.
+        getActiveOrThrow(conversationId);
+        executionService.terminateRunningForConversation(conversationId, ExecutionStatus.STOPPED);
         return releaseToIdle(conversationId, "실행이 중지되었습니다.");
     }
 
