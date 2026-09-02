@@ -1,0 +1,28 @@
+server:
+  port: 9101
+
+spring:
+  application:
+    name: demo-shop
+
+# ── AI Test Forge 클라이언트 라이브러리 설정 ──
+# 라이브러리가 기동 시 baseUrl+/v3/api-docs에서 스펙을 긁어 server-url로 등록한다.
+ai-test-forge:
+  enabled: true
+  # 에이전트 서버 (등록 대상). 로컬 검증 단계에서는 localhost 직접 지정.
+  server-url: ${AGENT_URL:http://localhost:8080}
+  # 등록 보안 토큰. 에이전트 서버의 TESTFORGE_TOKEN과 일치해야 함 (기본값 local-dev-token).
+  register-token: ${TESTFORGE_TOKEN:local-dev-token}
+  # 이 서버의 baseUrl (식별 키 + 스펙 수집 대상). 검증 단계에서는 localhost.
+  base-url: ${SHOP_BASE_URL:http://localhost:9101}
+  docs-url: /v3/api-docs
+  name: "demo-shop"
+  service:
+    description: "온라인 쇼핑몰 API (상품/주문/결제)"
+    domain: "커머스"
+    capabilities: ["상품조회", "주문", "결제", "주문취소"]
+    notes: "데모 서버, 실 결제 없음"
+  auth:
+    profiles:
+      - name: "일반"
+        login-page-url: "http://localhost:9101/login-page"
