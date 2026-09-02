@@ -1,5 +1,6 @@
 package com.testforge.controller.conversation;
 
+import com.testforge.dto.common.CursorPage;
 import com.testforge.dto.conversation.ConversationDetailResponse;
 import com.testforge.dto.conversation.ConversationStartRequest;
 import com.testforge.dto.conversation.ConversationStartResponse;
@@ -91,10 +92,16 @@ public class ConversationController {
         return ResponseEntity.noContent().build();
     }
 
-    /** 대화방 메시지 목록 (SEQ 오름차순). 없거나 삭제된 대화방이면 404. */
+    /**
+     * 대화방 메시지 목록 (커서 기반 무한 스크롤, 최신순). 없거나 삭제된 대화방이면 404.
+     * cursor는 이전 응답의 nextCursor(가장 과거 seq)를 그대로 전달(없으면 첫 페이지=최신).
+     * size 기본 20, 최대 50. 응답 items는 최신순이며 FE가 채팅 표시 시 역순 렌더한다.
+     */
     @GetMapping("/{id}/messages")
-    public List<MessageResponse> listMessages(@PathVariable Long id) {
-        return conversationService.listMessages(id);
+    public CursorPage<MessageResponse> listMessages(@PathVariable Long id,
+                                                    @RequestParam(required = false) String cursor,
+                                                    @RequestParam(required = false) Integer size) {
+        return conversationService.listMessages(id, cursor, size);
     }
 
     /**

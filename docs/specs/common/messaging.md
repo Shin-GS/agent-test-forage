@@ -54,6 +54,17 @@ last-updated: 2026-09-01
   - `POST /api/v1/conversations/{id}/messages` — 기존 방에 이어서 전송
   - 빈 대화방을 미리 만들지 않아 orphan을 원천 차단 (overview.md)
 
+### 메시지 목록 조회 (커서 페이징)
+
+대화가 길어져도 부하가 없도록 메시지 조회는 **커서 기반 무한 스크롤**로 제공한다.
+
+- `GET /api/v1/conversations/{id}/messages?cursor={nextCursor}&size={n}`
+- 응답: `{ items, nextCursor, hasNext }` (커서 페이지). `items`는 **최신순(seq DESC)**
+- 정렬/커서 = 대화방 로컬 `seq`(단조증가·유일). 채팅은 최신이 아래이고 위로 스크롤하면 과거를 불러오므로 "다음 페이지 = 과거"다. `cursor`는 직전 페이지의 가장 과거 seq(응답의 `nextCursor`)를 그대로 전달
+- `size` 기본 20, 최대 50 (과도 로딩 방지)
+- **FE 렌더**: 진입 시 첫 페이지(최신 N건)를 받아 **seq 오름차순으로 뒤집어** 표시(최신이 아래). 위로 스크롤 시 `nextCursor`로 과거 페이지를 이어 로드해 위쪽에 prepend. 화면 정렬 기준은 항상 `seq`(위 낙관적 UI와 동일)
+- `cursor`는 **엔드포인트별 불투명 값**이다(메시지=seq, 실행 히스토리=id). FE는 내부 형식을 해석하지 말고 그대로 다음 요청에 전달
+
 ---
 
 ## 메시지 타입

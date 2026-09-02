@@ -303,9 +303,9 @@ class ConversationIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }
 
-    // ── listMessages: seq 오름차순 (각 사용자 메시지 뒤에 assistant 응답이 낀다) ──
+    // ── listMessages: 커서 페이지, 최신순(seq DESC) ──
     @Test
-    void listMessages_returnsInSeqOrder() throws Exception {
+    void listMessages_returnsCursorPageNewestFirst() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
 
         for (String content : new String[]{"첫째", "둘째", "셋째"}) {
@@ -315,19 +315,49 @@ class ConversationIntegrationTest {
                     .andExpect(status().isCreated());
         }
 
-        // user 3건 + assistant 3건 = 6건. 사용자 메시지는 seq 1/3/5(홀수)에 위치.
+        // user 3건 + assistant 3건 = 6건(seq 1~6). 최신순 DESC로 반환 → items[0].seq=6, items[5].seq=1.
+        // 전부 한 페이지(size 기본 20)라 hasNext=false.
         mockMvc.perform(get("/api/v1/conversations/{id}/messages", id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(6))
-                .andExpect(jsonPath("$[0].seq").value(1))
-                .andExpect(jsonPath("$[0].role.code").value("USER"))
-                .andExpect(jsonPath("$[0].content").value("첫째"))
-                .andExpect(jsonPath("$[1].seq").value(2))
-                .andExpect(jsonPath("$[1].role.code").value("ASSISTANT"))
-                .andExpect(jsonPath("$[2].seq").value(3))
-                .andExpect(jsonPath("$[2].content").value("둘째"))
-                .andExpect(jsonPath("$[4].seq").value(5))
-                .andExpect(jsonPath("$[4].content").value("셋째"));
+                .andExpect(jsonPath("$.items.length()").value(6))
+                .andExpect(jsonPath("$.hasNext").value(false))
+                .andExpect(jsonPath("$.items[0].seq").value(6))
+                .andExpect(jsonPath("$.items[0].role.code").value("ASSISTANT"))
+                .andExpect(jsonPath("$.items[5].seq").value(1))
+                .andExpect(jsonPath("$.items[5].role.code").value("USER"))
+                .andExpect(jsonPath("$.items[5].content").value("첫째"));
+    }
+
+    // ── listMessages: 커서로 과거 페이지 이어 조회 (무한 스크롤) ──
+    @Test
+    void listMessages_cursorWalksToOlder() throws Exception {
+        Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
+        for (String content : new String[]{"첫째", "둘째", "셋째"}) {
+            mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"userId\":" + USER_ID + ",\"content\":\"" + content + "\"}"))
+                    .andExpect(status().isCreated());
+        }
+
+        // 1페이지 size=2 → 최신 seq 6,5. hasNext=true, nextCursor=5(가장 과거)
+        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id)
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].seq").value(6))
+                .andExpect(jsonPath("$.items[1].seq").value(5))
+                .andExpect(jsonPath("$.hasNext").value(true))
+                .andExpect(jsonPath("$.nextCursor").value("5"));
+
+        // 2페이지(cursor=5) → seq 4,3
+        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id)
+                        .param("size", "2")
+                        .param("cursor", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].seq").value(4))
+                .andExpect(jsonPath("$.items[1].seq").value(3))
+                .andExpect(jsonPath("$.hasNext").value(true))
+                .andExpect(jsonPath("$.nextCursor").value("3"));
     }
 
     // ── listMessages: 없는 대화방 → 404 ──

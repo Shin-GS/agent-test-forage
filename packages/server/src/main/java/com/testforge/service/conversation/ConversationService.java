@@ -1,6 +1,7 @@
 package com.testforge.service.conversation;
 
 import com.testforge.common.error.ApiException;
+import com.testforge.dto.common.CursorPage;
 import com.testforge.dto.common.StatusView;
 import com.testforge.dto.conversation.AssistantMessageDraft;
 import com.testforge.dto.conversation.ConversationDetailResponse;
@@ -144,9 +145,9 @@ public class ConversationService {
     /**
      * 사용자별 미삭제 대화방 목록 (lastMessageAt DESC). unread는 서버 계산.
      *
-     * <p><b>TODO (별도 조각: 목록 페이징):</b> 현재 전체를 반환한다. 대화방이 쌓이면 부하가 되므로,
-     * 실행 히스토리와 동일한 커서 기반 페이징(lastMessageAt DESC + id tie-break, CursorPage)으로
-     * 전환해야 한다. listMessages(seq 오름차순, 위로 더 불러오기)도 함께.
+     * <p><b>TODO (별도 조각: 대화방 목록 페이징):</b> 현재 전체를 반환한다. 대화방이 쌓이면 부하가 되므로
+     * 커서 기반 페이징으로 전환해야 한다. 단 lastMessageAt으로 정렬되어 새 메시지 도착 시 순서가 실시간
+     * 변동하므로, 순서 안정성(중복/누락 방지)을 고려한 커서 설계가 필요하다(메시지 페이징은 완료).
      */
     @Transactional(readOnly = true)
     public List<ConversationSummaryResponse> list(Long userId) {
@@ -228,19 +229,57 @@ public class ConversationService {
     }
 
     /**
-     * 대화방 메시지 목록 (SEQ 오름차순). 없거나 삭제된 대화방이면 404.
+     * 대화방 메시지의 커서 페이지 (채팅 무한 스크롤). 없거나 삭제된 대화방이면 404.
      *
-     * <p><b>TODO (별도 조각: 목록 페이징):</b> 현재 전체 메시지를 반환한다. 대화가 길어지면 부하가
-     * 되므로, 커서 기반(최신 seq부터 위로 더 불러오기)으로 전환해야 한다. 메시지는 히스토리와 정렬
-     * 방향(오래된 순 로딩)이 반대라 커서 방향 설계에 유의.
+     * <p><b>정렬은 SEQ DESC(최신순).</b> 채팅은 최신 메시지가 아래이고 위로 스크롤하면 과거를 불러오므로,
+     * "다음 페이지 = 과거"다. 첫 페이지는 최신 size건, 이후는 {@code cursor}(가장 과거 seq)보다 더 과거를
+     * 이어 조회한다. items는 최신순으로 내려가며, FE가 채팅 표시 시 역순(오래된 순)으로 렌더한다.
+     * size 기본 20, 최대 50(과도 로딩 방지).
+     *
+     * @param conversationId 대상 대화방
+     * @param cursor 이전 응답의 nextCursor(가장 과거 seq). null이면 첫 페이지(최신)
+     * @param size 페이지 크기 (기본 20, 최대 50)
      */
     @Transactional(readOnly = true)
-    public List<MessageResponse> listMessages(Long conversationId) {
+    public CursorPage<MessageResponse> listMessages(Long conversationId, String cursor, Integer size) {
         getActiveOrThrow(conversationId);
-        return messageRepository.findByConversationIdOrderBySeqAsc(conversationId)
-                .stream()
-                .map(this::toMessage)
-                .toList();
+        int limit = normalizeMessageSize(size);
+        Long cursorSeq = decodeSeqCursor(cursor);
+
+        // hasNext(더 과거 존재) 판정을 위해 limit+1건 조회
+        List<Message> rows = messageRepository.findByConversationIdBySeqCursor(
+                conversationId, cursorSeq, org.springframework.data.domain.PageRequest.of(0, limit + 1));
+
+        boolean hasNext = rows.size() > limit;
+        List<Message> pageRows = hasNext ? rows.subList(0, limit) : rows;
+        List<MessageResponse> items = pageRows.stream().map(this::toMessage).toList();
+        if (!hasNext) {
+            return CursorPage.last(items);
+        }
+        // 다음 커서 = 이번 페이지에서 가장 과거(가장 작은 seq) = 최신순 목록의 마지막 항목
+        Message oldest = pageRows.get(pageRows.size() - 1);
+        return CursorPage.of(items, String.valueOf(oldest.getSeq()));
+    }
+
+    /** 메시지 페이지 크기 정규화 (기본 20, 최대 50) */
+    private int normalizeMessageSize(Integer size) {
+        if (size == null || size <= 0) {
+            return 20;
+        }
+        return Math.min(size, 50);
+    }
+
+    /** seq 커서 디코딩. null/빈/형식 불량이면 첫 페이지(null) */
+    private Long decodeSeqCursor(String cursor) {
+        if (cursor == null || cursor.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(cursor.trim());
+        } catch (NumberFormatException e) {
+            log.warn("Invalid message cursor, treating as first page: {}", cursor);
+            return null;
+        }
     }
 
     /**
