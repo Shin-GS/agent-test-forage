@@ -143,11 +143,12 @@ public class ConversationService {
     }
 
     /**
-     * 사용자별 미삭제 대화방 목록 (lastMessageAt DESC). unread는 서버 계산.
+     * 사용자별 미삭제 대화방 목록 (lastMessageAt DESC, 최근 200건). unread는 서버 계산.
      *
-     * <p><b>TODO (별도 조각: 대화방 목록 페이징):</b> 현재 전체를 반환한다. 대화방이 쌓이면 부하가 되므로
-     * 커서 기반 페이징으로 전환해야 한다. 단 lastMessageAt으로 정렬되어 새 메시지 도착 시 순서가 실시간
-     * 변동하므로, 순서 안정성(중복/누락 방지)을 고려한 커서 설계가 필요하다(메시지 페이징은 완료).
+     * <p>대화방 목록은 사용자가 직접 만드는 개수(보통 10~20개)라 무한 스크롤/커서가 필요하지 않다.
+     * 사이드바 전체 목록으로 한 번에 반환하되, 비정상 폭증에 대비해 최근 200건 상한만 둔다
+     * (메시지/실행 히스토리와 달리 무한정 쌓이는 데이터가 아님). 상한을 넘기는 상황이 실제로 생기면
+     * 그때 오래된 대화 정리 UX를 검토한다.
      */
     @Transactional(readOnly = true)
     public List<ConversationSummaryResponse> list(Long userId) {
@@ -155,7 +156,7 @@ public class ConversationService {
             throw ApiException.invalidRequest("userId is required");
         }
         return conversationRepository
-                .findByUserIdAndDeletedAtIsNullOrderByLastMessageAtDesc(userId)
+                .findTop200ByUserIdAndDeletedAtIsNullOrderByLastMessageAtDesc(userId)
                 .stream()
                 .map(this::toSummary)
                 .toList();
