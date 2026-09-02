@@ -16,11 +16,6 @@ spring:
       hibernate:
         format_sql: false
 
-  # ── Spring AI (실제 연동 시 활성화) ──
-  # ai:
-  #   openai:
-  #     api-key: ${OPENAI_API_KEY}
-
 server:
   port: ${SERVER_PORT:8080}
 
@@ -44,3 +39,13 @@ ai-test-forge:
   jira:
     base-url: ${JIRA_BASE_URL:}
     api-token: ${JIRA_API_TOKEN:}   # 시크릿. .env / 환경변수로 주입
+  # ── AI 설정 (OpenAI 호환: OpenAI / OpenRouter 등) ──
+  # api-key가 비어 있으면 실제 AI 대신 규칙 기반 목(RuleBasedIntentResolver)이 동작한다.
+  # provider/model의 런타임 변경(설정 페이지)은 추후 — 지금은 프로퍼티(.env)로 주입.
+  ai:
+    base-url: ${AI_BASE_URL:https://openrouter.ai/api/v1}
+    api-key: ${AI_API_KEY:}                       # 시크릿. .env / 환경변수로 주입
+    reasoning-model: ${AI_MODEL_REASONING:openai/gpt-4o}
+    fast-model: ${AI_MODEL_FAST:openai/gpt-4o-mini}
+    history-limit: ${AI_HISTORY_LIMIT:15}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:30}

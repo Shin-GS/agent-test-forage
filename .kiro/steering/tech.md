@@ -30,13 +30,17 @@ packages/
 | 언어 | Java 25 (LTS) |
 | 프레임워크 | Spring Boot 4.0 |
 | Spring Framework | 7.0 (Boot 4.0 번들) |
-| AI | Spring AI 2.0 (Boot 4.0 대상) |
+| AI | OpenAI 호환 API 직접 호출 (RestClient). OpenAI/OpenRouter 등 |
 | DB | MySQL |
 | 빌드 | Gradle (Kotlin DSL) |
 | 실시간 | SSE (Global SSE 1개) |
 
-- AI 모델: OpenAI GPT-4o(reasoning) + GPT-4o-mini(fast). 설정으로 교체 가능
-- Tool Calling: Spring AI ToolCallback. investigate 루프는 ToolCallingManager로 직접 제어 검토
+- AI 모델: reasoning(예 gpt-4o) + fast(예 gpt-4o-mini). base-url/key/model을 설정으로 교체 (OpenRouter 우선)
+- Tool Calling: OpenAI 호환 function tools + tool_calls 직접 파싱. IntentResolver 인터페이스 뒤에 구현
+  (RuleBased 목 / OpenAiCompatible 실제). Spring AI는 현 규모에선 불필요(IntentResolver가 이미 확장 경계).
+  investigate 루프가 복잡해지거나 임베딩/RAG(시맨틱 레시피 검색)가 필요해지면 재검토 — IntentResolver
+  뒤에서 부분 도입 가능
+- investigate 반복 루프도 직접 제어(최대 5회/120초 + SSE 진행). 다음 조각
 
 ## web (FE)
 
@@ -99,6 +103,6 @@ com.testforge
 
 ## 미확정 / 추후
 
-- Spring AI 2.0 세부 마이너 버전은 구현 시 최신 확인
+- AI 프로바이더/모델의 런타임 변경(설정 페이지, DB 저장)은 추후 — 지금은 프로퍼티(.env)
 - MySQL 버전, 배포 인프라는 추후
 - 라이브러리 추가 언어/버전은 필요 시 확장

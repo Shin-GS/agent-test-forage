@@ -2,7 +2,6 @@ package com.testforge.ai;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,8 +29,11 @@ import java.util.Locale;
  *
  * <p>plan/propose_plan과 investigate는 이번 조각의 목 규칙에서 다루지 않는다(단일 매칭 위주).
  * 복합 플랜/정보 조회는 실제 AI 또는 다음 조각에서 확장한다.
+ *
+ * <p><b>fallback 전용:</b> 빈 등록은 {@code AiResolverConfig}가 관리한다. 실제 AI 구현
+ * ({@link OpenAiCompatibleIntentResolver})이 없을 때(= {@code ai-test-forge.ai.api-key} 미설정)만
+ * 이 목이 {@code IntentResolver} 빈으로 등록된다.
  */
-@Component
 public class RuleBasedIntentResolver implements IntentResolver {
 
     private static final Logger log = LoggerFactory.getLogger(RuleBasedIntentResolver.class);

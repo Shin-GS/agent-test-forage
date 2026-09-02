@@ -36,6 +36,8 @@ public enum ErrorCode implements EnumColumn {
     EXECUTION_STEP_NOT_FOUND("실행 스텝을 찾을 수 없음"),
     /** 실행 중이라 요청을 수행할 수 없음 (예: 실행 중 대화방 삭제) */
     CONVERSATION_EXECUTING("대화방이 실행 중"),
+    /** AI 호출 실패 (외부 AI API 오류/파싱 실패) */
+    AI_CALL_FAILED("AI 호출 실패"),
     /** 서버 내부 오류 */
     INTERNAL_ERROR("서버 내부 오류");
 

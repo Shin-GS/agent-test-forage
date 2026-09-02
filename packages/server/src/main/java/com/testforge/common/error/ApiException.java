@@ -95,6 +95,11 @@ public class ApiException extends RuntimeException {
                 "Conversation is executing: " + conversationId);
     }
 
+    /** AI 호출 실패 (외부 AI API 오류/파싱 실패). 5xx로 처리 (외부 의존 실패) */
+    public static ApiException aiCallFailed(String detail) {
+        return new ApiException(ErrorCode.AI_CALL_FAILED, HttpStatus.INTERNAL_SERVER_ERROR, detail);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

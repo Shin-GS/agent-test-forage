@@ -22,8 +22,6 @@ java {
 
 repositories {
     mavenCentral()
-    // Spring AI가 milestone 단계인 경우 필요 (GA면 제거 가능)
-    maven { url = uri("https://repo.spring.io/milestone") }
 }
 
 dependencies {
@@ -34,9 +32,8 @@ dependencies {
     // OpenAPI 3.0/3.1 파싱 (specJson의 paths → endpoint 분해)
     implementation("io.swagger.parser.v3:swagger-parser:2.1.22")
 
-    // Spring AI — 실제 AI 기능 구현 시 활성화 (버전은 구현 시점 최신 확인)
-    // implementation(platform("org.springframework.ai:spring-ai-bom:2.0.0"))
-    // implementation("org.springframework.ai:spring-ai-starter-model-openai")
+    // AI는 OpenAI 호환 API를 RestClient(spring-boot-starter-web 포함)로 직접 호출한다.
+    // Spring AI는 미채택 (IntentResolver 추상화가 이미 확장 경계라 프로바이더 추상화가 중복).
 
     runtimeOnly("com.mysql:mysql-connector-j")
 

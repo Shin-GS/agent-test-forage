@@ -7,9 +7,20 @@ last-updated: 2026-08-27
 
 ## 기술 스택 방향
 
-- **Spring AI 기반** — ChatClient + Tool Calling(ToolCallback)으로 tool 정의/호출 처리
+- **OpenAI 호환 API 직접 호출(RestClient)** — 현 규모에선 Spring AI 없이 직접 호출. 근거: 우리의 확장
+  경계는 이미 `IntentResolver` 인터페이스이므로 Spring AI의 프로바이더 추상화(ChatModel)는 중복이다.
+  tool calling은 OpenAI 호환 스펙(function tools + tool_calls)이 안정적이고 tool이 7종으로 고정이라 직접
+  파싱이 관리 가능하다. Spring AI 2.0(Boot4) 성숙도 리스크도 회피한다. 프로바이더가 늘면
+  `IntentResolver` 구현체를 추가한다(코드 격리).
+  - **Spring AI 재검토 조건**: (1) investigate의 tool 반복 루프가 직접 관리하기 복잡해질 때
+    (ToolCallingManager 가치), (2) 임베딩 기반 시맨틱 레시피 검색/RAG가 필요해질 때(EmbeddingModel +
+    VectorStore 통합 가치). 현 규모(레시피 수백~천 개)는 서비스별 필터 + 전체 목록을 프롬프트에 넣어도
+    토큰 한도(128K) 내라 임베딩 불필요. 재검토 시 IntentResolver 뒤에서 부분 도입 가능.
+- **프로바이더 전환은 설정으로** — base-url + api-key만 바꾸면 OpenAI/OpenRouter 등 OpenAI 호환
+  엔드포인트를 전환. 지금은 프로퍼티(.env), 추후 설정 페이지(DB)로 확장(settings.md). 읽기 창구는
+  `AiSettings` 하나로 일원화하여 소스가 바뀌어도 호출 코드는 불변.
 - **SSE 스트리밍** — AI 응답 및 investigate 조회 진행 상태를 SSE로 FE에 실시간 전달
-- 모델/버전은 미확정 (구현 시점에 확정). 구조는 특정 모델/버전에 종속되지 않게 설계
+- 모델/버전은 설정으로 교체. 구조는 특정 모델/버전/프로바이더에 종속되지 않게 설계
 
 ## 모델 구성
 
@@ -47,9 +58,11 @@ last-updated: 2026-08-27
 - 최대 횟수 도달 시: 지금까지 수집한 정보로 답변하거나, "정보가 충분하지 않다"고 안내
 - 각 조회는 SSE로 진행 상태 전송 (예: "🔍 API 스펙 확인 중 → Jira 조회 중")
 
-### Spring AI 루프 제어
+### 루프 제어 (직접 구현)
 
-Spring AI가 tool calling 루프를 자동 처리하지만, 우리는 "최대 횟수 + 타임아웃 + 중간 SSE 전송"의 커스텀 제어가 필요하므로 `ToolCallingManager`로 루프를 직접 제어하는 방향을 검토한다. (구현 시 확정)
+OpenAI 호환 API를 직접 호출하므로, investigate 루프도 우리가 직접 관리한다: "tool_calls가 있으면
+커넥터 실행 → 결과를 messages에 추가 → 재호출"을 최대 5회/타임아웃 120초까지 반복하고, 매 조회마다
+SSE로 진행 상태를 보낸다. 단순 tool 선택(1회 호출)과 달리 investigate만 이 반복 루프를 쓴다. (다음 조각)
 
 ---
 
