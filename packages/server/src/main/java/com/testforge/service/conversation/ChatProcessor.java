@@ -5,6 +5,8 @@ import com.testforge.ai.IntentResolver;
 import com.testforge.ai.IntentResult;
 import com.testforge.ai.RecipeCandidate;
 import com.testforge.ai.ServiceOption;
+import com.testforge.common.error.ApiException;
+import com.testforge.common.error.ErrorCode;
 import com.testforge.dto.conversation.AssistantMessageDraft;
 import com.testforge.entity.conversation.Message;
 import com.testforge.entity.recipe.Recipe;
@@ -28,7 +30,7 @@ import java.util.Map;
  * 채팅 처리 오케스트레이터. 사용자 메시지 접수 후 "무엇을 응답할지"를 결정한다:
  * <ol>
  *   <li>대화방/이력/레시피·서비스로 {@link IntentContext} 조립 (intent-classification.md 컨텍스트 분기)</li>
- *   <li>{@link IntentResolver}로 tool 선택 (지금은 규칙 기반 목, 추후 Spring AI)</li>
+ *   <li>{@link IntentResolver}로 tool 선택 (키 없으면 규칙 기반 목, 있으면 OpenAI 호환 실제 AI)</li>
  *   <li>tool 결과를 {@link AssistantMessageDraft}로 변환 (message 정책 + 카드 metadata)</li>
  *   <li>{@link ConversationService#completeAssistantTurn}로 저장/발행/종결(idle+락 해제) 위임</li>
  * </ol>
@@ -89,15 +91,27 @@ public class ChatProcessor {
             log.error("Chat processing failed, releasing conversation to idle: conversationId={}",
                     conversationId, e);
             try {
-                conversationService.completeAssistantTurn(conversationId,
-                        AssistantMessageDraft.system(
-                                "처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
-                                RecipeJsonUtil.toJsonString(Map.of("level", "error"))));
+                conversationService.completeAssistantTurn(conversationId, errorDraft(e));
             } catch (Exception releaseError) {
                 log.error("Failed to release conversation to idle after processing error: conversationId={}",
                         conversationId, releaseError);
             }
         }
+    }
+
+    /**
+     * 실패 종류에 맞는 시스템 안내 메시지를 만든다. AI 크레딧/한도 소진(AI_QUOTA_EXCEEDED)은 원인이
+     * 명확하므로 일반 오류와 구분해 전용 문구로 안내한다(ai-config.md 크레딧 소진 처리, 목 폴백 없음).
+     */
+    private AssistantMessageDraft errorDraft(Exception e) {
+        if (e instanceof ApiException api && api.getCode() == ErrorCode.AI_QUOTA_EXCEEDED) {
+            return AssistantMessageDraft.system(
+                    "AI 사용 한도에 도달했어요. 잠시 후 다시 시도해 주세요.",
+                    RecipeJsonUtil.toJsonString(Map.of("level", "warn")));
+        }
+        return AssistantMessageDraft.system(
+                "처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
+                RecipeJsonUtil.toJsonString(Map.of("level", "error")));
     }
 
     // ── 컨텍스트 조립 ──

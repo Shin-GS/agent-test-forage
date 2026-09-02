@@ -78,11 +78,15 @@ public class OpenAiClient {
                     .retrieve()
                     .body(String.class);
         } catch (RestClientResponseException e) {
-            // 4xx/5xx: 상태코드 + 응답 본문을 남겨 원인 추적(키 오류 401, 레이트리밋 429, 잘못된 model 400 등).
-            // 응답 본문에는 키가 없다. 요청 헤더는 로깅하지 않는다(Authorization 노출 방지).
-            log.error("AI API error: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
-            throw ApiException.aiCallFailed(
-                    "AI API returned " + e.getStatusCode().value());
+            // 상태코드 + 응답 본문을 남겨 원인 추적. 응답 본문엔 키가 없고, 요청 헤더는 로깅하지 않는다.
+            int status = e.getStatusCode().value();
+            log.error("AI API error: status={}, body={}", status, e.getResponseBodyAsString());
+            // 402(Payment Required)/429(Too Many Requests) = 크레딧/한도 소진 → 전용 예외로 구분.
+            // 재시도해도 소용없으므로 사용자에게 "사용 한도 도달"을 명확히 안내한다(ai-config.md).
+            if (status == 402 || status == 429) {
+                throw ApiException.aiQuotaExceeded("AI quota exceeded (status " + status + ")");
+            }
+            throw ApiException.aiCallFailed("AI API returned " + status);
         }
 
         try {

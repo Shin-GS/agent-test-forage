@@ -38,6 +38,8 @@ public enum ErrorCode implements EnumColumn {
     CONVERSATION_EXECUTING("대화방이 실행 중"),
     /** AI 호출 실패 (외부 AI API 오류/파싱 실패) */
     AI_CALL_FAILED("AI 호출 실패"),
+    /** AI 크레딧/사용 한도 소진 (402/429) */
+    AI_QUOTA_EXCEEDED("AI 사용 한도 도달"),
     /** 서버 내부 오류 */
     INTERNAL_ERROR("서버 내부 오류");
 

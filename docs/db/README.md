@@ -7,7 +7,7 @@ ai-test-forge 데이터베이스 스키마 설계 문서.
 | 문서 | 도메인 | 주요 테이블 |
 |------|--------|------------|
 | [spec.md](spec.md) | 스펙(외부 서버) | API_SPEC, API_SPEC_DOCUMENT, API_ENDPOINT, AUTH_PROFILE |
-| [user.md](user.md) | 사용자 | APP_USER, USER_SETTING |
+| [user.md](user.md) | 사용자 | APP_USER (AI/실행 설정은 DB 미저장 — 설정 파일로만) |
 | [recipe.md](recipe.md) | 레시피 | RECIPE, RECIPE_VERSION |
 | [execution.md](execution.md) | 실행/히스토리 | EXECUTION, EXECUTION_RECIPE, EXECUTION_STEP |
 | [conversation.md](conversation.md) | 대화 | CONVERSATION, MESSAGE |
@@ -15,8 +15,7 @@ ai-test-forge 데이터베이스 스키마 설계 문서.
 ## 도메인 관계 (개략)
 
 ```
-APP_USER ──┬── USER_SETTING (1:1)
-           ├── CONVERSATION ──── MESSAGE (1:N)
+APP_USER ──┬── CONVERSATION ──── MESSAGE (1:N)
            ├── RECIPE ──── RECIPE_VERSION (1:N)
            └── EXECUTION ──── EXECUTION_RECIPE ──── EXECUTION_STEP (1:N:N)
 

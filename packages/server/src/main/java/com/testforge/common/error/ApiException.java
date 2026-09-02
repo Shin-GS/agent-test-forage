@@ -100,6 +100,11 @@ public class ApiException extends RuntimeException {
         return new ApiException(ErrorCode.AI_CALL_FAILED, HttpStatus.INTERNAL_SERVER_ERROR, detail);
     }
 
+    /** AI 크레딧/한도 소진 (402/429). 재시도 무의미 — 사용자에게 한도 도달을 명확히 안내 */
+    public static ApiException aiQuotaExceeded(String detail) {
+        return new ApiException(ErrorCode.AI_QUOTA_EXCEEDED, HttpStatus.SERVICE_UNAVAILABLE, detail);
+    }
+
     public ErrorCode getCode() {
         return code;
     }

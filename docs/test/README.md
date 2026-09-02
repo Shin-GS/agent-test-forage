@@ -41,7 +41,7 @@ docs/test/
     ├── recipe-editor.js   ← 레시피 편집/관리 (14개 케이스)
     ├── login.js           ← 로그인/인증 (8개 케이스)
     ├── spec.js            ← 스펙 등록/관리 (12개 케이스)
-    ├── settings.js        ← 설정 (8개 케이스)
+    ├── settings.js        ← 설정 (7개 케이스)
     ├── history.js         ← 전체 히스토리 페이지 (6개 케이스)
     └── admin.js           ← 관리자 페이지 (8개 케이스)
 ```
@@ -55,7 +55,7 @@ docs/test/
 | 레시피 편집/관리 | high | 14 | RECIPE-xxx |
 | 로그인/인증 | high | 8 | LOGIN-xxx |
 | 스펙 등록/관리 | high | 12 | SPEC-xxx |
-| 설정 | medium | 8 | SETTINGS-xxx |
+| 설정 | medium | 7 | SETTINGS-xxx |
 | 전체 히스토리 페이지 | medium | 6 | HISTORY-xxx |
 | 관리자 페이지 | medium | 8 | ADMIN-xxx |
 | **합계** | | **87** | |

@@ -43,7 +43,7 @@ const TEST_MANIFEST = [
     name: "설정",
     file: "../web/settings.js",
     priority: "medium",
-    description: "AI Provider/모델 변경, 타임아웃, 비밀번호 변경, 유효성 검증"
+    description: "AI/실행 설정 읽기 전용 조회(파일로만 변경), 비밀번호 변경"
   },
   {
     id: "history",

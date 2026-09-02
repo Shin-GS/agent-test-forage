@@ -90,7 +90,7 @@ AI: 회원가입 시 약관 동의는 필수이며, 만 14세 미만은 보호�
 | investigate → api_spec | BE | 내부 DB 조회 |
 | investigate → jira | BE | 서버 시크릿 토큰 |
 
-이유: AI 루프가 BE(Spring AI ChatClient)에서 돌고, Jira 토큰은 서버 시크릿이라 FE에 노출할 수 없다.
+이유: AI 루프가 BE(OpenAI 호환 API 직접 호출, OpenRouter)에서 돌고, Jira 토큰은 서버 시크릿이라 FE에 노출할 수 없다.
 
 ## 커넥터별 조회 내용
 
