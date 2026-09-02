@@ -2,8 +2,6 @@ package com.testforge.dto.spec;
 
 import com.testforge.dto.common.StatusView;
 
-import java.time.LocalDateTime;
-
 /**
  * 스펙 관리 목록의 한 행. (admin.md "스펙 관리 > 목록" 소비용)
  *
@@ -14,8 +12,7 @@ import java.time.LocalDateTime;
  *   "name": "demo-shop",
  *   "baseUrl": "https://shop.example.com",
  *   "status": { "code": "ACTIVE", "description": "정상" },
- *   "apiCount": 42,
- *   "lastHeartbeatAt": "2026-08-28T10:00:00"
+ *   "apiCount": 42
  * }
  * </pre>
  */
@@ -29,7 +26,5 @@ public record SpecSummaryResponse(
         // 생명주기 상태 (code + description)
         StatusView status,
         // ACTIVE 엔드포인트 수 (DEPRECATED 제외)
-        long apiCount,
-        // 마지막 heartbeat 수신 시각
-        LocalDateTime lastHeartbeatAt) {
+        long apiCount) {
 }

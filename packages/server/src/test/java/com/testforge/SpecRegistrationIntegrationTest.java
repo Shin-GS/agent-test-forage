@@ -3,10 +3,12 @@ package com.testforge;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.testforge.entity.spec.ApiEndpoint;
 import com.testforge.entity.spec.ApiSpec;
+import com.testforge.entity.spec.AuthProfile;
+import com.testforge.entity.spec.enums.AuthProfileStatus;
 import com.testforge.entity.spec.enums.EndpointStatus;
-import com.testforge.entity.spec.enums.SpecStatus;
 import com.testforge.repository.spec.ApiEndpointRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
+import com.testforge.repository.spec.AuthProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,11 +48,15 @@ class SpecRegistrationIntegrationTest {
     @Autowired
     private ApiEndpointRepository endpointRepository;
 
+    @Autowired
+    private AuthProfileRepository authProfileRepository;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        authProfileRepository.deleteAll();
         endpointRepository.deleteAll();
         specRepository.deleteAll();
     }
@@ -133,73 +139,69 @@ class SpecRegistrationIntegrationTest {
         assertThat(post.getStatus()).isEqualTo(EndpointStatus.DEPRECATED);
     }
 
-    // ── heartbeat: matching hash → none ──
+    // ── register: re-register upsert keeps auth profile PK ──
     @Test
-    void heartbeat_matchingHash_returnsNone() throws Exception {
-        Map<String, Object> reg = registerBody(specJson(List.of("GET /api/v1/users")));
-        mockMvc.perform(post("/api/v1/specs/register")
-                        .header(TOKEN_HEADER, VALID_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(reg)))
-                .andExpect(status().isOk());
-
-        Map<String, Object> hb = new LinkedHashMap<>();
-        hb.put("schemaVersion", "1");
-        hb.put("baseUrl", BASE_URL);
-        hb.put("specHash", reg.get("specHash"));
-
-        mockMvc.perform(post("/api/v1/specs/heartbeat")
-                        .header(TOKEN_HEADER, VALID_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(hb)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.action").value("none"));
-    }
-
-    // ── heartbeat: unknown baseUrl / mismatch → resend ──
-    @Test
-    void heartbeat_unknownOrMismatch_returnsResend() throws Exception {
-        Map<String, Object> hbUnknown = new LinkedHashMap<>();
-        hbUnknown.put("schemaVersion", "1");
-        hbUnknown.put("baseUrl", "https://unknown.example.com");
-        hbUnknown.put("specHash", "deadbeef");
-
-        mockMvc.perform(post("/api/v1/specs/heartbeat")
-                        .header(TOKEN_HEADER, VALID_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(hbUnknown)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.action").value("resend"));
-    }
-
-    // ── heartbeat: STALE spec returns to ACTIVE on matching heartbeat ──
-    @Test
-    void heartbeat_staleSpec_returnsToActive() throws Exception {
-        Map<String, Object> reg = registerBody(specJson(List.of("GET /api/v1/users")));
-        mockMvc.perform(post("/api/v1/specs/register")
-                        .header(TOKEN_HEADER, VALID_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(reg)))
-                .andExpect(status().isOk());
+    void register_reRegister_keepsAuthProfilePk() throws Exception {
+        Map<String, Object> first = registerBody(specJson(List.of("GET /api/v1/users")));
+        first.put("authProfiles", List.of(
+                Map.of("name", "default", "loginPageUrl", "https://a.example.com/login")));
+        register(first);
 
         ApiSpec spec = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
-        spec.setStatus(SpecStatus.STALE);
-        specRepository.save(spec);
+        Long profileIdBefore = authProfileRepository.findByApiSpecId(spec.getId()).get(0).getId();
 
-        Map<String, Object> hb = new LinkedHashMap<>();
-        hb.put("schemaVersion", "1");
-        hb.put("baseUrl", BASE_URL);
-        hb.put("specHash", reg.get("specHash"));
+        // Re-register with same profile name but changed loginPageUrl → PK kept, URL updated.
+        Map<String, Object> second = registerBody(specJson(List.of("GET /api/v1/users")));
+        second.put("authProfiles", List.of(
+                Map.of("name", "default", "loginPageUrl", "https://b.example.com/login")));
+        register(second);
 
-        mockMvc.perform(post("/api/v1/specs/heartbeat")
-                        .header(TOKEN_HEADER, VALID_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(hb)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.action").value("none"));
+        List<AuthProfile> after = authProfileRepository.findByApiSpecId(spec.getId());
+        assertThat(after).hasSize(1);
+        assertThat(after.get(0).getId()).isEqualTo(profileIdBefore);
+        assertThat(after.get(0).getLoginPageUrl()).isEqualTo("https://b.example.com/login");
+        assertThat(after.get(0).getStatus()).isEqualTo(AuthProfileStatus.ACTIVE);
+    }
 
-        ApiSpec reloaded = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
-        assertThat(reloaded.getStatus()).isEqualTo(SpecStatus.ACTIVE);
+    // ── register: auth profile removed → INACTIVE, then revived → ACTIVE ──
+    @Test
+    void register_authProfileRemovedThenRevived_softUpsert() throws Exception {
+        Map<String, Object> first = registerBody(specJson(List.of("GET /api/v1/users")));
+        first.put("authProfiles", List.of(
+                Map.of("name", "default", "loginPageUrl", "https://a.example.com/login"),
+                Map.of("name", "admin", "loginPageUrl", "https://a.example.com/admin-login")));
+        register(first);
+
+        ApiSpec spec = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
+        Long adminIdBefore = authProfileRepository.findByApiSpecId(spec.getId()).stream()
+                .filter(p -> "admin".equals(p.getName())).findFirst().orElseThrow().getId();
+
+        // Re-register without "admin" → admin becomes INACTIVE, not deleted.
+        Map<String, Object> second = registerBody(specJson(List.of("GET /api/v1/users")));
+        second.put("authProfiles", List.of(
+                Map.of("name", "default", "loginPageUrl", "https://a.example.com/login")));
+        register(second);
+
+        List<AuthProfile> afterRemove = authProfileRepository.findByApiSpecId(spec.getId());
+        assertThat(afterRemove).hasSize(2);
+        AuthProfile admin = afterRemove.stream()
+                .filter(p -> "admin".equals(p.getName())).findFirst().orElseThrow();
+        assertThat(admin.getStatus()).isEqualTo(AuthProfileStatus.INACTIVE);
+        assertThat(admin.getId()).isEqualTo(adminIdBefore);
+
+        // Re-register with "admin" again → revived to ACTIVE, same PK.
+        Map<String, Object> third = registerBody(specJson(List.of("GET /api/v1/users")));
+        third.put("authProfiles", List.of(
+                Map.of("name", "default", "loginPageUrl", "https://a.example.com/login"),
+                Map.of("name", "admin", "loginPageUrl", "https://a.example.com/admin-login")));
+        register(third);
+
+        List<AuthProfile> afterRevive = authProfileRepository.findByApiSpecId(spec.getId());
+        assertThat(afterRevive).hasSize(2);
+        AuthProfile revived = afterRevive.stream()
+                .filter(p -> "admin".equals(p.getName())).findFirst().orElseThrow();
+        assertThat(revived.getStatus()).isEqualTo(AuthProfileStatus.ACTIVE);
+        assertThat(revived.getId()).isEqualTo(adminIdBefore);
     }
 
     // ── token: invalid → 401 ──
@@ -244,6 +246,15 @@ class SpecRegistrationIntegrationTest {
     }
 
     // ── helpers ──
+
+    /** Performs a successful register POST with the given body map. */
+    private void register(Map<String, Object> body) throws Exception {
+        mockMvc.perform(post("/api/v1/specs/register")
+                        .header(TOKEN_HEADER, VALID_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk());
+    }
 
     private Map<String, Object> registerBody(String specJson) {
         Map<String, Object> body = new LinkedHashMap<>();

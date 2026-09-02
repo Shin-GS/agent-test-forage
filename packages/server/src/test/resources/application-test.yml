@@ -17,8 +17,3 @@ spring:
 
 ai-test-forge:
   register-token: test-token
-  stale-after-minutes: 5
-  delete-after-hours: 24
-  scheduler:
-    # 테스트 프로파일에서도 스케줄러 비활성 (프로토타입 비활성)
-    enabled: false

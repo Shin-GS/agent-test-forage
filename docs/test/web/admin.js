@@ -1,7 +1,7 @@
 /**
  * 관리자 페이지 (사용자 관리 + 서비스 설명)
  * Priority: medium
- * 스펙 등록/상태(ACTIVE/STALE/INACTIVE/삭제)는 spec.js에서 커버.
+ * 스펙 등록/상태(ACTIVE/INACTIVE/삭제)는 spec.js에서 커버.
  */
 const ADMIN_TESTS = {
   feature: "admin",

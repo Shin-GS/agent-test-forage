@@ -29,13 +29,6 @@ management:
 ai-test-forge:
   # 라이브러리 등록 요청 인증용 공유 시크릿. 프로덕션은 환경변수로 주입.
   register-token: ${TESTFORGE_TOKEN:local-dev-token}
-  # heartbeat 기준 시간 (분)
-  stale-after-minutes: ${TESTFORGE_STALE_MINUTES:5}
-  delete-after-hours: ${TESTFORGE_DELETE_HOURS:24}
-  scheduler:
-    # 프로토타입 단계에서는 생명주기 스케줄러를 비활성화한다.
-    # true로 두면 SpecLifecycleScheduler가 빈으로 등록되어 주기 실행된다.
-    enabled: false
   jira:
     base-url: ${JIRA_BASE_URL:}
     api-token: ${JIRA_API_TOKEN:}   # 시크릿. .env / 환경변수로 주입

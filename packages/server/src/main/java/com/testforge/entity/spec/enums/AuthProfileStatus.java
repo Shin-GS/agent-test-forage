@@ -3,20 +3,20 @@ package com.testforge.entity.spec.enums;
 import com.testforge.common.EnumColumn;
 
 /**
- * 등록된 스펙의 생명주기 상태 (API_SPEC.STATUS).
+ * 인증 프로필의 생명주기 상태 (AUTH_PROFILE.STATUS).
  * DB에는 {@code @Enumerated(STRING)}으로 name()이 그대로 저장된다.
  */
-public enum SpecStatus implements EnumColumn {
+public enum AuthProfileStatus implements EnumColumn {
 
-    /** 정상: AI 매칭/실행 대상 */
-    ACTIVE("정상"),
-    /** 관리자가 수동으로 비활성화. AI 매칭/실행 대상에서 제외 */
-    INACTIVE("관리자 수동 비활성");
+    /** 최신 등록 스펙에 존재하는 인증 프로필 */
+    ACTIVE("최신 스펙에 존재"),
+    /** 최신 스펙에서 사라짐. 이력 보존을 위해 삭제하지 않고 보존 */
+    INACTIVE("스펙에서 사라짐");
 
     /** 사람이 읽는 한글 설명 */
     private final String description;
 
-    SpecStatus(String description) {
+    AuthProfileStatus(String description) {
         this.description = description;
     }
 

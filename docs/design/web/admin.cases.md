@@ -19,7 +19,7 @@ ref: docs/specs/pages/admin.md
 
 | # | 케이스 | 설명 |
 |---|--------|------|
-| 1 | 스펙 관리 목록 | 등록된 서비스 + 상태(ACTIVE/STALE) + API 수 |
+| 1 | 스펙 관리 목록 | 등록된 서비스 + 상태(ACTIVE/INACTIVE) + API 수 |
 | 2 | 스펙 상세 | 서비스 설명(편집) + API 엔드포인트 목록 + 인증 프로필 |
 | 3 | 사용자 관리 | 사용자 목록 + 역할/상태 + 초대 |
 
@@ -33,7 +33,7 @@ ref: docs/specs/pages/admin.md
 
 ## 스펙 상태 / 수동 관리
 
-- 스펙 상태: ACTIVE / STALE / **INACTIVE**(관리자 수동 비활성)
+- 스펙 상태: ACTIVE / **INACTIVE**(관리자 수동 비활성)
 - 목록에서 INACTIVE 스펙은 흐리게 표시 (예: URL 변경으로 남은 좀비 스펙)
 - 상세에서 [비활성화]/[활성화] 토글 + [삭제]
 - API 목록에 **DEPRECATED 뱃지** (스펙에서 사라진 API, 참조 레시피는 경고)

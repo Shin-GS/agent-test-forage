@@ -19,8 +19,7 @@
     .data-table tr:hover td { background: var(--color-bg-hover); }
     .status-dot { width: 8px; height: 8px; border-radius: var(--radius-full); display: inline-block; margin-right: var(--space-1); }
     .status-dot--active { background: var(--color-success); }
-    .status-dot--stale { background: var(--color-warning); }
-    .status-dot--offline { background: var(--color-text-tertiary); }
+    .status-dot--inactive { background: var(--color-text-tertiary); }
     .admin-tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); }
     .admin-tab { padding: var(--space-2) var(--space-4); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer; transition: all var(--transition-fast); }
     .admin-tab:hover { color: var(--color-text-primary); }
@@ -57,22 +56,22 @@
           <button class="admin-tab">👥 사용자 관리</button>
         </div>
         <table class="data-table">
-          <thead><tr><th>서비스명</th><th>baseUrl</th><th>상태</th><th>API 수</th><th>마지막 heartbeat</th><th>액션</th></tr></thead>
+          <thead><tr><th>서비스명</th><th>baseUrl</th><th>상태</th><th>API 수</th><th>등록 시각</th><th>액션</th></tr></thead>
           <tbody>
             <tr>
               <td style="font-weight: var(--font-weight-medium);">사람인</td>
               <td style="font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary);">saramin-api.example.com</td>
               <td><span class="status-dot status-dot--active"></span> ACTIVE</td>
               <td>42개</td>
-              <td style="color: var(--color-text-tertiary);">10초 전</td>
+              <td style="color: var(--color-text-tertiary);">방금 전</td>
               <td><button class="btn btn--ghost btn--sm">상세</button></td>
             </tr>
             <tr>
               <td style="font-weight: var(--font-weight-medium);">잡코리아</td>
               <td style="font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary);">jobkorea-api.example.com</td>
-              <td><span class="status-dot status-dot--stale"></span> STALE</td>
+              <td><span class="status-dot status-dot--active"></span> ACTIVE</td>
               <td>35개</td>
-              <td style="color: var(--color-warning);">6분 전</td>
+              <td style="color: var(--color-text-tertiary);">10분 전</td>
               <td><button class="btn btn--ghost btn--sm">상세</button></td>
             </tr>
             <tr>
@@ -80,13 +79,13 @@
               <td style="font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary);">shop-api.example.com</td>
               <td><span class="status-dot status-dot--active"></span> ACTIVE</td>
               <td>28개</td>
-              <td style="color: var(--color-text-tertiary);">5초 전</td>
+              <td style="color: var(--color-text-tertiary);">방금 전</td>
               <td><button class="btn btn--ghost btn--sm">상세</button></td>
             </tr>
             <tr style="opacity: 0.6;">
               <td style="font-weight: var(--font-weight-medium);">demo-shop (구 URL)</td>
               <td style="font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary);">old-shop-api.example.com</td>
-              <td><span class="status-dot status-dot--offline"></span> INACTIVE</td>
+              <td><span class="status-dot status-dot--inactive"></span> INACTIVE</td>
               <td>28개</td>
               <td style="color: var(--color-text-tertiary);">3일 전</td>
               <td><button class="btn btn--ghost btn--sm">상세</button></td>
@@ -121,7 +120,7 @@
             <div style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); display: flex; gap: var(--space-4);">
               <span>baseUrl: <code style="color: var(--color-text-secondary);">saramin-api.example.com</code></span>
               <span>상태: <span class="status-dot status-dot--active"></span>ACTIVE</span>
-              <span>마지막 heartbeat: 10초 전</span>
+              <span>등록 시각: 방금 전</span>
             </div>
           </div>
 

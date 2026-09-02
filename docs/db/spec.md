@@ -43,7 +43,7 @@ ref: docs/specs/spec/registration.md
 | `ID` | BIGINT PK | 스펙 ID |
 | `NAME` | VARCHAR(100) | 표시용 서비스 이름 (중복 허용, 사용자/AI 노출) |
 | `BASE_URL` | VARCHAR(500) | 서버 도메인. 식별 키 (UNIQUE) |
-| `STATUS` | VARCHAR(20) | ACTIVE / STALE / INACTIVE |
+| `STATUS` | VARCHAR(20) | ACTIVE / INACTIVE |
 | `SPEC_HASH` | CHAR(64) | 정규화 후 SHA-256 (변경 감지) |
 | `SERVICE_DESCRIPTION` | VARCHAR(500) | 서비스 설명 (관리자 우선) |
 | `SERVICE_DOMAIN` | VARCHAR(100) | 도메인 영역 |
@@ -55,7 +55,6 @@ ref: docs/specs/spec/registration.md
 | `SCHEMA_VERSION` | VARCHAR(10) | 마지막 등록에 사용된 계약 버전 (진단용) |
 | `IS_ADMIN_EDITED` | BOOLEAN | 관리자가 메타를 수정했는지 (yml 덮어쓰기 방지) |
 | `YML_META_HASH` | CHAR(64) | yml에서 온 메타 해시 (yml 변경 감지용) |
-| `LAST_HEARTBEAT_AT` | DATETIME | 마지막 heartbeat 시각 |
 | `DELETED_AT` | DATETIME NULL | 소프트 삭제 (NULL이면 유효) |
 | `CREATED_AT` / `UPDATED_AT` | DATETIME | audit |
 
@@ -67,13 +66,13 @@ ref: docs/specs/spec/registration.md
 
 | 상태 | 의미 | 전이 |
 |------|------|------|
-| ACTIVE | 정상 (heartbeat 유지) | 기본 |
-| STALE | 5분 이상 heartbeat 없음 | heartbeat 재수신 시 ACTIVE 복귀 |
+| ACTIVE | 정상 (등록됨) | 기본. 재등록 시 유지 |
 | INACTIVE | 관리자가 수동 비활성 | 관리자만 ACTIVE로 복귀 |
 
-- 24시간 이상 heartbeat 없음 → 소프트 삭제 (`DELETED_AT`). **INACTIVE는 자동 삭제 제외** (초기 버전 기준, 공격적 삭제 방지)
+- 초기 버전은 **heartbeat 기반 자동 상태 전이(STALE)와 자동 소프트 삭제가 없다.** 등록은 기동당 1회이며, 등록된 스펙은 관리자가 명시적으로 비활성/삭제하기 전까지 ACTIVE로 유지된다.
 - INACTIVE/삭제 스펙은 AI 매칭/실행 제외. 참조 레시피는 유효성 검증에서 경고
 - 프로토타입에 REGISTERING(비동기 파싱) 상태 없음 (동기 처리)
+- 서버 가용성은 실행 시점 헬스체크로 확인 (추후, registration.md 참조)
 
 ### 서비스 메타 병합 (관리자 우선)
 
@@ -143,9 +142,25 @@ ref: docs/specs/spec/registration.md
 | `API_SPEC_ID` | BIGINT FK | 소속 스펙 |
 | `NAME` | VARCHAR(100) | 프로필 이름 (예: 일반/관리자) |
 | `LOGIN_PAGE_URL` | VARCHAR(500) | 401/403 시 안내할 로그인 URL |
+| `STATUS` | VARCHAR(20) | ACTIVE / INACTIVE (스펙에서 사라짐) |
 | `CREATED_AT` / `UPDATED_AT` | DATETIME | audit |
 
-- 재등록 시 API_SPEC 기준 전체 재구성 (레시피가 PK 참조 안 하므로 단순 교체 가능)
+**인덱스**
+- `UQ_AUTH_PROFILE_SPEC_NAME` : UNIQUE (`API_SPEC_ID`, `NAME`) — upsert 키
+- `IDX_AUTH_PROFILE_SPEC` : (`API_SPEC_ID`)
+
+### 재등록 upsert
+
+키 `(API_SPEC_ID, NAME)` 기준 (API_ENDPOINT와 동일한 소프트 upsert 원칙):
+
+| 상황 | 처리 |
+|------|------|
+| 기존에 있음 | LOGIN_PAGE_URL 갱신 + `STATUS = ACTIVE` (**ID 유지**) |
+| 신규 | INSERT |
+| 스펙에서 사라짐 | `STATUS = INACTIVE` (물리 삭제 X) |
+| 다시 나타남(부활) | `STATUS = ACTIVE`로 복귀 |
+
+- NAME이 없는 프로필은 키를 만들 수 없어 스킵 (경고 로그)
 
 ---
 
@@ -194,22 +209,8 @@ ref: docs/specs/spec/registration.md
 - OpenAPI 스펙 버전(3.0/3.1)은 `specJson` 내부 `openapi` 필드에 이미 존재 → 서버가 그걸로 파싱
 - 계약이 하위호환 불가하게 깨지면 API 경로도 승격 (`/api/v2/specs/register`)
 
-### Heartbeat (해시만)
-
-`POST /api/v1/specs/heartbeat`
-
-```json
-{
-  "schemaVersion": "1",
-  "baseUrl": "https://shop-api.example.com",
-  "specHash": "sha256..."
-}
-```
-
-- server가 저장된 해시와 비교
-  - 같음 → `LAST_HEARTBEAT_AT` 갱신, `200 { "action": "none" }`
-  - 다름 → `200 { "action": "resend" }` → 라이브러리가 `/register` 재호출
-  - baseUrl 미등록 → `200 { "action": "resend" }`
+> 초기 버전은 heartbeat 엔드포인트를 두지 않는다. 등록은 기동당 1회(`/register`)뿐이며,
+> 재기동 시 다시 1회 등록되어 최신 스펙으로 upsert된다.
 
 ### 인증 (등록 보안)
 
@@ -230,9 +231,9 @@ ref: docs/specs/spec/registration.md
 
 | 상황 | 처리 |
 |------|------|
-| 서버 N대가 각각 heartbeat | 모두 `baseUrl` 동일 → 같은 스펙 갱신. specHash 같으면 no-op |
+| 서버 N대가 각각 기동 등록 | 모두 `baseUrl` 동일 → 같은 스펙 upsert 갱신 |
 | 동시 최초 등록 (경합) | `UQ_API_SPEC_BASE_URL` 제약으로 1건만 성공, 나머지 upsert 흡수 |
-| baseUrl 변경 (서버 URL 교체) | 구 URL 스펙은 heartbeat 끊겨 STALE → 관리자가 수동 INACTIVE/삭제 |
+| baseUrl 변경 (서버 URL 교체) | 구 URL 스펙은 더 이상 등록되지 않고 ACTIVE로 남음 → 관리자가 수동 INACTIVE/삭제 (자동 삭제 없음) |
 
 ---
 

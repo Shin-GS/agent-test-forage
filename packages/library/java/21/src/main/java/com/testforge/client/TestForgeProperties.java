@@ -16,7 +16,6 @@ import java.util.List;
  *   name: "demo-shop"
  *   base-url: https://shop-api.example.com
  *   docs-url: /v3/api-docs
- *   heartbeat-interval: 30000
  *   service:
  *     description: "온라인 쇼핑몰 API"
  *     domain: "커머스"
@@ -51,9 +50,6 @@ public class TestForgeProperties {
     /** OpenAPI 문서 경로 (기본 /v3/api-docs) */
     private String docsUrl = "/v3/api-docs";
 
-    /** heartbeat 주기 ms (기본 30초) */
-    private long heartbeatInterval = 30000L;
-
     private Service service = new Service();
     private Jira jira = new Jira();
     private Auth auth = new Auth();
@@ -70,8 +66,6 @@ public class TestForgeProperties {
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
     public String getDocsUrl() { return docsUrl; }
     public void setDocsUrl(String docsUrl) { this.docsUrl = docsUrl; }
-    public long getHeartbeatInterval() { return heartbeatInterval; }
-    public void setHeartbeatInterval(long heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
     public Service getService() { return service; }
     public void setService(Service service) { this.service = service; }
     public Jira getJira() { return jira; }

@@ -17,8 +17,9 @@ import java.util.logging.Logger;
 /**
  * 외부 서버의 OpenAPI 스펙을 ai-test-forge에 등록/heartbeat 하는 서비스.
  *
- * - ApplicationReadyEvent 시점에 /v3/api-docs에서 OpenAPI JSON 수집 → 등록
- * - SHA-256 해시로 변경 감지, heartbeat 시 해시만 전송
+ * - ApplicationReadyEvent 시점에 /v3/api-docs에서 OpenAPI JSON 수집 → 1회 등록
+ * - 주기적 heartbeat 없음. 재기동 시 재등록으로 스펙을 갱신한다.
+ * - SHA-256 해시로 스펙 식별
  * - 등록 실패해도 앱 기동을 막지 않음 (최대 3회 재시도 후 로그만)
  * - 순수 자바 (Lombok 미사용)
  */
@@ -36,8 +37,6 @@ public class SpecRegistrationService {
 
     private final TestForgeProperties properties;
     private final RestClient restClient;
-
-    private String lastSpecHash;
 
     public SpecRegistrationService(TestForgeProperties properties) {
         this.properties = properties;
@@ -58,7 +57,6 @@ public class SpecRegistrationService {
                 String specJson = fetchOpenApiSpec();
                 String hash = computeHash(specJson);
                 register(specJson, hash);
-                this.lastSpecHash = hash;
                 printBanner(specJson);
                 return;
             } catch (Exception e) {
@@ -69,41 +67,6 @@ public class SpecRegistrationService {
             }
         }
         log.severe("AI Test Forge: 스펙 등록 최종 실패 — " + properties.getName() + " (앱은 정상 기동)");
-    }
-
-    /** heartbeat: 해시만 전송, 서버가 resend 요청하면 전체 재등록 */
-    public void sendHeartbeat() {
-        if (properties.getBaseUrl() == null || properties.getBaseUrl().isBlank()) {
-            return;
-        }
-        try {
-            String specJson = fetchOpenApiSpec();
-            String hash = computeHash(specJson);
-
-            // heartbeat는 경량 요청: schemaVersion으로 서버 파싱만 분기, client는 register에서만 전달
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("schemaVersion", SCHEMA_VERSION);
-            body.put("baseUrl", properties.getBaseUrl());
-            body.put("specHash", hash);
-
-            Map<?, ?> res = restClient.post()
-                    .uri("/api/v1/specs/heartbeat")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-TestForge-Token", properties.getRegisterToken())
-                    .body(body)
-                    .retrieve()
-                    .body(Map.class);
-
-            String action = res != null ? String.valueOf(res.get("action")) : "none";
-            if ("resend".equals(action)) {
-                register(specJson, hash);
-                this.lastSpecHash = hash;
-            } else {
-                this.lastSpecHash = hash;
-            }
-        } catch (Exception e) {
-            log.warning("AI Test Forge: heartbeat 실패 — " + e.getMessage());
-        }
     }
 
     /** 전체 스펙 등록 */

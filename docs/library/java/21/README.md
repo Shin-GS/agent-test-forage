@@ -28,7 +28,6 @@ ai-test-forge:
   name: "demo-shop"                            # 사용자에게 보이는 서비스 이름
   base-url: https://shop-api.example.com       # 이 서버 도메인 (식별 키)
   docs-url: /v3/api-docs                        # OpenAPI 경로 (기본값)
-  heartbeat-interval: 30000                     # heartbeat 주기 ms (기본 30초)
   service:
     description: "온라인 쇼핑몰 API"
     domain: "커머스"
@@ -42,7 +41,8 @@ ai-test-forge:
         login-page-url: "https://shop.example.com/login"
 ```
 
-- 설정 후 앱을 기동하면 자동 등록된다 (별도 코드 불필요).
+- 설정 후 앱을 기동하면 자동 등록된다 (별도 코드 불필요). **등록은 기동당 1회.**
+- 재배포/재기동 시 다시 1회 등록되어 최신 스펙으로 갱신된다. 주기적 heartbeat는 없다.
 - 등록은 앱 기동을 막지 않는다. 실패 시 3회 재시도 후 로그만 남기고 계속 진행.
 - 등록 완료 시 콘솔에 배너가 출력된다.
 
@@ -77,12 +77,12 @@ public PaymentResponse pay(...) { }
 
 ## 전제조건 (CORS 쿠키 인증)
 
-레시피 실행 시 FE 브라우저가 이 서버 API를 직접 호출한다. 쿠키 인증이 크로스 도메인에서 동작하려면:
+레시피 실행 시 FE 브라우저가 이 서버 API를 직접 호출한다. 쿠키 인증이 동작하려면:
 
-| 조건 | 이유 |
-|------|------|
-| 세션 쿠키 `SameSite=None; Secure` | 크로스 도메인 쿠키 전송 |
-| HTTPS | `SameSite=None`은 Secure 필수 |
+| 배포 형태 | 세션 쿠키 | 이유 |
+|-----------|-----------|------|
+| 같은 상위 도메인의 서브도메인 (권장) | `SameSite=Lax` | same-site라 HTTPS 없이도 쿠키 전송 |
+| 서로 다른 도메인 (크로스 사이트) | `SameSite=None; Secure` + HTTPS | 크로스 사이트 쿠키 전송 요건 |
 
 이 조건은 외부 서버가 충족해야 하며 라이브러리로 강제하지 않는다.
 

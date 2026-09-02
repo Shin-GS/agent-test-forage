@@ -41,7 +41,7 @@ public class ApiSpec extends BaseEntity {
     @Column(name = "BASE_URL", length = 500, nullable = false)
     private String baseUrl;
 
-    /** 생명주기 상태: ACTIVE / STALE / INACTIVE */
+    /** 생명주기 상태: ACTIVE / INACTIVE */
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", length = 20, nullable = false)
     private SpecStatus status = SpecStatus.ACTIVE;
@@ -89,10 +89,6 @@ public class ApiSpec extends BaseEntity {
     /** yml에서 온 메타의 해시 (yml 변경 감지용, 64자 고정) */
     @Column(name = "YML_META_HASH", columnDefinition = "CHAR(64)")
     private String ymlMetaHash;
-
-    /** 마지막 heartbeat 수신 시각 */
-    @Column(name = "LAST_HEARTBEAT_AT")
-    private LocalDateTime lastHeartbeatAt;
 
     /** 소프트 삭제 시각 (NULL이면 유효한 스펙) */
     @Column(name = "DELETED_AT")
@@ -219,14 +215,6 @@ public class ApiSpec extends BaseEntity {
 
     public void setYmlMetaHash(String ymlMetaHash) {
         this.ymlMetaHash = ymlMetaHash;
-    }
-
-    public LocalDateTime getLastHeartbeatAt() {
-        return lastHeartbeatAt;
-    }
-
-    public void setLastHeartbeatAt(LocalDateTime lastHeartbeatAt) {
-        this.lastHeartbeatAt = lastHeartbeatAt;
     }
 
     public LocalDateTime getDeletedAt() {

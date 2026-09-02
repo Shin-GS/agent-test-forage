@@ -36,7 +36,7 @@ const TEST_MANIFEST = [
     name: "스펙 등록/관리",
     file: "../web/spec.js",
     priority: "high",
-    description: "클라이언트 라이브러리 등록, heartbeat, ACTIVE/STALE, 관리자 수동 관리"
+    description: "클라이언트 라이브러리 등록(기동 1회), 재등록 upsert, ACTIVE/INACTIVE, 관리자 수동 관리"
   },
   {
     id: "settings",

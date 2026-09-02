@@ -164,19 +164,6 @@ class SpecQueryIntegrationTest {
         assertThat(reloaded.getStatus()).isEqualTo(SpecStatus.ACTIVE);
     }
 
-    // ── activate: STALE는 유지 (heartbeat 관리 상태이므로 변경 안 함) ──
-    @Test
-    void activate_fromStale_keepsStale() throws Exception {
-        ApiSpec spec = specRepository.save(
-                newSpec("svc", "https://svc.example.com", SpecStatus.STALE));
-
-        mockMvc.perform(patch("/api/v1/specs/{id}/activate", spec.getId()))
-                .andExpect(status().isNoContent());
-
-        ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
-        assertThat(reloaded.getStatus()).isEqualTo(SpecStatus.STALE);
-    }
-
     // ── delete: 소프트 삭제 → DELETED_AT 설정 + 목록/상세에서 사라짐 ──
     @Test
     void delete_softDeletesSpec() throws Exception {
@@ -208,7 +195,6 @@ class SpecQueryIntegrationTest {
         ApiSpec spec = new ApiSpec(baseUrl);
         spec.setName(name);
         spec.setStatus(status);
-        spec.setLastHeartbeatAt(LocalDateTime.now());
         return spec;
     }
 

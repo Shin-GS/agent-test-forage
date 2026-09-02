@@ -24,7 +24,7 @@ import java.util.List;
 
 /**
  * 스펙 조회/관리(비활성/활성/삭제) 로직. 관리자 화면(admin.md 스펙 관리)이 소비한다.
- * 등록/heartbeat 흐름과 분리하여, 라이브러리 등록 토큰과 무관한 조회 API를 담당한다.
+ * 등록 흐름과 분리하여, 라이브러리 등록 토큰과 무관한 조회 API를 담당한다.
  */
 @Service
 public class SpecQueryService {
@@ -78,7 +78,7 @@ public class SpecQueryService {
 
     /**
      * 스펙 활성화 (INACTIVE → ACTIVE 복귀). 관리자만 수행.
-     * INACTIVE가 아닌 경우(ACTIVE/STALE)는 heartbeat가 관리하는 상태이므로 변경하지 않는다.
+     * 이미 ACTIVE인 경우는 변경하지 않는다.
      */
     @Transactional
     public void activate(Long id) {
@@ -114,8 +114,7 @@ public class SpecQueryService {
                 spec.getName(),
                 spec.getBaseUrl(),
                 StatusView.of(spec.getStatus()),
-                apiCount,
-                spec.getLastHeartbeatAt());
+                apiCount);
     }
 
     /** 상세 매핑 */
@@ -154,7 +153,6 @@ public class SpecQueryService {
                 spec.getName(),
                 spec.getBaseUrl(),
                 StatusView.of(spec.getStatus()),
-                spec.getLastHeartbeatAt(),
                 serviceInfo,
                 endpointItems,
                 profileItems,

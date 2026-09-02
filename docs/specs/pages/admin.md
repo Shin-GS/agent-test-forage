@@ -35,11 +35,11 @@ last-updated: 2026-08-27
 ┌──────────────────────────────────────────────────────────┐
 │ 스펙 관리                                                │
 ├──────────────────────────────────────────────────────────┤
-│ 서비스명   | baseUrl                  | 상태 | API 수 | 마지막 heartbeat │
+│ 서비스명   | baseUrl                  | 상태 | API 수 | 등록 시각        │
 │ ──────────────────────────────────────────────────────────────────────── │
-│ demo-shop  | https://shop.example.com | 🟢 ACTIVE | 42개 | 10초 전       │
-│ demo-pay   | https://pay.example.com  | 🟡 STALE  | 35개 | 6분 전        │
-│ demo-auth  | https://auth.example.com | 🟢 ACTIVE | 28개 | 5초 전        │
+│ demo-shop  | https://shop.example.com | 🟢 ACTIVE   | 42개 | 방금 전       │
+│ demo-pay   | https://pay.example.com  | ⚪ INACTIVE | 35개 | 1시간 전      │
+│ demo-auth  | https://auth.example.com | 🟢 ACTIVE   | 28개 | 방금 전       │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -57,11 +57,11 @@ last-updated: 2026-08-27
 
 | 액션 | 동작 |
 |------|------|
-| 비활성화 | STATUS = INACTIVE. AI 매칭/실행 대상에서 제외. 자동 삭제 대상 아님 |
+| 비활성화 | STATUS = INACTIVE. AI 매칭/실행 대상에서 제외 |
 | 활성화 | INACTIVE → ACTIVE 복귀 (관리자만) |
 | 삭제 | 소프트 삭제. 참조 레시피는 유효성 검증에서 경고 |
 
-- 예: `shop-api.acme.com` → `shop.acme.com`으로 URL 변경 시, 구 URL 스펙은 heartbeat 끊겨 STALE → 관리자가 비활성/삭제로 정리
+- 예: `shop-api.acme.com` → `shop.acme.com`으로 URL 변경 시, 구 URL 스펙은 더 이상 등록되지 않고 ACTIVE로 남으므로 → 관리자가 비활성/삭제로 정리 (자동 삭제 없음)
 - INACTIVE/삭제된 스펙을 참조하는 레시피는 실행 전 유효성 검증에서 경고
 
 ---

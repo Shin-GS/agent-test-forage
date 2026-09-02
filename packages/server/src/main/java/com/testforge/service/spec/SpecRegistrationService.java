@@ -6,6 +6,7 @@ import com.testforge.entity.spec.ApiEndpoint;
 import com.testforge.entity.spec.ApiSpec;
 import com.testforge.entity.spec.ApiSpecDocument;
 import com.testforge.entity.spec.AuthProfile;
+import com.testforge.entity.spec.enums.AuthProfileStatus;
 import com.testforge.entity.spec.enums.EndpointStatus;
 import com.testforge.entity.spec.enums.SpecStatus;
 import com.testforge.parser.NormalizedSpec;
@@ -21,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,18 +68,17 @@ public class SpecRegistrationService {
         applyIdentityAndDiagnostics(spec, normalized);
         mergeServiceMeta(spec, normalized);
 
-        // 등록/heartbeat는 스펙을 살아있게 유지한다. INACTIVE는 유지(관리자만 재활성화),
+        // 등록은 스펙을 살아있게 유지한다. INACTIVE는 유지(관리자만 재활성화),
         // 그 외에는 ACTIVE로 복귀한다.
         if (spec.getStatus() != SpecStatus.INACTIVE) {
             spec.setStatus(SpecStatus.ACTIVE);
         }
-        spec.setLastHeartbeatAt(LocalDateTime.now());
 
         ApiSpec saved = specRepository.save(spec);
 
         upsertDocument(saved.getId(), normalized.specJson());
         upsertEndpoints(saved.getId(), normalized.endpoints());
-        replaceAuthProfiles(saved.getId(), normalized.authProfiles());
+        upsertAuthProfiles(saved.getId(), normalized.authProfiles());
 
         log.info("Spec registered: baseUrl={}, specId={}, endpoints={}",
                 saved.getBaseUrl(), saved.getId(), normalized.endpoints().size());
@@ -181,14 +180,41 @@ public class SpecRegistrationService {
         endpointRepository.saveAll(toSave);
     }
 
-    /** 인증 프로필 전체 교체 (레시피가 PK 참조 안 하므로 단순 삭제 후 재삽입) */
-    private void replaceAuthProfiles(Long specId, List<NormalizedSpec.AuthProfileData> profiles) {
-        authProfileRepository.deleteByApiSpecId(specId);
-        authProfileRepository.flush();
-        List<AuthProfile> toSave = new ArrayList<>();
-        for (NormalizedSpec.AuthProfileData p : profiles) {
-            toSave.add(new AuthProfile(specId, p.name(), p.loginPageUrl()));
+    /**
+     * (specId, name) 키 기준 인증 프로필 upsert. 기존 행은 PK를 유지하고 loginPageUrl을
+     * 갱신하며 ACTIVE로 복귀시킨다(부활). 새 스펙에서 사라진 프로필은 삭제하지 않고
+     * INACTIVE로 표시한다. name이 없는 프로필은 키를 만들 수 없어 스킵한다.
+     */
+    private void upsertAuthProfiles(Long specId, List<NormalizedSpec.AuthProfileData> profiles) {
+        List<AuthProfile> existing = authProfileRepository.findByApiSpecId(specId);
+        Map<String, AuthProfile> existingByName = new HashMap<>();
+        for (AuthProfile p : existing) {
+            existingByName.put(p.getName(), p);
         }
+
+        List<AuthProfile> toSave = new ArrayList<>();
+        for (NormalizedSpec.AuthProfileData data : profiles) {
+            if (data.name() == null || data.name().isBlank()) {
+                log.warn("Skipping auth profile without name: specId={}", specId);
+                continue;
+            }
+            AuthProfile profile = existingByName.remove(data.name());
+            if (profile == null) {
+                profile = new AuthProfile(specId, data.name(), data.loginPageUrl());
+            }
+            profile.setLoginPageUrl(data.loginPageUrl());
+            profile.setStatus(AuthProfileStatus.ACTIVE);
+            toSave.add(profile);
+        }
+
+        // 맵에 남은 항목은 새 스펙에서 사라진 것 → INACTIVE로 표시.
+        for (AuthProfile stale : existingByName.values()) {
+            if (stale.getStatus() != AuthProfileStatus.INACTIVE) {
+                stale.setStatus(AuthProfileStatus.INACTIVE);
+                toSave.add(stale);
+            }
+        }
+
         authProfileRepository.saveAll(toSave);
     }
 

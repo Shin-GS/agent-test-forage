@@ -2,7 +2,6 @@ package com.testforge.dto.spec;
 
 import com.testforge.dto.common.StatusView;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -18,8 +17,6 @@ public record SpecDetailResponse(
         String baseUrl,
         // 생명주기 상태 (code + description)
         StatusView status,
-        // 마지막 heartbeat 수신 시각
-        LocalDateTime lastHeartbeatAt,
         // 서비스 설명 메타 (description/domain/capabilities/notes)
         ServiceInfo serviceInfo,
         // 엔드포인트 목록

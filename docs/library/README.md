@@ -16,10 +16,10 @@
 
 의존성 추가 + yml 설정만으로 자동 동작:
 
-1. **스펙 자동 등록** — 앱 기동 시 OpenAPI 수집 → ai-test-forge 전송
-2. **Heartbeat** — 30초마다 신호 (해시 증분 전송)
-3. **변경 감지** — SHA-256 해시로 스펙 변경 시에만 재전송
-4. **CORS 자동 허용** — ai-test-forge 도메인을 허용 오리진에 등록
-5. **어노테이션** — API별 제어 (`@TestForgeExclude`, `@TestForgeConfirm`)
+1. **스펙 자동 등록** — 앱 기동 시 OpenAPI 수집 → ai-test-forge 전송 (기동당 1회, 재기동 시 재등록)
+2. **CORS 자동 허용** — ai-test-forge 도메인을 허용 오리진에 등록
+3. **어노테이션** — API별 제어 (`@TestForgeExclude`, `@TestForgeConfirm`)
+
+> 초기 버전은 주기적 heartbeat를 두지 않는다. 등록은 기동 시 1회이며, 재배포/재기동 시 다시 등록되어 최신 스펙으로 갱신된다.
 
 기획 참조: [스펙 등록 방식](../specs/spec/registration.md)

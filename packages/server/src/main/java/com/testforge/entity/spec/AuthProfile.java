@@ -1,21 +1,30 @@
 package com.testforge.entity.spec;
 
 import com.testforge.entity.common.BaseEntity;
+import com.testforge.entity.spec.enums.AuthProfileStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 /**
  * 스펙의 인증 프로필 (이름 + 401/403 시 안내할 로그인 URL).
- * 레시피가 PK를 참조하지 않으므로 재등록 시 스펙 기준 전체 교체된다.
+ * 재등록 시 (specId, name) 키로 upsert하며, 사라진 프로필은 삭제하지 않고
+ * INACTIVE로 표시한다(다시 나타나면 ACTIVE로 복귀).
  */
 @Entity
 @Table(
         name = "AUTH_PROFILE",
+        uniqueConstraints = @UniqueConstraint(
+                name = "UQ_AUTH_PROFILE_SPEC_NAME",
+                columnNames = {"API_SPEC_ID", "NAME"}
+        ),
         indexes = @Index(name = "IDX_AUTH_PROFILE_SPEC", columnList = "API_SPEC_ID")
 )
 public class AuthProfile extends BaseEntity {
@@ -37,6 +46,11 @@ public class AuthProfile extends BaseEntity {
     /** 401/403 시 안내할 로그인 페이지 URL */
     @Column(name = "LOGIN_PAGE_URL", length = 500)
     private String loginPageUrl;
+
+    /** 생명주기 상태: ACTIVE / INACTIVE(스펙에서 사라짐) */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "STATUS", length = 20, nullable = false)
+    private AuthProfileStatus status = AuthProfileStatus.ACTIVE;
 
     protected AuthProfile() {
     }
@@ -73,5 +87,13 @@ public class AuthProfile extends BaseEntity {
 
     public void setLoginPageUrl(String loginPageUrl) {
         this.loginPageUrl = loginPageUrl;
+    }
+
+    public AuthProfileStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(AuthProfileStatus status) {
+        this.status = status;
     }
 }
