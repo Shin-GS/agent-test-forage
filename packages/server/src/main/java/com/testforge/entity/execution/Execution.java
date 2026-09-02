@@ -30,8 +30,10 @@ import java.time.LocalDateTime;
 @Table(
         name = "EXECUTION",
         indexes = {
-                @Index(name = "IDX_EXECUTION_USER", columnList = "USER_ID"),
-                @Index(name = "IDX_EXECUTION_CONVERSATION", columnList = "CONVERSATION_ID"),
+                // 커서 페이징(WHERE user_id=? AND id<? ORDER BY id DESC)을 인덱스로 커버하기 위해 복합
+                @Index(name = "IDX_EXECUTION_USER_ID", columnList = "USER_ID, ID"),
+                @Index(name = "IDX_EXECUTION_CONVERSATION_ID", columnList = "CONVERSATION_ID, ID"),
+                // 기간 필터/표시용 (추후 기간 검색 대비). 히스토리 정렬 자체는 ID 기준
                 @Index(name = "IDX_EXECUTION_STARTED", columnList = "STARTED_AT")
         }
 )

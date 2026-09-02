@@ -3,8 +3,10 @@ package com.testforge.service.execution;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.testforge.common.error.ApiException;
+import com.testforge.dto.common.CursorPage;
 import com.testforge.dto.common.StatusView;
 import com.testforge.dto.execution.ExecutionCompletePayload;
+import com.testforge.dto.execution.ExecutionSummaryView;
 import com.testforge.dto.execution.ExecutionCompleteRequest;
 import com.testforge.dto.execution.ExecutionProgressPayload;
 import com.testforge.dto.execution.ExecutionRecipeView;
@@ -35,6 +37,7 @@ import com.testforge.sse.enums.SseEventType;
 import com.testforge.utils.RecipeJsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -243,6 +246,116 @@ public class ExecutionService {
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> ApiException.executionNotFound(executionId));
         return toResponse(execution);
+    }
+
+    /** 히스토리 목록 페이지 기본/최대 크기 (무한 스크롤 UX + 과도 로딩 방지) */
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 50;
+
+    /**
+     * 사용자 실행 히스토리의 커서 페이지 조회 (최신순 무한 스크롤). 상태/키워드는 옵션 필터다.
+     * 경량 요약({@link ExecutionSummaryView})만 담아 목록 부하를 줄인다(상세는 detail로 별도 조회).
+     *
+     * @param userId 필수. 없으면 400
+     * @param status 옵션 상태 필터 (null이면 전체)
+     * @param keyword 옵션 제목 키워드 (null/빈이면 전체)
+     * @param cursor 옵션 커서 (null이면 첫 페이지). 이전 응답의 nextCursor를 그대로 전달
+     * @param size 페이지 크기 (기본 20, 최대 50)
+     */
+    @Transactional(readOnly = true)
+    public CursorPage<ExecutionSummaryView> history(Long userId, ExecutionStatus status,
+                                                    String keyword, String cursor, Integer size) {
+        if (userId == null) {
+            throw ApiException.invalidRequest("userId is required");
+        }
+        int limit = normalizeSize(size);
+        String normalizedKeyword = escapeLike((keyword == null || keyword.isBlank()) ? null : keyword.trim());
+        Long cursorId = decodeCursor(cursor);
+
+        // hasNext 판정을 위해 limit+1건 조회 (정렬은 쿼리에 포함, Pageable은 limit 용도)
+        List<Execution> rows = executionRepository.findHistoryByCursor(
+                userId, status, normalizedKeyword, cursorId, PageRequest.of(0, limit + 1));
+        return toCursorPage(rows, limit);
+    }
+
+    /**
+     * 특정 대화방의 실행 목록 커서 페이지 (패널에서 현재 대화방 실행 보기). 대화방 존재/삭제 검증 후
+     * 커서 페이지를 돌려준다.
+     */
+    @Transactional(readOnly = true)
+    public CursorPage<ExecutionSummaryView> historyByConversation(Long conversationId, String cursor,
+                                                                  Integer size) {
+        conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElseThrow(() -> ApiException.conversationNotFound(conversationId));
+        int limit = normalizeSize(size);
+        Long cursorId = decodeCursor(cursor);
+
+        List<Execution> rows = executionRepository.findByConversationIdByCursor(
+                conversationId, cursorId, PageRequest.of(0, limit + 1));
+        return toCursorPage(rows, limit);
+    }
+
+    /** limit+1건 조회 결과를 커서 페이지로 변환 (초과분 유무로 hasNext 판정, 초과분은 잘라냄) */
+    private CursorPage<ExecutionSummaryView> toCursorPage(List<Execution> rows, int limit) {
+        boolean hasNext = rows.size() > limit;
+        List<Execution> pageRows = hasNext ? rows.subList(0, limit) : rows;
+        List<ExecutionSummaryView> items = pageRows.stream().map(this::toSummaryView).toList();
+        if (!hasNext) {
+            return CursorPage.last(items);
+        }
+        Execution lastRow = pageRows.get(pageRows.size() - 1);
+        // 커서 = 마지막 항목의 id (불투명 문자열). id는 정렬 키이자 유일 키라 이거면 충분하다.
+        return CursorPage.of(items, String.valueOf(lastRow.getId()));
+    }
+
+    /** size 정규화: null이면 기본값, 범위(1~MAX)로 클램프 */
+    private int normalizeSize(Integer size) {
+        if (size == null || size <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(size, MAX_PAGE_SIZE);
+    }
+
+    /** 커서 디코딩(id). null/빈/형식 불량이면 첫 페이지(null)로 간주 */
+    private Long decodeCursor(String cursor) {
+        if (cursor == null || cursor.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(cursor.trim());
+        } catch (NumberFormatException e) {
+            log.warn("Invalid cursor value, treating as first page: {}", cursor);
+            return null;
+        }
+    }
+
+    /**
+     * LIKE 검색어의 와일드카드를 이스케이프한다. {@code \ % _}를 리터럴로 매칭하기 위해 앞에 {@code \}를
+     * 붙인다(쿼리는 {@code ESCAPE '\'} 사용). 역슬래시를 먼저 처리해 이중 이스케이프를 피한다.
+     */
+    private String escapeLike(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        return keyword
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+
+    /** 실행 → 경량 요약 뷰 (스텝 상세 제외) */
+    private ExecutionSummaryView toSummaryView(Execution execution) {
+        return new ExecutionSummaryView(
+                execution.getId(),
+                execution.getConversationId(),
+                execution.getApiSpecId(),
+                StatusView.of(execution.getType()),
+                execution.getTitle(),
+                StatusView.of(execution.getStatus()),
+                execution.getResultSummary(),
+                execution.getStartedAt(),
+                execution.getFinishedAt(),
+                execution.getDurationMs());
     }
 
     /**

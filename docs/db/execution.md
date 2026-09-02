@@ -50,9 +50,14 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 | `CREATED_AT` / `UPDATED_AT` | DATETIME | audit |
 
 **인덱스**
-- `IDX_EXECUTION_USER` : (`USER_ID`)
-- `IDX_EXECUTION_CONVERSATION` : (`CONVERSATION_ID`)
-- `IDX_EXECUTION_STARTED` : (`STARTED_AT`) — 히스토리 최신순
+- `IDX_EXECUTION_USER_ID` : (`USER_ID`, `ID`) — 사용자 히스토리 커서 페이징 (필터 + id 정렬/범위를 인덱스로 커버)
+- `IDX_EXECUTION_CONVERSATION_ID` : (`CONVERSATION_ID`, `ID`) — 대화방별 실행 커서 페이징
+- `IDX_EXECUTION_STARTED` : (`STARTED_AT`) — 기간 필터/표시용 (추후 기간 검색 대비)
+
+> **커서 페이징 정렬 = `ID DESC` 단독.** ID는 auto-increment PK라 생성순(=최신순)이자 유일하므로,
+> `STARTED_AT`(마이크로초 정밀도) 기반 커서의 정밀도 손실로 인한 경계 누락/중복 위험을 피한다.
+> 커서는 마지막 항목의 `ID`이며, 조건은 `id < :cursorId`. 쿼리(`WHERE user_id=? AND id<? ORDER BY id DESC`)를
+> 복합 인덱스 `(USER_ID, ID)`가 온전히 커버해 부하가 없다. 기간 검색이 생기면 `STARTED_AT` 인덱스를 활용한다.
 
 ### 상태 (STATUS)
 

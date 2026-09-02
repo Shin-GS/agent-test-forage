@@ -5,8 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.Map;
 
@@ -35,6 +37,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException ex) {
         log.warn("Malformed request body: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, ErrorCode.INVALID_REQUEST, "Malformed request body");
+    }
+
+    /** 필수 쿼리 파라미터 누락 → 400 (클라이언트 요청 오류) */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParam(MissingServletRequestParameterException ex) {
+        log.warn("Missing request parameter: {}", ex.getParameterName());
+        return build(HttpStatus.BAD_REQUEST, ErrorCode.INVALID_REQUEST,
+                "Missing required parameter: " + ex.getParameterName());
+    }
+
+    /** 파라미터 타입 변환 실패(예: 잘못된 enum 값, 숫자 아님) → 400 */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.warn("Invalid request parameter '{}': {}", ex.getName(), ex.getValue());
+        return build(HttpStatus.BAD_REQUEST, ErrorCode.INVALID_REQUEST,
+                "Invalid value for parameter: " + ex.getName());
     }
 
     /** 예상하지 못한 예외 → 500 (상세는 로그에만) */

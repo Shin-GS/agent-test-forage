@@ -141,7 +141,13 @@ public class ConversationService {
         return new ConversationStartResponse(true, toDetail(savedConversation), messageView);
     }
 
-    /** 사용자별 미삭제 대화방 목록 (lastMessageAt DESC). unread는 서버 계산. */
+    /**
+     * 사용자별 미삭제 대화방 목록 (lastMessageAt DESC). unread는 서버 계산.
+     *
+     * <p><b>TODO (별도 조각: 목록 페이징):</b> 현재 전체를 반환한다. 대화방이 쌓이면 부하가 되므로,
+     * 실행 히스토리와 동일한 커서 기반 페이징(lastMessageAt DESC + id tie-break, CursorPage)으로
+     * 전환해야 한다. listMessages(seq 오름차순, 위로 더 불러오기)도 함께.
+     */
     @Transactional(readOnly = true)
     public List<ConversationSummaryResponse> list(Long userId) {
         if (userId == null) {
@@ -221,7 +227,13 @@ public class ConversationService {
         log.info("Conversation soft-deleted: conversationId={}", id);
     }
 
-    /** 대화방 메시지 목록 (SEQ 오름차순). 없거나 삭제된 대화방이면 404. */
+    /**
+     * 대화방 메시지 목록 (SEQ 오름차순). 없거나 삭제된 대화방이면 404.
+     *
+     * <p><b>TODO (별도 조각: 목록 페이징):</b> 현재 전체 메시지를 반환한다. 대화가 길어지면 부하가
+     * 되므로, 커서 기반(최신 seq부터 위로 더 불러오기)으로 전환해야 한다. 메시지는 히스토리와 정렬
+     * 방향(오래된 순 로딩)이 반대라 커서 방향 설계에 유의.
+     */
     @Transactional(readOnly = true)
     public List<MessageResponse> listMessages(Long conversationId) {
         getActiveOrThrow(conversationId);
