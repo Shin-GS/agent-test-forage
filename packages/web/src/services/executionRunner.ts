@@ -123,8 +123,9 @@ export async function runExecution(
   }
 
   const snapshotSteps = extractSnapshotSteps(recipe);
-  // 재개면 이전 context 를 이어받고, 아니면 새로 시작한다.
-  const context: RunContext = options.resume?.context ?? { userInput: {} };
+  // 재개면 이전 context 를 이어받고, 아니면 실행 응답의 초기 context(BE 가 시드한 userInput 등)로 시작한다.
+  // BE 는 execute_recipe 추출값 + 레시피 변수 기본값을 병합해 execution.context.userInput 에 넣어준다.
+  const context: RunContext = options.resume?.context ?? initialContextOf(execution);
   const startIndex = options.resume?.startIndex ?? 0;
 
   // 스펙 상세를 조회해 baseUrl 과 endpointId→{method,path} 맵을 구성한다.
@@ -562,6 +563,20 @@ function normalizeStepType(raw: string): string {
   const upper = raw.toUpperCase().replace(/[-\s]/g, "_");
   if (upper === "USERINPUT") return "USER_INPUT";
   return upper;
+}
+
+/**
+ * 실행 응답의 초기 context 를 RunContext 로 정규화한다.
+ * BE 는 execution.context 에 { userInput: {...} } 형태로 시드한다(추출값 + 변수 기본값).
+ * userInput 키가 없으면 빈 객체로 보장한다(스텝 body 의 {{userInput.x}} 해석 안정성).
+ */
+function initialContextOf(execution: ExecutionResponse): RunContext {
+  const raw = execution.context;
+  const base: RunContext = raw && typeof raw === "object" ? { ...(raw as RunContext) } : {};
+  if (base.userInput == null || typeof base.userInput !== "object") {
+    base.userInput = {};
+  }
+  return base;
 }
 
 /** baseUrl 해석: 실행 context > 스냅샷 > 스펙 상세 baseUrl > 기본 상수 */

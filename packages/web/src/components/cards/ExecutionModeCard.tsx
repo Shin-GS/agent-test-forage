@@ -47,6 +47,8 @@ export function ExecutionModeCard({ card }: Props) {
         userId,
         recipeId: card.recipeId,
         mode: spec.mode,
+        // AI 가 발화에서 추출한 값을 실행 시작 시 시드(BE 가 recipe 변수 기본값과 병합).
+        initialContext: card.extractedValues,
       });
       // 실행 엔진 구동. 진행 상태는 SSE 로 스토어가 갱신한다.
       const result = await runExecution(execution, { mode: spec.mode });

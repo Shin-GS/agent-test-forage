@@ -87,7 +87,7 @@ public class RuleBasedIntentResolver implements IntentResolver {
         if (matches.size() == 1) {
             RecipeCandidate only = matches.get(0);
             log.debug("Resolved execute_recipe: recipeId={}", only.id());
-            return IntentResult.executeRecipe(only.id());
+            return IntentResult.executeRecipe(only.id(), java.util.Map.of());
         }
         List<RecipeCandidate> limited = matches.size() > MAX_CANDIDATES
                 ? matches.subList(0, MAX_CANDIDATES)
@@ -109,7 +109,7 @@ public class RuleBasedIntentResolver implements IntentResolver {
         boolean present = context.recipes().stream().anyMatch(r -> refRecipeId.equals(r.id()));
         if (present) {
             log.debug("Resolved execute_recipe by referenceId: recipeId={}", refRecipeId);
-            return IntentResult.executeRecipe(refRecipeId);
+            return IntentResult.executeRecipe(refRecipeId, java.util.Map.of());
         }
         return null;
     }

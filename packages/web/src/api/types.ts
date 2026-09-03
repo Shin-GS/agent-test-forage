@@ -170,6 +170,8 @@ export interface ExecutionModeCard {
   cardType: "execution_mode";
   recipeId: number;
   buttons: string[];
+  /** AI 가 발화에서 추출한 값 (실행 시작 시 initialContext 로 전달). 없으면 생략 */
+  extractedValues?: Record<string, unknown>;
 }
 
 export interface PlanCard {

@@ -8,6 +8,8 @@ export interface StartExecutionPayload {
   recipeId: number;
   /** 실행 모드 코드 (예: AUTO / MANUAL) */
   mode: string;
+  /** 실행 시작 시 시드할 초기값 (AI 추출값 등). BE 가 recipe 변수 기본값과 병합해 context.userInput 에 넣는다 */
+  initialContext?: Record<string, unknown>;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

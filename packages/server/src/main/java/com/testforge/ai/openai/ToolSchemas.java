@@ -58,10 +58,18 @@ public final class ToolSchemas {
         return Map.of("type", "string", "description", description);
     }
 
+    private static Map<String, Object> objectProp(String description) {
+        return Map.of("type", "object", "description", description);
+    }
+
     private static OpenAiDtos.Tool executeRecipe() {
         return fn(ToolName.EXECUTE_RECIPE,
                 "사용자 요청과 정확히 일치하는 레시피 1개를 실행한다. 후보가 여러 개면 show_candidates를 쓴다.",
-                object(Map.of("recipeId", integerProp("실행할 레시피 ID")), List.of("recipeId")));
+                object(Map.of(
+                        "recipeId", integerProp("실행할 레시피 ID"),
+                        "extractedValues", objectProp(
+                                "발화에서 명시적으로 언급된 값(키-값). 추측 금지, 언급된 것만 담는다.")),
+                        List.of("recipeId")));
     }
 
     private static OpenAiDtos.Tool proposePlan() {

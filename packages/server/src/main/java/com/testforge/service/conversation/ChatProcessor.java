@@ -235,19 +235,24 @@ public class ChatProcessor {
             case CHAT, CLARIFY -> AssistantMessageDraft.text(result.message());
             case NO_MATCH -> AssistantMessageDraft.system(
                     NO_MATCH_NOTICE, RecipeJsonUtil.toJsonString(Map.of("level", "info")));
-            case EXECUTE_RECIPE -> AssistantMessageDraft.card(executionModeCard(result.recipeId()));
+            case EXECUTE_RECIPE -> AssistantMessageDraft.card(
+                    executionModeCard(result.recipeId(), result.extractedValues()));
             case PROPOSE_PLAN -> AssistantMessageDraft.card(planCard(result.recipeIds()));
             case SELECT_SERVICE -> AssistantMessageDraft.card(serviceSelectCard(result.suggestedServices()));
             case SHOW_CANDIDATES -> AssistantMessageDraft.card(candidatesCard(result.candidates()));
         };
     }
 
-    /** execution_mode 카드: 실행 진입점 ([자동 실행]/[직접 입력]). 실제 실행은 다음 조각 */
-    private String executionModeCard(Long recipeId) {
+    /**
+     * execution_mode 카드: 실행 진입점 ([자동 실행]/[직접 입력]).
+     * extractedValues는 발화에서 추출된 초기 입력값으로, 실행 시작 시 initialContext로 전달된다.
+     */
+    private String executionModeCard(Long recipeId, Map<String, Object> extractedValues) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("cardType", "execution_mode");
         meta.put("recipeId", recipeId);
         meta.put("buttons", List.of("auto", "manual"));
+        meta.put("extractedValues", extractedValues == null ? Map.of() : extractedValues);
         return RecipeJsonUtil.toJsonString(meta);
     }
 

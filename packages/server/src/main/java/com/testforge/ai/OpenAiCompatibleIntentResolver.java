@@ -155,7 +155,7 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
                     log.warn("execute_recipe with invalid recipeId={}, falling back to clarify", recipeId);
                     yield IntentResult.clarify("어떤 레시피를 실행할지 다시 알려주시겠어요?");
                 }
-                yield IntentResult.executeRecipe(recipeId);
+                yield IntentResult.executeRecipe(recipeId, asMap(args.get("extractedValues")));
             }
             case PROPOSE_PLAN -> {
                 List<Long> ids = asLongList(args.get("recipeIds")).stream()
@@ -272,5 +272,14 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
             return s;
         }
         return fallback;
+    }
+
+    /** JSON object 인자를 Map으로. Map이 아니면 빈 맵(추측/오염 방지) */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
     }
 }

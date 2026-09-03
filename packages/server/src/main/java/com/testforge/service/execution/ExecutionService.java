@@ -150,6 +150,13 @@ public class ExecutionService {
                 executionStepRepository.save(executionStep);
             }
 
+            // 3-1) 실행 context 초기 시드: userInput = { 레시피 변수 기본값 ..., initialContext ... }
+            //      (initialContext가 기본값을 덮어씀). 레시피 body의 {{userInput.x}} 참조가 시작부터
+            //      값을 갖게 한다. 스텝 실행 후 누적(reportStep)은 별도로 유지된다.
+            Map<String, Object> userInput = seedUserInput(recipe.getVariablesJson(), request.initialContext());
+            savedExecution.setContextJson(RecipeJsonUtil.toJsonString(Map.of("userInput", userInput)));
+            executionRepository.save(savedExecution);
+
             // 4) 대화방 executing 전이 (락은 유지 → 종료 시 해제)
             conversation.setStatus(ConversationStatus.EXECUTING);
             conversationRepository.save(conversation);
@@ -569,6 +576,29 @@ public class ExecutionService {
         }
         merged.putAll(extractedValues);
         return RecipeJsonUtil.toJsonString(merged);
+    }
+
+    /**
+     * 실행 시작 시 {@code userInput} 초기값을 만든다. 레시피 변수 정의({@code variablesJson})의
+     * 각 변수 {@code default}를 먼저 깔고, {@code initialContext}(발화 추출값)로 덮어쓴다.
+     * default가 없는 변수는 시드에서 제외한다(빈 키를 만들지 않음).
+     *
+     * <p>{@code variablesJson}은 {@code [{name, type, required, default?}]} 배열 구조다.
+     */
+    private Map<String, Object> seedUserInput(String variablesJson, Map<String, Object> initialContext) {
+        Map<String, Object> userInput = new java.util.LinkedHashMap<>();
+        List<Map<String, Object>> variables = RecipeJsonUtil.parseSteps(variablesJson);
+        for (Map<String, Object> variable : variables) {
+            Object name = variable.get("name");
+            if (name == null || !variable.containsKey("default")) {
+                continue; // default 없는 변수는 시드하지 않음
+            }
+            userInput.put(name.toString(), variable.get("default"));
+        }
+        if (initialContext != null) {
+            userInput.putAll(initialContext); // 발화 추출값이 기본값을 덮어씀
+        }
+        return userInput;
     }
 
     /** 스텝 정의의 type 값을 StepType으로 매핑. 알 수 없으면 API로 간주(방어적 기본값) */
