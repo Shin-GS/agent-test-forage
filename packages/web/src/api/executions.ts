@@ -70,3 +70,22 @@ export function getExecution(executionId: number): Promise<ExecutionResponse> {
     method: "GET",
   });
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export interface ActionPickerRespondPayload {
+  executionId: number;
+  /** pre-run 일괄 수집이면 -1 (execution.md 규약) */
+  stepIndex: number;
+  values: Record<string, any>;
+}
+
+/**
+ * 액션 피커 입력 제출. 서버가 values 를 context.userInput 에 병합하고
+ * input_waiting → executing 전이 후 실행을 재개(응답의 executing execution 으로 러너 구동).
+ */
+export function respondActionPicker(payload: ActionPickerRespondPayload): Promise<ExecutionResponse> {
+  return request<ExecutionResponse>("/action-picker/respond", {
+    method: "POST",
+    body: payload,
+  });
+}

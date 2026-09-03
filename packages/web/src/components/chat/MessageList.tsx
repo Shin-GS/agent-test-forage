@@ -5,6 +5,7 @@
 import { useEffect, useRef } from "react";
 import type { MessageResponse } from "../../api/types";
 import { useChatStore } from "../../store/chatStore";
+import { ActionPicker } from "./ActionPicker";
 import { AuthRequiredCard } from "./AuthRequiredCard";
 import { ProgressSteps } from "./ProgressSteps";
 import { MessageItem } from "./MessageItem";
@@ -17,10 +18,11 @@ export function MessageList({ messages }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const executionProgress = useChatStore((state) => state.executionProgress);
   const authPause = useChatStore((state) => state.authPause);
+  const actionPicker = useChatStore((state) => state.actionPicker);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, executionProgress, authPause]);
+  }, [messages.length, executionProgress, authPause, actionPicker]);
 
   return (
     <div className="chat-messages">
@@ -40,6 +42,9 @@ export function MessageList({ messages }: Props) {
 
         {/* 인증 필요(401/403) 안내 — 있으면 표시(현재 대화방 것만) */}
         <AuthRequiredCard />
+
+        {/* 액션 피커 — 필수 입력 미충족 시 표시(현재 대화방 것만). 실행마다 새 인스턴스 */}
+        {actionPicker && <ActionPicker key={actionPicker.executionId} />}
 
         <div ref={endRef} />
       </div>

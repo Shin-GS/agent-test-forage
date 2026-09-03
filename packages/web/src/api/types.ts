@@ -145,6 +145,23 @@ export interface ExecutionRecipeView {
   finishedAt: string | null;
 }
 
+/**
+ * 액션 피커 변수 스키마 (레시피 variables 항목 그대로). action-picker.md 변수 정의 스키마.
+ * key/label/type 필수, 나머지는 타입별 선택.
+ */
+export interface ActionPickerVariable {
+  key: string;
+  label: string;
+  type: string; // text | number | textarea | select | multi-select | radio | checkbox | date | search-select | json
+  required?: boolean;
+  default?: any;
+  placeholder?: string;
+  options?: { label: string; value: string }[];
+  min?: number;
+  max?: number;
+  [key: string]: any;
+}
+
 export interface ExecutionResponse {
   id: number;
   userId: number;
@@ -157,6 +174,8 @@ export interface ExecutionResponse {
   context: any;
   resultSummary: string | null;
   recipes: ExecutionRecipeView[];
+  /** 액션 피커로 수집할 변수 스키마(미충족/노출 대상). 없으면 빈 배열 */
+  pendingInputs: ActionPickerVariable[];
   startedAt: string;
   finishedAt: string | null;
   durationMs: number | null;

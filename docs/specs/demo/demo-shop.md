@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-02
+last-updated: 2026-09-03
 ---
 
 # demo-shop (이커머스 데모 서버)
@@ -104,6 +104,35 @@ CREATED --결제--> PAID --취소--> CANCELLED
   1. `[API]` 주문 생성 — `POST /orders` body `{productId: {{userInput.productId}}, quantity: {{userInput.quantity}}}`, extract `orderId`
   2. `[API]` 주문 확인 — `GET /orders/{{orderId}}`
 - **결과**: 생성된 주문의 orderId/status/amount 요약
+
+사용자 입력 변수 스키마 예시 (레시피 메타에 선언 → 실행 시작 직전 액션 피커로 렌더링. 스키마 형식은 [action-picker.md 변수 정의 스키마](../chat/action-picker.md#변수-정의-스키마) 참조):
+
+```json
+{
+  "variables": [
+    {
+      "key": "productId",
+      "label": "상품 ID",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "placeholder": "상품 ID (예: 1)"
+    },
+    {
+      "key": "quantity",
+      "label": "수량",
+      "type": "number",
+      "required": true,
+      "default": 1,
+      "min": 1,
+      "max": 100
+    }
+  ]
+}
+```
+
+- 스텝의 `{{userInput.productId}}` / `{{userInput.quantity}}`는 위 선언과 1:1 대응한다(선언되지 않은 `userInput` 키 사용 금지).
+- 자동 실행 모드에서 "마우스 2개 주문해줘"처럼 발화로 값이 충족되면 액션 피커 없이 바로 실행된다. 필수값(`productId`)이 비면 실행 직전 액션 피커로 미충족 필드만 물어본다. (규칙: [execution.md](../recipe/execution.md#자동-실행-모드에서-값-부족-처리-확정))
 
 ### 레시피 2: 주문하고 결제까지 (조건 분기 포함)
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.testforge.common.error.ApiException;
 import com.testforge.dto.common.CursorPage;
 import com.testforge.dto.common.StatusView;
+import com.testforge.dto.execution.ActionPickerRespondRequest;
 import com.testforge.dto.execution.ExecutionCompletePayload;
 import com.testforge.dto.execution.ExecutionSummaryView;
 import com.testforge.dto.execution.ExecutionCompleteRequest;
@@ -157,13 +158,36 @@ public class ExecutionService {
             savedExecution.setContextJson(RecipeJsonUtil.toJsonString(Map.of("userInput", userInput)));
             executionRepository.save(savedExecution);
 
-            // 4) 대화방 executing 전이 (락은 유지 → 종료 시 해제)
+            // 4) 액션 피커 pre-run 분기 (execution.md 액션 피커 트리거)
+            //    - MANUAL(직접 입력): 미충족 여부와 무관하게 모든 입력변수를 pendingInputs로 노출
+            //    - AUTO + 미충족 있음: 미충족 변수만 pendingInputs로 노출
+            //    - AUTO + 미충족 없음: 바로 executing 전이 (기존 흐름)
+            Long ownerId = conversation.getUserId();
+            Long executionId = savedExecution.getId();
+            List<Map<String, Object>> pendingInputs =
+                    resolvePendingInputs(recipe.getVariablesJson(), userInput, mode);
+
+            if (!pendingInputs.isEmpty()) {
+                // 입력 대기: 대화방 WAITING_INPUT 전이 + session_status만 발행 (락 유지 → respond/cancel에서 해제).
+                // execution_progress started는 실제 실행 재개(respond) 시점에 발행하므로 여기선 발행하지 않음.
+                conversation.setStatus(ConversationStatus.WAITING_INPUT);
+                conversationRepository.save(conversation);
+
+                publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                        com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.WAITING_INPUT));
+
+                started = true; // 락 유지 (respond/cancel에서 해제)
+                log.info("Execution started, waiting for action-picker input: executionId={}, conversationId={}, recipeId={}, pending={}",
+                        executionId, conversationId, recipe.getId(), pendingInputs.size());
+
+                return toResponse(savedExecution, pendingInputs);
+            }
+
+            // 대화방 executing 전이 (락은 유지 → 종료 시 해제)
             conversation.setStatus(ConversationStatus.EXECUTING);
             conversationRepository.save(conversation);
 
             // SSE: 실행 진행 시작 + 대화방 상태(executing). 커밋 후 발행.
-            Long ownerId = conversation.getUserId();
-            Long executionId = savedExecution.getId();
             publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
                     com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.EXECUTING));
             publishAfterCommit(ownerId, SseEventType.EXECUTION_PROGRESS, conversationId,
@@ -496,6 +520,76 @@ public class ExecutionService {
         return toStepView(step);
     }
 
+    /**
+     * 액션 피커 입력 응답 처리 (action-picker.md / execution.md 재개 흐름). 사용자가 액션 피커에서
+     * 값을 제출하면 {@code values}를 실행 context의 {@code userInput.*}에 병합한 뒤,
+     * 대화방을 {@code WAITING_INPUT → EXECUTING}으로 전환하고 실행을 재개한다
+     * ({@code session_status: executing} + {@code execution_progress: started} 발행).
+     *
+     * <p>실행이 없으면 404. 대화방이 입력 대기(WAITING_INPUT) 상태가 아니면 400(상태 오염 방지).
+     * 병합 후에도 필수 변수가 여전히 비어 있으면 400 + WAITING_INPUT 유지(액션 피커 재노출).
+     * 재개에 성공하면 대화방 락은 계속 유지되며(실행 종료 시 complete/stop/cancel에서 해제),
+     * 응답의 {@code pendingInputs}는 빈 리스트다.
+     *
+     * <p>{@code stepIndex}는 pre-run 수집이면 {@code -1}로 온다. 프로토타입은 값 병합에 사용하지 않는다.
+     */
+    @Transactional
+    public ExecutionResponse respondActionPicker(ActionPickerRespondRequest request) {
+        if (request.executionId() == null) {
+            throw ApiException.invalidRequest("executionId is required");
+        }
+
+        Execution execution = executionRepository.findById(request.executionId())
+                .orElseThrow(() -> ApiException.executionNotFound(request.executionId()));
+
+        Long conversationId = execution.getConversationId();
+        if (conversationId == null) {
+            throw ApiException.invalidRequest("execution is not attached to a conversation: " + execution.getId());
+        }
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElseThrow(() -> ApiException.conversationNotFound(conversationId));
+
+        // 상태 검증: 입력 대기 중이 아니면 거절 (상태 오염/중복 제출 방지)
+        if (conversation.getStatus() != ConversationStatus.WAITING_INPUT) {
+            throw ApiException.invalidRequest(
+                    "conversation is not waiting for input: " + conversationId + " (status=" + conversation.getStatus() + ")");
+        }
+
+        // 값 병합: context.userInput 하위에 values를 덮어쓰기 병합 (최상위 아님)
+        Map<String, Object> values = request.values() == null ? Map.of() : request.values();
+        String mergedContext = mergeUserInput(execution.getContextJson(), values);
+        execution.setContextJson(mergedContext);
+        executionRepository.save(execution);
+
+        // 재검증: 병합 후에도 required 변수가 비면 WAITING_INPUT 유지 + 액션 피커 재노출 (400).
+        // 검증 기준은 실행 시작 시점의 레시피 스냅샷(원본 독립)에 담긴 variablesJson을 사용한다.
+        Map<String, Object> userInput = currentUserInput(mergedContext);
+        String variablesJson = snapshotVariablesJson(execution.getId());
+        List<Map<String, Object>> stillMissing = missingRequired(variablesJson, userInput);
+        if (!stillMissing.isEmpty()) {
+            // 상태/락 그대로 유지 (WAITING_INPUT). 액션 피커를 다시 노출하도록 미충족 목록을 돌려준다.
+            log.info("Action-picker respond incomplete, still waiting: executionId={}, conversationId={}, missing={}",
+                    execution.getId(), conversationId, stillMissing.size());
+            throw ApiException.invalidRequest(
+                    "required inputs are still missing: " + stillMissing.size() + " field(s)");
+        }
+
+        // 재개: WAITING_INPUT → EXECUTING 전이 + SSE (락 유지 → 실행 종료 시 해제)
+        conversation.setStatus(ConversationStatus.EXECUTING);
+        conversationRepository.save(conversation);
+
+        Long ownerId = conversation.getUserId();
+        Long executionId = execution.getId();
+        publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.EXECUTING));
+        publishAfterCommit(ownerId, SseEventType.EXECUTION_PROGRESS, conversationId,
+                ExecutionProgressPayload.started(conversationId, executionId));
+
+        log.info("Action-picker respond accepted, execution resumed: executionId={}, conversationId={}, stepIndex={}",
+                executionId, conversationId, request.stepIndex());
+        return toResponse(execution);
+    }
+
     // ── helpers ──
 
     /** 레시피 전체 스냅샷 JSON (메타+스텝+변수+결과정의). 원본 독립 재현용 */
@@ -601,6 +695,138 @@ public class ExecutionService {
         return userInput;
     }
 
+    /**
+     * 액션 피커 pre-run 노출 대상 변수 목록을 산출한다 (execution.md 액션 피커 트리거).
+     * <ul>
+     *   <li>MANUAL(직접 입력): 모든 입력 변수를 노출(기본값이 프리필된 채 FE가 렌더링).</li>
+     *   <li>AUTO: required=true인데 userInput에 값이 없거나 빈 것만 노출.</li>
+     * </ul>
+     * 각 항목은 {@code variablesJson}의 변수 정의 객체 그대로다(key/label/type/required/default/... 자유 필드).
+     * 프로토타입 변수 스키마는 {@code key}(또는 {@code name})로 userInput 키와 매칭한다.
+     */
+    private List<Map<String, Object>> resolvePendingInputs(String variablesJson,
+                                                           Map<String, Object> userInput,
+                                                           ExecutionMode mode) {
+        List<Map<String, Object>> variables = RecipeJsonUtil.parseSteps(variablesJson);
+        if (variables.isEmpty()) {
+            return List.of();
+        }
+        if (mode == ExecutionMode.MANUAL) {
+            // 직접 입력 모드: 미충족 여부와 무관하게 모든 입력 변수를 노출
+            return List.copyOf(variables);
+        }
+        // AUTO: required 미충족만
+        return missingRequired(variablesJson, userInput);
+    }
+
+    /**
+     * {@code variablesJson}의 변수 중 required=true인데 {@code userInput}에 값이 없거나
+     * null/빈 문자열인 것을 그대로(정의 객체) 돌려준다. required가 아니면 대상이 아니다.
+     */
+    private List<Map<String, Object>> missingRequired(String variablesJson, Map<String, Object> userInput) {
+        List<Map<String, Object>> variables = RecipeJsonUtil.parseSteps(variablesJson);
+        List<Map<String, Object>> missing = new java.util.ArrayList<>();
+        for (Map<String, Object> variable : variables) {
+            if (!isRequired(variable)) {
+                continue;
+            }
+            String key = variableKey(variable);
+            if (key == null) {
+                continue;
+            }
+            Object value = userInput == null ? null : userInput.get(key);
+            if (isBlankValue(value)) {
+                missing.add(variable);
+            }
+        }
+        return missing;
+    }
+
+    /** 변수 정의에서 매칭 키를 얻는다. {@code key} 우선, 없으면 {@code name}(seedUserInput과 정합). */
+    private String variableKey(Map<String, Object> variable) {
+        Object key = variable.get("key");
+        if (key == null) {
+            key = variable.get("name");
+        }
+        return key == null ? null : key.toString();
+    }
+
+    /** required=true 여부. Boolean/문자열("true") 모두 허용. 값 없으면 false. */
+    private boolean isRequired(Map<String, Object> variable) {
+        Object required = variable.get("required");
+        if (required instanceof Boolean b) {
+            return b;
+        }
+        return required != null && "true".equalsIgnoreCase(required.toString());
+    }
+
+    /** 값이 미충족(null / 빈 문자열 / 공백만)인지 판정. 숫자/불리언/컬렉션 등은 채워진 것으로 본다. */
+    private boolean isBlankValue(Object value) {
+        if (value == null) {
+            return true;
+        }
+        if (value instanceof CharSequence cs) {
+            return cs.toString().trim().isEmpty();
+        }
+        return false;
+    }
+
+    /**
+     * 실행 context JSON의 {@code userInput} 하위 맵에 {@code values}를 덮어쓰기 병합한 뒤 JSON 문자열로
+     * 돌려준다. context는 {@code {"userInput":{...}, ...extract}} 구조이므로 최상위가 아니라
+     * userInput 하위에만 병합한다(다른 최상위 추출값은 보존). userInput이 없으면 새로 만든다.
+     */
+    @SuppressWarnings("unchecked")
+    private String mergeUserInput(String currentContextJson, Map<String, Object> values) {
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        Object current = RecipeJsonUtil.toObject(currentContextJson);
+        if (current instanceof Map<?, ?> currentMap) {
+            context.putAll((Map<String, Object>) currentMap);
+        }
+        Map<String, Object> userInput = new java.util.LinkedHashMap<>();
+        Object existing = context.get("userInput");
+        if (existing instanceof Map<?, ?> existingMap) {
+            userInput.putAll((Map<String, Object>) existingMap);
+        }
+        if (values != null) {
+            userInput.putAll(values); // 제출값이 기존 userInput을 덮어씀
+        }
+        context.put("userInput", userInput);
+        return RecipeJsonUtil.toJsonString(context);
+    }
+
+    /** context JSON에서 현재 {@code userInput} 하위 맵을 꺼낸다. 없으면 빈 맵. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> currentUserInput(String contextJson) {
+        Object current = RecipeJsonUtil.toObject(contextJson);
+        if (current instanceof Map<?, ?> currentMap) {
+            Object userInput = ((Map<String, Object>) currentMap).get("userInput");
+            if (userInput instanceof Map<?, ?> userInputMap) {
+                return (Map<String, Object>) userInputMap;
+            }
+        }
+        return Map.of();
+    }
+
+    /**
+     * 실행 시작 시점의 레시피 스냅샷(EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON)에서 {@code variablesJson}을
+     * 꺼낸다. 스냅샷의 variablesJson은 (snapshotOf에서) JSON 문자열로 저장돼 있어 문자열로 돌려준다.
+     * 스냅샷/필드가 없으면 null(→ 미충족 없음으로 취급).
+     */
+    private String snapshotVariablesJson(Long executionId) {
+        List<ExecutionRecipe> recipes =
+                executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
+        if (recipes.isEmpty()) {
+            return null;
+        }
+        Object snapshot = RecipeJsonUtil.toObject(recipes.get(0).getRecipeSnapshotJson());
+        if (snapshot instanceof Map<?, ?> snapshotMap) {
+            Object variablesJson = snapshotMap.get("variablesJson");
+            return variablesJson == null ? null : variablesJson.toString();
+        }
+        return null;
+    }
+
     /** 스텝 정의의 type 값을 StepType으로 매핑. 알 수 없으면 API로 간주(방어적 기본값) */
     private StepType resolveStepType(Object typeValue) {
         if (typeValue == null) {
@@ -624,8 +850,16 @@ public class ExecutionService {
         return execution.getUserId();
     }
 
-    /** 실행 상세를 응답으로 매핑 (하위 레시피/스텝 포함) */
+    /** 실행 상세를 응답으로 매핑 (하위 레시피/스텝 포함). pendingInputs 없이(빈 리스트) 매핑 */
     private ExecutionResponse toResponse(Execution execution) {
+        return toResponse(execution, List.of());
+    }
+
+    /**
+     * 실행 상세를 응답으로 매핑 (하위 레시피/스텝 + 액션 피커 미충족 변수 목록 포함).
+     * {@code pendingInputs}가 비어있지 않으면 대화방은 WAITING_INPUT 상태이며 FE가 액션 피커를 띄운다.
+     */
+    private ExecutionResponse toResponse(Execution execution, List<Map<String, Object>> pendingInputs) {
         List<ExecutionRecipe> recipes =
                 executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(execution.getId());
         List<ExecutionRecipeView> recipeViews = recipes.stream().map(this::toRecipeView).toList();
@@ -642,6 +876,7 @@ public class ExecutionService {
                 RecipeJsonUtil.toObject(execution.getContextJson()),
                 execution.getResultSummary(),
                 recipeViews,
+                pendingInputs == null ? List.of() : pendingInputs,
                 execution.getStartedAt(),
                 execution.getFinishedAt(),
                 execution.getDurationMs());

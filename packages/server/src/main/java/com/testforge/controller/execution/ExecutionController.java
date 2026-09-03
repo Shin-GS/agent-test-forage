@@ -1,6 +1,7 @@
 package com.testforge.controller.execution;
 
 import com.testforge.dto.common.CursorPage;
+import com.testforge.dto.execution.ActionPickerRespondRequest;
 import com.testforge.dto.execution.ExecutionCompleteRequest;
 import com.testforge.dto.execution.ExecutionResponse;
 import com.testforge.dto.execution.ExecutionStartRequest;
@@ -102,5 +103,15 @@ public class ExecutionController {
                                         @PathVariable Long stepId,
                                         @RequestBody StepReportRequest request) {
         return executionService.reportStep(executionId, stepId, request);
+    }
+
+    /**
+     * 액션 피커 입력 응답 (action-picker.md). 사용자가 액션 피커에서 값을 제출하면 실행 context의
+     * userInput에 병합한 뒤 대화방을 WAITING_INPUT → EXECUTING으로 전환하고 실행을 재개한다.
+     * 실행 없으면 404, 입력 대기 상태가 아니거나 필수값이 여전히 비면 400(WAITING_INPUT 유지).
+     */
+    @PostMapping("/action-picker/respond")
+    public ExecutionResponse respondActionPicker(@RequestBody ActionPickerRespondRequest request) {
+        return executionService.respondActionPicker(request);
     }
 }

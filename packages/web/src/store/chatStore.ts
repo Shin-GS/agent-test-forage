@@ -3,7 +3,7 @@
 // - SSE 이벤트를 받아 상태를 갱신하는 액션 제공 (useSse 훅에서 라우팅)
 
 import { create } from "zustand";
-import type { ConversationSummary, MessageResponse, StatusView } from "../api/types";
+import type { ActionPickerVariable, ConversationSummary, MessageResponse, StatusView } from "../api/types";
 import type { ConversationRuntimeStatus, ExecutionProgress } from "./types";
 
 // auth 미구현 — 임시 하드코딩 사용자
@@ -42,6 +42,20 @@ export interface ConversationListSnapshot {
 export interface SessionListUpdatePayload {
   op: "upsert" | "removed";
   conversation: ConversationListSnapshot;
+}
+
+/**
+ * 액션 피커 대기 상태 (실행 시작 시 필수 입력 미충족). 액션 피커 컴포넌트가 이 상태를 읽어
+ * 입력 폼을 렌더하고, 제출 시 respond API 로 값을 보낸 뒤 실행을 재개한다.
+ * execution 은 재개(runExecution)에 필요한 런타임 객체라 직렬화하지 않고 메모리에만 둔다.
+ */
+export interface ActionPickerState {
+  conversationId: number;
+  executionId: number;
+  /** pre-run 수집이면 -1 */
+  stepIndex: number;
+  variables: ActionPickerVariable[];
+  mode: string;
 }
 
 /**
@@ -87,6 +101,8 @@ interface ChatState {
   executionProgress: ExecutionProgress | null;
   /** 인증 대기 상태 (있으면 인증 안내 카드 표시) */
   authPause: AuthPauseState | null;
+  /** 액션 피커 대기 상태 (있으면 입력 폼 표시) */
+  actionPicker: ActionPickerState | null;
 
   // --- 일반 액션 ---
   setCurrentConversation: (conversationId: number | null) => void;
@@ -97,6 +113,8 @@ interface ChatState {
   clearConversation: () => void;
   /** 인증 대기 상태 설정/해제 */
   setAuthPause: (pause: AuthPauseState | null) => void;
+  /** 액션 피커 대기 상태 설정/해제 */
+  setActionPicker: (picker: ActionPickerState | null) => void;
 
   // --- SSE 라우팅 액션 ---
   onMessageNew: (message: MessageResponse) => void;
@@ -116,6 +134,7 @@ function mapRuntimeStatus(status: StatusView | string): ConversationRuntimeStatu
     case "EXECUTING":
       return "executing";
     case "INPUT_WAITING":
+    case "WAITING_INPUT":
       return "input_waiting";
     default:
       return "idle";
@@ -143,6 +162,7 @@ export const useChatStore = create<ChatState>((set) => ({
   conversationStatus: "idle",
   executionProgress: null,
   authPause: null,
+  actionPicker: null,
 
   setCurrentConversation: (conversationId) =>
     set({
@@ -151,6 +171,7 @@ export const useChatStore = create<ChatState>((set) => ({
       conversationStatus: "idle",
       executionProgress: null,
       authPause: null,
+      actionPicker: null,
     }),
 
   setConversations: (conversations) => set({ conversations }),
@@ -158,6 +179,8 @@ export const useChatStore = create<ChatState>((set) => ({
   setMessages: (messages) => set({ messages: normalizeMessages(messages) }),
 
   setAuthPause: (pause) => set({ authPause: pause }),
+
+  setActionPicker: (picker) => set({ actionPicker: picker }),
 
   addMessage: (message) =>
     set((state) => ({ messages: normalizeMessages([...state.messages, message]) })),
@@ -169,6 +192,7 @@ export const useChatStore = create<ChatState>((set) => ({
       conversationStatus: "idle",
       executionProgress: null,
       authPause: null,
+      actionPicker: null,
     }),
 
   // --- SSE 라우팅 ---
