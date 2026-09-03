@@ -202,16 +202,49 @@ public class ChatProcessor {
         return turns;
     }
 
-    /** 서비스(스펙)의 미삭제 레시피를 후보 표현으로 로드 */
+    /** 서비스(스펙)의 미삭제 레시피를 후보 표현으로 로드 (변수 스키마 요약 포함 — 발화값 추출용) */
     private List<RecipeCandidate> loadRecipes(Long apiSpecId) {
         List<Recipe> recipes = recipeRepository.search(apiSpecId, null, null, null);
         List<RecipeCandidate> candidates = new ArrayList<>();
         for (Recipe r : recipes) {
             candidates.add(new RecipeCandidate(
                     r.getId(), r.getName(), r.getDescription(),
-                    RecipeJsonUtil.parseTags(r.getTags())));
+                    RecipeJsonUtil.parseTags(r.getTags()),
+                    summarizeVariables(r.getVariablesJson())));
         }
         return candidates;
+    }
+
+    /**
+     * 레시피 변수 정의(variablesJson)를 발화값 추출용 최소 요약으로 변환한다
+     * (ai-config.md "레시피 변수 스키마 전달": key/label/type/required + 있으면 description).
+     * key는 {@code key} 우선, 없으면 {@code name}(userInput 매칭 키와 정합). 변수가 없으면 빈 리스트.
+     */
+    private List<RecipeCandidate.VariableSummary> summarizeVariables(String variablesJson) {
+        List<Map<String, Object>> variables = RecipeJsonUtil.parseSteps(variablesJson);
+        List<RecipeCandidate.VariableSummary> summaries = new ArrayList<>();
+        for (Map<String, Object> variable : variables) {
+            String key = variableKey(variable);
+            if (key == null) {
+                continue;
+            }
+            summaries.add(new RecipeCandidate.VariableSummary(
+                    key,
+                    asStringOrNull(variable.get("label")),
+                    asStringOrNull(variable.get("type")),
+                    isRequired(variable),
+                    asStringOrNull(variable.get("description"))));
+        }
+        return summaries;
+    }
+
+    /** 값을 문자열로 변환하되 null/빈이면 null (토큰 절약: 빈 필드는 생략 대상) */
+    private String asStringOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String s = value.toString().trim();
+        return s.isEmpty() ? null : s;
     }
 
     /** ACTIVE 서비스 목록을 서비스 옵션으로 로드 (미지정 대화방에서 서비스 선택용) */

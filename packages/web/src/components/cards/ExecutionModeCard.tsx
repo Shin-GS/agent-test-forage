@@ -38,6 +38,14 @@ export function ExecutionModeCard({ card }: Props) {
   const userId = useChatStore((state) => state.userId);
   const setActionPicker = useChatStore((state) => state.setActionPicker);
   const authPause = useChatStore((state) => state.authPause);
+  // 실행 흔적: 이 대화에 진행/결과(PROGRESS/RESULT) 메시지가 하나라도 있으면 이미 실행된 것으로 본다.
+  // 새로고침으로 로컬 started 가 초기화돼도 메시지 기반으로 재활성을 막는다(메시지 로드로 복원됨).
+  const hasRunMessage = useChatStore((state) =>
+    state.messages.some((m) => {
+      const t = (m.type?.code ?? "").toUpperCase();
+      return t === "PROGRESS" || t === "RESULT";
+    })
+  );
   const [running, setRunning] = useState(false);
   // 한 번 실행을 시작하면 이 카드로 다시 실행할 수 없다(중복 실행 방지).
   const [started, setStarted] = useState(false);
@@ -48,7 +56,8 @@ export function ExecutionModeCard({ card }: Props) {
   const authPending = authPause != null && authPause.conversationId === conversationId;
 
   const buttons = card.buttons?.length ? card.buttons : ["auto", "manual"];
-  const disabled = running || started || conversationId == null;
+  const alreadyRun = started || hasRunMessage;
+  const disabled = running || alreadyRun || conversationId == null;
 
   const handleRun = async (buttonCode: string) => {
     if (disabled) return;
@@ -153,7 +162,7 @@ export function ExecutionModeCard({ card }: Props) {
             </button>
           );
         })}
-        {started && (
+        {alreadyRun && (
           <span className={`badge ${authPending ? "badge--warning" : "badge--info"}`}>
             {authPending ? "인증 대기" : "실행됨"}
           </span>

@@ -168,7 +168,11 @@ public class ExecutionService {
             // 3-1) 실행 context 초기 시드: userInput = { 레시피 변수 기본값 ..., initialContext ... }
             //      (initialContext가 기본값을 덮어씀). 레시피 body의 {{userInput.x}} 참조가 시작부터
             //      값을 갖게 한다. 스텝 실행 후 누적(reportStep)은 별도로 유지된다.
-            Map<String, Object> userInput = seedUserInput(recipe.getVariablesJson(), request.initialContext());
+            // 발화 추출값(initialContext)을 레시피 변수 type에 맞게 정규화한 뒤 시드에 반영한다
+            // (ai-config.md: 추출값은 실행 시작 전 type에 맞게 파싱/정규화). 변환 실패값은 버려 미충족 처리.
+            Map<String, Object> normalizedContext =
+                    normalizeExtractedValues(recipe.getVariablesJson(), request.initialContext());
+            Map<String, Object> userInput = seedUserInput(recipe.getVariablesJson(), normalizedContext);
             savedExecution.setContextJson(RecipeJsonUtil.toJsonString(Map.of("userInput", userInput)));
             executionRepository.save(savedExecution);
 
@@ -1070,6 +1074,109 @@ public class ExecutionService {
      *
      * <p>{@code variablesJson}은 {@code [{name, type, required, default?}]} 배열 구조다.
      */
+    /**
+     * 발화 추출값({@code extractedValues})을 레시피 변수 정의의 {@code type}에 맞게 정규화한다
+     * (ai-config.md: 실행 시작 전 type에 맞게 파싱/정규화). number/integer면 숫자로, boolean이면
+     * boolean으로 변환한다(문자열 "2"→2, "true"→true). 변수 정의에 없는 키는 그대로 통과시키고,
+     * 타입이 없거나 string이면 원값을 유지한다. <b>변환 실패 값은 버린다</b>(미충족 처리) — 잘못된
+     * 타입으로 실행 body에 흘러가지 않도록 하고, 이후 액션 피커로 사용자가 보정한다.
+     *
+     * @return 정규화된 새 맵 (입력이 null/빈이면 빈 맵). 원본은 변경하지 않는다.
+     */
+    private Map<String, Object> normalizeExtractedValues(String variablesJson,
+                                                         Map<String, Object> extractedValues) {
+        if (extractedValues == null || extractedValues.isEmpty()) {
+            return Map.of();
+        }
+        // 변수 key → type 매핑 (key 우선, 없으면 name)
+        Map<String, String> typeByKey = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> variable : RecipeJsonUtil.parseSteps(variablesJson)) {
+            String key = variableKey(variable);
+            if (key == null) {
+                continue;
+            }
+            Object type = variable.get("type");
+            typeByKey.put(key, type == null ? null : type.toString());
+        }
+
+        Map<String, Object> normalized = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : extractedValues.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            String type = typeByKey.get(key);
+            if (!typeByKey.containsKey(key) || value == null) {
+                // 변수 정의에 없는 키 또는 null 값은 그대로 통과 (매칭/미충족 판단은 후단이 담당)
+                normalized.put(key, value);
+                continue;
+            }
+            Object coerced = coerceToType(value, type);
+            if (coerced == null && value != null) {
+                // 변환 실패: 값을 버려 미충족으로 처리 (액션 피커로 사용자 보정)
+                log.warn("Dropping extracted value with type mismatch: key={}, type={}, value={}",
+                        key, type, value);
+                continue;
+            }
+            normalized.put(key, coerced);
+        }
+        return normalized;
+    }
+
+    /**
+     * 단일 값을 변수 {@code type}에 맞춰 변환한다. number/integer는 숫자(Long/Double),
+     * boolean은 Boolean으로 변환한다. type이 null/그 외(string 등)면 원값을 그대로 돌려준다.
+     * 변환 불가면 null을 돌려준다(호출측이 미충족 처리).
+     */
+    private Object coerceToType(Object value, String type) {
+        if (type == null) {
+            return value;
+        }
+        String t = type.toLowerCase(Locale.ROOT);
+        switch (t) {
+            case "number":
+            case "integer":
+            case "int":
+            case "long":
+            case "float":
+            case "double": {
+                if (value instanceof Number) {
+                    return value;
+                }
+                String s = value.toString().trim();
+                if (s.isEmpty()) {
+                    return null;
+                }
+                try {
+                    if (t.equals("integer") || t.equals("int") || t.equals("long")) {
+                        return Long.parseLong(s);
+                    }
+                    // number/float/double: 정수처럼 보이면 Long, 아니면 Double
+                    if (s.matches("[+-]?\\d+")) {
+                        return Long.parseLong(s);
+                    }
+                    return Double.parseDouble(s);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            case "boolean":
+            case "bool": {
+                if (value instanceof Boolean) {
+                    return value;
+                }
+                String s = value.toString().trim().toLowerCase(Locale.ROOT);
+                if (s.equals("true")) {
+                    return Boolean.TRUE;
+                }
+                if (s.equals("false")) {
+                    return Boolean.FALSE;
+                }
+                return null;
+            }
+            default:
+                return value;
+        }
+    }
+
     private Map<String, Object> seedUserInput(String variablesJson, Map<String, Object> initialContext) {
         Map<String, Object> userInput = new java.util.LinkedHashMap<>();
         List<Map<String, Object>> variables = RecipeJsonUtil.parseSteps(variablesJson);

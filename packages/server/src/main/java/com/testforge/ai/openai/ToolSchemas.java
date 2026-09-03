@@ -68,7 +68,9 @@ public final class ToolSchemas {
                 object(Map.of(
                         "recipeId", integerProp("실행할 레시피 ID"),
                         "extractedValues", objectProp(
-                                "발화에서 명시적으로 언급된 값(키-값). 추측 금지, 언급된 것만 담는다.")),
+                                "레시피의 입력변수 목록에 정의된 key에 맞춰, 발화에 명시적으로 나온 값만 담아라. "
+                                        + "추측 금지. 예: 발화 '1번 상품 2개' + 변수 productId/quantity "
+                                        + "→ {\"productId\":1,\"quantity\":2}. 발화에 없는 값은 담지 않는다.")),
                         List.of("recipeId")));
     }
 

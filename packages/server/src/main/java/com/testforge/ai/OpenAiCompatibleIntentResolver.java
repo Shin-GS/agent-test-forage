@@ -108,9 +108,43 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
             if (r.tags() != null && !r.tags().isEmpty()) {
                 sb.append(", tags=").append(String.join("/", r.tags()));
             }
+            appendVariables(sb, r.variables());
             sb.append("\n");
         }
         return sb.toString();
+    }
+
+    /**
+     * 레시피 줄에 발화값 추출용 입력 변수 스키마를 덧붙인다 (ai-config.md "레시피 변수 스키마 전달").
+     * 예: {@code , 입력변수=[productId(상품 ID,number,필수), quantity(수량,number,선택)]}.
+     * 변수가 없으면 생략한다(토큰 절약). 각 변수는 key(label,type,필수/선택)로 최소 표기하고,
+     * 설명이 있으면 콜론 뒤에 덧붙인다.
+     */
+    private void appendVariables(StringBuilder sb, List<RecipeCandidate.VariableSummary> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        sb.append(", 입력변수=[");
+        for (int i = 0; i < variables.size(); i++) {
+            RecipeCandidate.VariableSummary v = variables.get(i);
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(v.key());
+            List<String> attrs = new java.util.ArrayList<>();
+            if (v.label() != null) {
+                attrs.add(v.label());
+            }
+            if (v.type() != null) {
+                attrs.add(v.type());
+            }
+            attrs.add(v.required() ? "필수" : "선택");
+            sb.append("(").append(String.join(",", attrs)).append(")");
+            if (v.description() != null) {
+                sb.append(": ").append(v.description());
+            }
+        }
+        sb.append("]");
     }
 
     private String renderServices(List<ServiceOption> services) {

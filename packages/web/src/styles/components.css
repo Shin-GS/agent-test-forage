@@ -91,6 +91,17 @@
   color: var(--color-text-tertiary);
 }
 
+/* number 입력의 기본 스피너(상하 화살표) 제거 — 디자인 일관성. 값 조정은 키보드/타이핑으로 */
+.input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.input[type="number"]::-webkit-outer-spin-button,
+.input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* --- Card --- */
 .card {
   background: var(--color-bg-secondary);
