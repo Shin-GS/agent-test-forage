@@ -29,6 +29,9 @@ management:
 ai-test-forge:
   # 라이브러리 등록 요청 인증용 공유 시크릿. 프로덕션은 환경변수로 주입.
   register-token: ${TESTFORGE_TOKEN:local-dev-token}
+  # FE(브라우저)에서의 채팅/실행 API 호출 허용 origin. credentials 허용을 위해 명시적 목록 사용.
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   jira:
     base-url: ${JIRA_BASE_URL:}
     api-token: ${JIRA_API_TOKEN:}   # 시크릿. .env / 환경변수로 주입

@@ -7,6 +7,13 @@ plugins {
 group = "com.testforge.demo"
 version = "0.0.1-SNAPSHOT"
 
+// 프로젝트 경로에 비ASCII 문자(Windows)가 있으면 클래스 파일 쓰기가 손상된다.
+// 빌드 출력을 ASCII 경로로 우회한다. -PasciiBuildDir 로 opt-in (일반/CI 체크아웃은 영향 없음).
+if (project.hasProperty("asciiBuildDir")) {
+    val base = project.property("asciiBuildDir").toString()
+    layout.buildDirectory.set(file("$base/demo-shop"))
+}
+
 java {
     // 메인 서버(packages/server)와 동일한 Java 25로 통일
     toolchain {

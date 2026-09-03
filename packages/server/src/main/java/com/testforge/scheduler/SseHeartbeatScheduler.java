@@ -36,8 +36,14 @@ public class SseHeartbeatScheduler {
         }
         int sent = 0;
         for (Long userId : userIds) {
-            if (registry.sendHeartbeat(userId)) {
-                sent++;
+            // 한 사용자의 전송 실패가 나머지 사용자 heartbeat와 스케줄러 스레드에 영향을 주지 않도록
+            // 개별적으로 방어한다(registry.sendHeartbeat 가 이미 예외를 삼키지만 이중 안전장치).
+            try {
+                if (registry.sendHeartbeat(userId)) {
+                    sent++;
+                }
+            } catch (Exception e) {
+                log.warn("Heartbeat error for userId={}", userId, e);
             }
         }
         log.debug("Heartbeat sent to {}/{} SSE connection(s)", sent, userIds.size());

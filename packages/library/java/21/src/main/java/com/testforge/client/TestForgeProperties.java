@@ -38,6 +38,14 @@ public class TestForgeProperties {
     /** ai-test-forge 서버 URL. 스펙 등록 대상 + CORS 자동 허용 대상 */
     private String serverUrl;
 
+    /**
+     * 레시피를 실행하는 웹 앱(FE) origin 목록. CORS 자동 허용 대상에 추가된다.
+     * 레시피 API 는 FE 브라우저가 이 서버로 직접 호출하므로, FE origin 을 허용해야 한다
+     * (serverUrl 은 BE origin 이라 FE 호출을 커버하지 못한다).
+     * 예: ["http://localhost:5173"]
+     */
+    private List<String> webOrigins = new ArrayList<>();
+
     /** 등록 보안 토큰 (X-TestForge-Token 헤더로 전송) */
     private String registerToken;
 
@@ -58,6 +66,8 @@ public class TestForgeProperties {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getServerUrl() { return serverUrl; }
     public void setServerUrl(String serverUrl) { this.serverUrl = serverUrl; }
+    public List<String> getWebOrigins() { return webOrigins; }
+    public void setWebOrigins(List<String> webOrigins) { this.webOrigins = webOrigins; }
     public String getRegisterToken() { return registerToken; }
     public void setRegisterToken(String registerToken) { this.registerToken = registerToken; }
     public String getName() { return name; }

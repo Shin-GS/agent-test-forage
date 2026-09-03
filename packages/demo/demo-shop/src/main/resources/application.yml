@@ -11,6 +11,9 @@ ai-test-forge:
   enabled: true
   # 에이전트 서버 (등록 대상). 로컬 검증 단계에서는 localhost 직접 지정.
   server-url: ${AGENT_URL:http://localhost:8080}
+  # 레시피를 실행하는 웹 앱(FE) origin. FE 브라우저가 이 서버 API 를 직접 호출하므로 CORS 허용 대상.
+  web-origins:
+    - ${WEB_ORIGIN:http://localhost:5173}
   # 등록 보안 토큰. 에이전트 서버의 TESTFORGE_TOKEN과 일치해야 함 (기본값 local-dev-token).
   register-token: ${TESTFORGE_TOKEN:local-dev-token}
   # 이 서버의 baseUrl (식별 키 + 스펙 수집 대상). 검증 단계에서는 localhost.

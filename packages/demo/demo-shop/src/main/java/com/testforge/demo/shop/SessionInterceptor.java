@@ -22,6 +22,12 @@ public class SessionInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // CORS preflight(OPTIONS)는 인증 대상이 아니다. 브라우저가 실제 요청 전에 자동으로 보내며
+        // 쿠키/인증 헤더가 없을 수 있어, 여기서 401을 주면 preflight 실패로 실제 요청이 차단된다.
+        // 스프링 CORS 처리기가 OPTIONS 응답을 만들도록 통과시킨다.
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
         String token = extractSessionToken(request);
         if (store.isValidSession(token)) {
             return true;

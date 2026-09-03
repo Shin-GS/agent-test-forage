@@ -8,7 +8,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -83,26 +82,26 @@ public class GlobalSseRegistry {
         if (emitter == null) {
             return false;
         }
+        String json;
         try {
-            String json = objectMapper.writeValueAsString(event);
+            json = objectMapper.writeValueAsString(event);
+        } catch (Exception e) {
+            // 직렬화 실패 — 발행은 best-effort이므로 로그만 남기고 연결은 유지한다.
+            log.warn("SSE event serialization failed: userId={}", userId, e);
+            return false;
+        }
+        try {
             emitter.send(SseEmitter.event()
                     .id(String.valueOf(event.eventId()))
                     .name(event.type())
                     .data(json, MediaType.APPLICATION_JSON));
             return true;
-        } catch (IOException | IllegalStateException e) {
-            // 끊긴 연결 등 → 정리 (좀비 커넥션/메모리 누수 방지)
+        } catch (Exception e) {
+            // 끊긴 연결 등 전송 실패 → 맵에서 제거만 한다(좀비 커넥션/메모리 누수 방지).
+            // AsyncRequestNotUsableException(IOException 하위) 포함 폭넓게 잡아 발행 스레드로의 전파를 막고,
+            // send 실패 후에는 complete()를 다시 부르지 않는다(재-flush 로 2차 예외 유발 방지 — sendHeartbeat 참고).
             log.debug("SSE send failed, removing emitter: userId={}, reason={}", userId, e.toString());
             removeIfCurrent(userId, emitter);
-            try {
-                emitter.complete();
-            } catch (Exception ignore) {
-                // 무시
-            }
-            return false;
-        } catch (Exception e) {
-            // 직렬화 실패 등 예상 못한 오류 — 발행은 best-effort이므로 로그만
-            log.warn("SSE send unexpected error: userId={}", userId, e);
             return false;
         }
     }
@@ -120,14 +119,13 @@ public class GlobalSseRegistry {
         try {
             emitter.send(SseEmitter.event().comment("heartbeat"));
             return true;
-        } catch (IOException | IllegalStateException e) {
+        } catch (Exception e) {
+            // 끊긴 연결에 대한 전송 실패. AsyncRequestNotUsableException(IOException 하위)뿐 아니라
+            // 컨테이너가 던지는 다른 런타임 예외까지 폭넓게 잡는다(스케줄러 스레드로의 전파 차단).
+            // send 실패 시 Spring MVC 가 이미 async 요청을 종료 처리하므로 여기서 complete()를
+            // 다시 부르지 않는다 — 재-flush 로 2차 예외(text/event-stream 응답에 JSON 변환 실패)를 유발함.
             log.debug("SSE heartbeat failed, removing emitter: userId={}, reason={}", userId, e.toString());
             removeIfCurrent(userId, emitter);
-            try {
-                emitter.complete();
-            } catch (Exception ignore) {
-                // 무시
-            }
             return false;
         }
     }
