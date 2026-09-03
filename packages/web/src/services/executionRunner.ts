@@ -127,6 +127,8 @@ export async function runExecution(
   // BE 는 execute_recipe 추출값 + 레시피 변수 기본값을 병합해 execution.context.userInput 에 넣어준다.
   const context: RunContext = options.resume?.context ?? initialContextOf(execution);
   const startIndex = options.resume?.startIndex ?? 0;
+  // 진행 블록은 BE 가 PROGRESS 메시지로 생성/갱신하고, FE 는 message_new/message_update 로만 그린다.
+  // (러너는 스텝을 실행하고 reportStep 으로 보고만 한다 — 별도 진행 상태 초기화 없음)
 
   // 스펙 상세를 조회해 baseUrl 과 endpointId→{method,path} 맵을 구성한다.
   // 레시피 스텝은 path/method 를 직접 담지 않고 endpointId 만 가지므로 이 해석이 필요하다.

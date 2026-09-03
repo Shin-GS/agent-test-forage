@@ -14,6 +14,8 @@ import java.util.Map;
  * @param userId         실행 사용자 (SSE 대상)
  * @param recipeId       실행할 레시피 ID
  * @param mode           실행 모드 (null이면 AUTO)
+ * @param messageId      실행을 촉발한 execution_mode 카드 메시지 ID (optional). 새로고침 복원 시
+ *                       진행 블록을 촉발 메시지 위치에 배치하는 데 사용된다. null이면 미연결.
  * @param initialContext 발화에서 추출한 초기 입력값. 레시피 변수 기본값을 덮어써
  *                       실행 context({@code userInput})에 시드된다. null이면 기본값만 시드.
  */
@@ -21,5 +23,6 @@ public record ExecutionStartRequest(
         Long userId,
         Long recipeId,
         ExecutionMode mode,
+        Long messageId,
         Map<String, Object> initialContext) {
 }

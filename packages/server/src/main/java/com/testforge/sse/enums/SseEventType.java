@@ -23,10 +23,8 @@ public enum SseEventType implements EnumColumn {
     SESSION_STATUS(SseCategory.SESSION, SseEventNature.SIGNAL, "대화방 상태 변경"),
     /** 대화방 목록 한 줄 갱신 (추가/삭제/이름·서비스·읽음·상태 흡수) */
     SESSION_LIST_UPDATE(SseCategory.SESSION, SseEventNature.SIGNAL, "대화방 목록 갱신"),
-    /** 레시피 실행 스텝 진행 */
-    EXECUTION_PROGRESS(SseCategory.EXECUTION, SseEventNature.SIGNAL, "실행 진행"),
-    /** 레시피 실행 종료 (결과/사유 포함) */
-    EXECUTION_COMPLETE(SseCategory.EXECUTION, SseEventNature.DATA, "실행 종료"),
+    // 실행 진행/완료는 별도 EXECUTION 이벤트가 아니라 CHAT 메시지(PROGRESS/RESULT)의 message_new/
+    // message_update로 흐른다(messaging.md). 기존 execution_progress/execution_complete는 폐지됨.
     /** 연결 유지용 heartbeat */
     HEARTBEAT(SseCategory.SYSTEM, SseEventNature.SIGNAL, "연결 유지");
 

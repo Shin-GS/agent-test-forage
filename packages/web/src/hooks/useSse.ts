@@ -23,8 +23,6 @@ const SSE_EVENT_TYPES = [
   "message_update",
   "session_status",
   "session_list_update",
-  "execution_progress",
-  "execution_complete",
 ] as const;
 
 /**
@@ -84,7 +82,9 @@ function routeEnvelope(envelope: SseEnvelope): void {
       return;
 
     case "message_update":
-      store.onMessageUpdate(data);
+      // BE 계약(MessageUpdatePayload): { sessionId, messageId, message }.
+      // 실제 갱신 대상은 래퍼 안의 message(전체 스냅샷)이므로 언랩해서 넘긴다.
+      store.onMessageUpdate(data?.message ?? data);
       return;
 
     case "session_status":
@@ -93,14 +93,6 @@ function routeEnvelope(envelope: SseEnvelope): void {
 
     case "session_list_update":
       store.onSessionListUpdate(data);
-      return;
-
-    case "execution_progress":
-      store.onExecutionProgress(data);
-      return;
-
-    case "execution_complete":
-      store.onExecutionComplete(data);
       return;
 
     default:

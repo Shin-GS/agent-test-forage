@@ -1,7 +1,7 @@
 ---
 status: draft
-last-updated: 2026-08-28
-ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel/history.md, docs/specs/pages/history-full.md
+last-updated: 2026-09-05
+ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel/history.md, docs/specs/pages/history-full.md, docs/specs/common/messaging.md
 ---
 
 # 실행/히스토리 도메인 DB 설계
@@ -37,6 +37,7 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 | `ID` | BIGINT PK | |
 | `USER_ID` | BIGINT FK | 실행한 사용자 |
 | `CONVERSATION_ID` | BIGINT FK NULL | 실행된 대화방. 대화방은 소프트 삭제라 **연결 유지**(끊지 않음). 히스토리 독립성은 USER_ID 기준 조회로 확보. NULL은 대화 없이 시작된 실행(추후) 대비 |
+| `MESSAGE_ID` | BIGINT FK NULL | **실행을 촉발한 execution_mode 카드 메시지** ID. 메시지-실행 정규 연결(어느 메시지에서 나온 실행인지). 대화 진입/새로고침 시 실행 진행 블록을 촉발 메시지 위치에 복원하는 데 사용. NULL은 대화 없이 시작된 실행(추후) 대비 |
 | `API_SPEC_ID` | BIGINT FK NULL | 대상 서비스 (참조용, 스펙 삭제 대비 NULL 허용) |
 | `TYPE` | VARCHAR(20) | SINGLE(단일 레시피) / PLAN(복합) |
 | `TITLE` | VARCHAR(200) | 표시명 (예: "회원가입 × 5", "플랜: 입사지원") |
@@ -51,7 +52,8 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 
 **인덱스**
 - `IDX_EXECUTION_USER_ID` : (`USER_ID`, `ID`) — 사용자 히스토리 커서 페이징 (필터 + id 정렬/범위를 인덱스로 커버)
-- `IDX_EXECUTION_CONVERSATION_ID` : (`CONVERSATION_ID`, `ID`) — 대화방별 실행 커서 페이징
+- `IDX_EXECUTION_CONVERSATION_ID` : (`CONVERSATION_ID`, `ID`) — 대화방별 실행 커서 페이징. 대화 진입/새로고침 복원 조회에도 사용
+- `IDX_EXECUTION_MESSAGE_ID` : (`MESSAGE_ID`) — 촉발 메시지별 실행 조회 (진행 블록 위치 매칭)
 - `IDX_EXECUTION_STARTED` : (`STARTED_AT`) — 기간 필터/표시용 (추후 기간 검색 대비)
 
 > **커서 페이징 정렬 = `ID DESC` 단독.** ID는 auto-increment PK라 생성순(=최신순)이자 유일하므로,
@@ -148,6 +150,17 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 - STOPPED/FAILED 실행에서 마지막 SUCCESS 스텝 다음부터 재개
 - CONTEXT_JSON에 누적된 변수로 이어서 실행 (서버가 내려줌)
 - 프로토타입: "처음부터 다시"만 제공, 이어서 실행은 스키마는 준비하되 구현 추후 가능
+
+---
+
+## 새로고침 복원 (메시지-실행 연결)
+
+실행 진행 블록이 FE 메모리(zustand)에만 있으면 새로고침 시 사라진다. `EXECUTION.MESSAGE_ID`로 메시지-실행을 정규 연결해 서버 저장분으로 복원한다.
+
+- **연결점**: `MESSAGE_ID` = 실행을 촉발한 execution_mode 카드 메시지. "어느 메시지에서 나온 실행인지"를 정규화(메시지-실행 1:1 기준).
+- **복원 흐름**: 대화 진입/새로고침 시 `CONVERSATION_ID`로 그 대화의 실행 목록 + 각 실행의 스텝(`EXECUTION_RECIPE`/`EXECUTION_STEP`)을 조회 → 각 실행을 **촉발 메시지(`MESSAGE_ID`) 위치**에 배치 → 진행 블록을 손실 없이 복원.
+- **이후 갱신은 SSE**: 복원 이후의 진행/완료는 `execution_progress`/`execution_complete`로 갱신한다. (messaging.md)
+- RUNNING 상태로 남은 실행의 처리(브라우저 종료로 중단된 실행)는 [recipe/execution.md 브라우저 새로고침](../specs/recipe/execution.md#브라우저-새로고침--탭-닫기) 정책을 따른다.
 
 ---
 

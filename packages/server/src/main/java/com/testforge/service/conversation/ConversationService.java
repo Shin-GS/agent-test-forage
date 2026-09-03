@@ -11,6 +11,7 @@ import com.testforge.dto.conversation.ConversationStartResponse;
 import com.testforge.dto.conversation.ConversationSummaryResponse;
 import com.testforge.dto.conversation.MessageResponse;
 import com.testforge.dto.conversation.MessageSendRequest;
+import com.testforge.dto.conversation.MessageUpdatePayload;
 import com.testforge.dto.conversation.MessageSendResponse;
 import com.testforge.dto.conversation.SessionListUpdatePayload;
 import com.testforge.dto.conversation.SessionStatusPayload;
@@ -420,6 +421,134 @@ public class ConversationService {
     }
 
     /**
+     * 실행 진행 블록(PROGRESS) 메시지를 생성하고 {@code message_new} + {@code session_list_update}를
+     * 발행한다(messaging.md 실행 SSE 흐름 — 실행 시작). {@code payloadJson}이 진실(kind/schemaVersion/
+     * executionId/recipeName/status/steps)이고, {@code content}는 표시용 진행 요약(파생물)이다.
+     *
+     * <p>실행 오케스트레이션({@link ExecutionService})이 호출한다. 여기서는 <b>메시지 저장/발행만</b>
+     * 담당하고 대화방 상태 전이(executing)와 락은 호출측이 관리한다. 호출측 트랜잭션에 참여해
+     * execution 레코드와 원자적으로 커밋되도록 기본 전파(REQUIRED)다. 대화방이 없으면(삭제) no-op으로
+     * {@code null}을 반환한다.
+     *
+     * @param conversationId 진행 블록을 남길 대화방
+     * @param payloadJson    진행 payload (JSON 문자열, kind:"progress")
+     * @param content        진행 요약 본문 (Markdown, 표시용)
+     * @return 생성된 PROGRESS 메시지 ID (EXECUTION.MESSAGE_ID로 저장), 대화방 없으면 null
+     */
+    @Transactional
+    public Long createProgressMessage(Long conversationId, String payloadJson, String content) {
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElse(null);
+        if (conversation == null) {
+            log.info("Progress message skipped (conversation missing): conversationId={}", conversationId);
+            return null;
+        }
+
+        Long ownerId = conversation.getUserId();
+        long nextSeq = nextSeq(conversationId);
+        Message message = new Message(conversationId, nextSeq,
+                MessageRole.ASSISTANT, MessageType.PROGRESS, MessageStatus.COMPLETED);
+        message.setContent(content);
+        message.setMetadataJson(payloadJson);
+        Message saved = messageRepository.save(message);
+
+        conversation.setLastMessageAt(saved.getCreatedAt());
+        Conversation savedConversation = conversationRepository.save(conversation);
+
+        MessageResponse messageView = toMessage(saved);
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+        publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
+                SessionListUpdatePayload.upsert(toListSnapshot(savedConversation)));
+
+        log.info("Progress message created: conversationId={}, messageId={}", conversationId, saved.getId());
+        return saved.getId();
+    }
+
+    /**
+     * 기존 진행 블록(PROGRESS) 메시지의 payload/content를 갱신하고 {@code message_update}를 발행한다
+     * (messaging.md 실행 SSE 흐름 — 스텝 보고/완료). 같은 메시지를 갱신하므로 새 메시지를 쌓지 않는다.
+     * payloadJson이 진실이고 content는 표시용 요약이다.
+     *
+     * <p>메시지가 없거나(삭제/미존재) PROGRESS 타입이 아니면 no-op. 호출측 트랜잭션에 참여한다(REQUIRED).
+     *
+     * @param conversationId 대화방 ID (발행 대상/소유자 도출)
+     * @param messageId      갱신 대상 PROGRESS 메시지 ID
+     * @param payloadJson    갱신된 진행 payload (JSON 문자열)
+     * @param content        갱신된 진행 요약 본문 (Markdown)
+     */
+    @Transactional
+    public void updateProgressMessage(Long conversationId, Long messageId, String payloadJson, String content) {
+        if (messageId == null) {
+            return;
+        }
+        Message message = messageRepository.findById(messageId).orElse(null);
+        if (message == null || message.getType() != MessageType.PROGRESS) {
+            log.info("Progress message update skipped (missing or not PROGRESS): messageId={}", messageId);
+            return;
+        }
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElse(null);
+        if (conversation == null) {
+            return;
+        }
+
+        message.setContent(content);
+        message.setMetadataJson(payloadJson);
+        Message saved = messageRepository.save(message);
+
+        Long ownerId = conversation.getUserId();
+        MessageResponse messageView = toMessage(saved);
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_UPDATE, conversationId,
+                MessageUpdatePayload.of(conversationId, messageView));
+
+        log.info("Progress message updated: conversationId={}, messageId={}", conversationId, messageId);
+    }
+
+    /**
+     * 실행 결과 블록(RESULT) 메시지를 생성하고 {@code message_new} + {@code session_list_update}를
+     * 발행한다(messaging.md 실행 SSE 흐름 — 완료). PROGRESS와 별개의 MESSAGE다. {@code payloadJson}이
+     * 진실(kind/schemaVersion/executionId/recipeName/resultValues/template?)이고 {@code content}는
+     * 표시용 결과 요약(템플릿 치환 결과 등, 파생물)이다.
+     *
+     * <p>여기서는 <b>메시지 저장/발행만</b> 담당하고, 대화방 상태 전이(idle)와 락 해제는 호출측이 이어서
+     * 수행한다(중복 종결 방지). 호출측 트랜잭션에 참여한다(REQUIRED). 대화방이 없거나 content가 비면 no-op.
+     *
+     * @param conversationId 결과를 남길 대화방
+     * @param payloadJson    결과 payload (JSON 문자열, kind:"result")
+     * @param content        결과 요약 본문 (Markdown, 표시용)
+     */
+    @Transactional
+    public void createResultMessage(Long conversationId, String payloadJson, String content) {
+        if (conversationId == null || content == null || content.isBlank()) {
+            return;
+        }
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElse(null);
+        if (conversation == null) {
+            log.info("Result message skipped (conversation missing): conversationId={}", conversationId);
+            return;
+        }
+
+        Long ownerId = conversation.getUserId();
+        long nextSeq = nextSeq(conversationId);
+        Message message = new Message(conversationId, nextSeq,
+                MessageRole.ASSISTANT, MessageType.RESULT, MessageStatus.COMPLETED);
+        message.setContent(content);
+        message.setMetadataJson(payloadJson);
+        Message saved = messageRepository.save(message);
+
+        conversation.setLastMessageAt(saved.getCreatedAt());
+        Conversation savedConversation = conversationRepository.save(conversation);
+
+        MessageResponse messageView = toMessage(saved);
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+        publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
+                SessionListUpdatePayload.upsert(toListSnapshot(savedConversation)));
+
+        log.info("Result message created: conversationId={}, messageId={}", conversationId, saved.getId());
+    }
+
+    /**
      * 대화방 처리 상태를 전이하고 {@code session_status} SSE를 발행한다(모든 탭 동기화).
      * 상태 변경이 실제로 있을 때만(같은 값이면 no-op) 저장/발행한다. 커밋 후 발행하여 확정 데이터로 내보낸다.
      *
@@ -451,7 +580,7 @@ public class ConversationService {
      * 이미 IDLE이면 <b>멱등 no-op</b>(에러 아님). 취소/중지는 반드시 API 경유이며 상태 해제는 모든 탭에 전파된다.
      *
      * <p>취소(CANCELLED)와 중지(STOPPED)는 상태로 구분해 히스토리에 남긴다("무슨 일이 있었나"의 기록).
-     * 재개 로직의 세분은 재개 기능 도입 시 다룬다. execution 종료(상태 + 요약 + {@code execution_complete})는
+     * 재개 로직의 세분은 재개 기능 도입 시 다룬다. execution 종료(상태 + 요약 + PROGRESS 메시지 확정)는
      * ExecutionService가, 대화방 상태/락/안내 메시지는 releaseToIdle이 담당한다.
      */
     @Transactional
@@ -464,7 +593,7 @@ public class ConversationService {
     /**
      * 실행 [중지]. 대화방의 RUNNING 실행을 <b>STOPPED</b>로 종료(현재까지 진행분 보존)한 뒤,
      * 대화방을 IDLE로 되돌리고 락을 해제한다. 이미 IDLE이면 <b>멱등 no-op</b>.
-     * execution 종료(EXECUTION 상태 + 요약 + {@code execution_complete})는 ExecutionService가, 대화방
+     * execution 종료(EXECUTION 상태 + 요약 + PROGRESS 메시지 확정)는 ExecutionService가, 대화방
      * 상태/락/안내 메시지는 releaseToIdle이 담당한다. 취소(CANCELLED)와 구분해 히스토리에 남긴다.
      */
     @Transactional

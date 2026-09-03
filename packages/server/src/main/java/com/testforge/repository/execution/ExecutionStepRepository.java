@@ -9,4 +9,7 @@ public interface ExecutionStepRepository extends JpaRepository<ExecutionStep, Lo
 
     /** 레시피 실행에 속한 스텝 목록 (스텝 순서대로) */
     List<ExecutionStep> findByExecutionRecipeIdOrderByStepIndexAsc(Long executionRecipeId);
+
+    /** 레시피 실행에 속한 스텝 개수 (SSE totalSteps 산출용) */
+    long countByExecutionRecipeId(Long executionRecipeId);
 }

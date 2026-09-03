@@ -51,4 +51,11 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
     List<Execution> findByConversationIdByCursor(@Param("conversationId") Long conversationId,
                                                  @Param("cursorId") Long cursorId,
                                                  Pageable pageable);
+
+    /**
+     * 특정 대화방의 전체 실행 목록 (id 오름차순). 대화 진입/새로고침 시 실행 진행 블록 복원 전용
+     * (db/execution.md 새로고침 복원). 커서 페이징(요약 목록)과 달리 그 대화의 실행을 <b>모두</b>
+     * 촉발 메시지 순서대로 재구성해야 하므로 상태 무관(RUNNING/종료 포함) 전체를 오름차순으로 돌려준다.
+     */
+    List<Execution> findByConversationIdOrderByIdAsc(Long conversationId);
 }

@@ -137,6 +137,17 @@ function App() {
     [currentConversationId, userId, setCurrentConversation, addMessage, loadConversations]
   );
 
+  // 실행 중지: 현재 대화방의 진행 실행을 서버에 중지 요청한다(상태/진행은 SSE 로 반영).
+  const handleStop = useCallback(async () => {
+    if (currentConversationId == null) return;
+    setError(null);
+    try {
+      await conversationsApi.stop(currentConversationId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "실행 중지에 실패했습니다");
+    }
+  }, [currentConversationId]);
+
   const isOnboarding = currentConversationId == null && messages.length === 0;
 
   return (
@@ -186,7 +197,7 @@ function App() {
             <MessageList messages={messages} />
           )}
 
-          <ChatInput status={conversationStatus} onSend={handleSend} />
+          <ChatInput status={conversationStatus} onSend={handleSend} onStop={handleStop} />
         </div>
       </div>
     </div>

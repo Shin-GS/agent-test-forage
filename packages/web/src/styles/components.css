@@ -257,6 +257,11 @@
 .progress-steps__item--done { color: var(--color-success); }
 .progress-steps__item--active { color: var(--color-warning); }
 .progress-steps__item--pending { color: var(--color-text-tertiary); }
+.progress-steps__item--failed { color: var(--color-error); }
+
+.progress-steps__icon { flex-shrink: 0; }
+.progress-steps__label { color: var(--color-text-primary); }
+.progress-steps__summary { color: var(--color-text-tertiary); font-size: var(--font-size-xs); }
 
 /* --- Quick Action Button --- */
 .quick-action {

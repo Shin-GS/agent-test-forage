@@ -26,11 +26,7 @@ class SseEventTypeTest {
         assertThat(SseEventType.SESSION_LIST_UPDATE.getCategory()).isEqualTo(SseCategory.SESSION);
         assertThat(SseEventType.SESSION_LIST_UPDATE.getNature()).isEqualTo(SseEventNature.SIGNAL);
 
-        assertThat(SseEventType.EXECUTION_PROGRESS.getCategory()).isEqualTo(SseCategory.EXECUTION);
-        assertThat(SseEventType.EXECUTION_PROGRESS.getNature()).isEqualTo(SseEventNature.SIGNAL);
-
-        assertThat(SseEventType.EXECUTION_COMPLETE.getCategory()).isEqualTo(SseCategory.EXECUTION);
-        assertThat(SseEventType.EXECUTION_COMPLETE.getNature()).isEqualTo(SseEventNature.DATA);
+        // 실행 진행/완료는 CHAT 메시지(PROGRESS/RESULT)로 흐른다. execution_progress/complete는 폐지됨.
 
         assertThat(SseEventType.HEARTBEAT.getCategory()).isEqualTo(SseCategory.SYSTEM);
         assertThat(SseEventType.HEARTBEAT.getNature()).isEqualTo(SseEventNature.SIGNAL);
@@ -39,8 +35,8 @@ class SseEventTypeTest {
     @Test
     void wireName_isLowerSnakeCase() {
         assertThat(SseEventType.MESSAGE_NEW.wireName()).isEqualTo("message_new");
+        assertThat(SseEventType.MESSAGE_UPDATE.wireName()).isEqualTo("message_update");
         assertThat(SseEventType.SESSION_LIST_UPDATE.wireName()).isEqualTo("session_list_update");
-        assertThat(SseEventType.EXECUTION_COMPLETE.wireName()).isEqualTo("execution_complete");
         assertThat(SseEventType.HEARTBEAT.wireName()).isEqualTo("heartbeat");
     }
 

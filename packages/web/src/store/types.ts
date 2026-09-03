@@ -7,17 +7,6 @@ export type ConversationRuntimeStatus =
   | "executing"
   | "input_waiting";
 
-/**
- * 실행 진행 상태 (SSE execution_progress 로 갱신).
- * BE 계약(ExecutionProgressPayload): { sessionId, executionId, stepIndex, status, summary }
- * - status 는 문자열("STARTED" | 스텝 상태 코드)
- * - stepIndex 는 방금 보고된 스텝 인덱스(0-based, 시작 알림이면 null)
- */
-export interface ExecutionProgress {
-  sessionId: number;
-  executionId: number;
-  /** 방금 진행된 스텝 인덱스 (0-based). 시작 알림(STARTED)이면 null */
-  stepIndex: number | null;
-  status: string;
-  summary: string | null;
-}
+// 실행 진행/결과는 이제 PROGRESS/RESULT 메시지 payload(api/types.ts)로 표현하며,
+// FE 스토어에 별도 실행 상태를 두지 않는다(messages 로 흡수). 진행 스텝 타입은
+// api/types.ts 의 ProgressPayload/ProgressStepPayload 를 사용한다.

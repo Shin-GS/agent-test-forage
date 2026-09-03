@@ -67,10 +67,10 @@ export function listMessages(
   });
 }
 
-/** 대화방 읽음 처리 */
+/** 대화방 읽음 처리 (BE: PATCH /conversations/{id}/read) */
 export function markRead(conversationId: number): Promise<void> {
   return request<void>(`/conversations/${conversationId}/read`, {
-    method: "POST",
+    method: "PATCH",
   });
 }
 

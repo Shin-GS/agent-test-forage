@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-08-27
+last-updated: 2026-09-04
 ---
 
 # 레시피 작성 UI/UX
@@ -282,10 +282,13 @@ memberName   │ [스텝1 > memberName ▾]
  - 수량: [userInput.quantity]          ]
 ```
 
-- 사용 가능한 변수: ④ 결과 정의 변수 + ② 사용자 입력 변수
+- 사용 가능한 변수: **④ 결과 정의 변수 + ② 사용자 입력 변수만**
+  - 스텝의 extract 원시 변수(`{{orderId}}` 등)를 템플릿에서 **직접 참조하지 않는다.** 템플릿에서 쓰려는 값은 반드시 ④ 결과 정의에 등록해 경유한다.
+  - 예: 스텝1이 `orderId`를 extract하고 템플릿이 `{{orderId}}`를 쓰려면 → ④ 결과 정의에 `orderId`(소스: 스텝1 > orderId)를 먼저 등록해야 한다.
 - 변수는 뱃지/태그로 시각 표시, 클릭으로 삽입
-- 미입력 시 AI가 자동 요약
+- 미입력 시 AI가 자동 요약 (입력=스텝 summary + 결과 정의 값. 상세: [result-summary.md](../chat/scenarios/result-summary.md))
 - 채팅 완료 메시지 + 히스토리 요약에 사용됨
+- 실행 완료 시 발행 흐름: [execution.md 실행 완료 / 결과 요약](execution.md#실행-완료--결과-요약)
 
 ---
 

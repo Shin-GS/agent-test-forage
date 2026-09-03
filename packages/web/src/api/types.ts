@@ -185,9 +185,26 @@ export interface ExecutionResponse {
 // Card metadata (메시지 metadata 의 구조화 형태)
 // ---------------------------------------------------------------------------
 
+/** execution_mode 카드의 필요 입력값 항목 (messaging.md) */
+export interface ExecutionModeInputVariable {
+  key: string;
+  label: string;
+  /** 현재 채워진 값. 미충족이면 null */
+  value: unknown | null;
+  /** 값 출처: utterance(🗣️발화) / default(📌기본값) / none(✏️미입력) */
+  source: "utterance" | "default" | "none" | string;
+  required: boolean;
+}
+
 export interface ExecutionModeCard {
   cardType: "execution_mode";
   recipeId: number;
+  /** 실행할 레시피명 (카드 제목) */
+  recipeName?: string;
+  /** 레시피 한줄 설명 */
+  description?: string;
+  /** 실행에 필요한 값 목록 */
+  inputVariables?: ExecutionModeInputVariable[];
   buttons: string[];
   /** AI 가 발화에서 추출한 값 (실행 시작 시 initialContext 로 전달). 없으면 생략 */
   extractedValues?: Record<string, unknown>;
@@ -213,6 +230,44 @@ export type CardMeta =
   | PlanCard
   | ServiceSelectCard
   | CandidatesCard;
+
+// ---------------------------------------------------------------------------
+// 메시지 payload (message.metadata 의 구조화 형태, messaging.md payloadJson 계약)
+// content 는 표시용 요약(파생물), 아래 payload 가 진실. kind 로 판별.
+// ---------------------------------------------------------------------------
+
+/** 진행 스텝 한 줄 (PROGRESS payload) */
+export interface ProgressStepPayload {
+  index: number;
+  name: string | null;
+  /** pending | running | success | failed | skipped */
+  status: string;
+  summary: string | null;
+}
+
+/** PROGRESS 메시지 payload */
+export interface ProgressPayload {
+  kind: "progress";
+  schemaVersion: number;
+  executionId: number;
+  recipeName: string | null;
+  /** running | success | partial | failed | stopped | cancelled */
+  status: string;
+  steps: ProgressStepPayload[];
+}
+
+/** RESULT 메시지 payload */
+export interface ResultPayload {
+  kind: "result";
+  schemaVersion: number;
+  executionId: number;
+  recipeName: string | null;
+  resultValues: Record<string, unknown>;
+  template?: string;
+}
+
+/** FE 가 아는 최신 payload schemaVersion. 이보다 큰 버전이면 content 폴백 */
+export const SUPPORTED_PAYLOAD_SCHEMA_VERSION = 1;
 
 // ---------------------------------------------------------------------------
 // SSE

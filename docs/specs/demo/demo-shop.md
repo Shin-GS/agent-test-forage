@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-03
+last-updated: 2026-09-04
 ---
 
 # demo-shop (이커머스 데모 서버)
@@ -102,8 +102,12 @@ CREATED --결제--> PAID --취소--> CANCELLED
 - **사용자 입력 변수**: `productId`(숫자), `quantity`(숫자, 기본 1)
 - **스텝**:
   1. `[API]` 주문 생성 — `POST /orders` body `{productId: {{userInput.productId}}, quantity: {{userInput.quantity}}}`, extract `orderId`
-  2. `[API]` 주문 확인 — `GET /orders/{{orderId}}`
+  2. `[API]` 주문 확인 — `GET /orders/{{orderId}}`, extract `orderStatus`, `amount`
+- **④ 결과 정의**: `orderId`(스텝1 > orderId), `orderStatus`(스텝2 > status), `amount`(스텝2 > amount)
+- **⑤ 결과 메시지 템플릿**: `주문이 생성되었습니다 (주문번호: {{orderId}})`
 - **결과**: 생성된 주문의 orderId/status/amount 요약
+
+> 참조 규칙 정합: 템플릿이 쓰는 `{{orderId}}`는 스텝 extract 원시 변수가 아니라 **④ 결과 정의에 등록된 `orderId`** 를 참조한다. 템플릿은 ④ 결과 정의 + ② 사용자 입력 변수만 참조 가능(규칙: [authoring.md ⑤](../recipe/authoring.md#⑤-결과-메시지-템플릿)). 템플릿이 있으므로 완료 시 BE가 치환해 결과 메시지를 발행하고 fast AI 요약은 호출하지 않는다([execution.md 실행 완료 / 결과 요약](../recipe/execution.md#실행-완료--결과-요약)).
 
 사용자 입력 변수 스키마 예시 (레시피 메타에 선언 → 실행 시작 직전 액션 피커로 렌더링. 스키마 형식은 [action-picker.md 변수 정의 스키마](../chat/action-picker.md#변수-정의-스키마) 참조):
 

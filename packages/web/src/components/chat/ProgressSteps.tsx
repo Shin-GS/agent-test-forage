@@ -1,69 +1,74 @@
-// 레시피 실행 진행 상태 (디자인 명세 chat.html .progress-steps).
-// store.executionProgress 를 소비해 진행을 표시한다.
+// 레시피 실행 진행 블록 (디자인 명세 chat.html .progress-steps).
+// PROGRESS 메시지 payload 를 소비해 스텝을 리스트로 표시한다.
 //
-// BE 계약(ExecutionProgressPayload): { sessionId, executionId, stepIndex, status, summary }
-// - execution_progress: status="STARTED"(시작) 또는 스텝 상태 코드 + stepIndex(0-based)
-// - execution_complete 는 store 에서 outcome.code 를 status 로 정규화해 전달
-// payload 에 전체 스텝 수/스텝별 상세가 없으므로, 헤더 + 방금 보고된 스텝 한 줄 + 요약으로 표시한다.
-// (스텝별 상세가 payload 에 추가되면 이 컴포넌트를 확장)
+// 원리(메시지 기반):
+// - 진행/완료는 PROGRESS 메시지(payload.steps)로 저장되고 message_update 로 갱신된다.
+// - 새로고침/멀티탭 모두 메시지 로드/구독으로 동일 화면이 복원된다.
+// - 완료 후에도 블록은 유지된다(스텝을 완료 처리한 상태로 남김).
 
-import type { ExecutionProgress } from "../../store/types";
+import type { ProgressPayload, ProgressStepPayload } from "../../api/types";
 
 interface Props {
-  progress: ExecutionProgress;
+  payload: ProgressPayload;
 }
 
-/** status(대문자) 분류 */
-function classify(status: string): "started" | "running" | "done" | "error" {
-  const s = (status ?? "").toUpperCase();
-  if (s === "COMPLETED" || s === "SUCCESS") return "done";
-  if (s === "PARTIAL") return "done";
-  if (s === "FAILED" || s === "ERROR" || s === "STOPPED" || s === "CANCELLED") return "error";
-  if (s === "STARTED") return "started";
-  return "running";
+/** 스텝 상태 → 아이콘/모디파이어 */
+function stepView(status: string): { icon: string; mod: string } {
+  switch (status) {
+    case "success":
+      return { icon: "✅", mod: "progress-steps__item--done" };
+    case "running":
+      return { icon: "🔄", mod: "progress-steps__item--active" };
+    case "failed":
+      return { icon: "❌", mod: "progress-steps__item--failed" };
+    case "skipped":
+      return { icon: "⏭️", mod: "progress-steps__item--pending" };
+    default:
+      return { icon: "⬜", mod: "progress-steps__item--pending" };
+  }
 }
 
-export function ProgressSteps({ progress }: Props) {
-  const kind = classify(progress.status);
-  const stepNo = progress.stepIndex != null ? progress.stepIndex + 1 : null;
+/** payload.status → 완료 여부 (running 이 아니면 종료) */
+function isFinished(status: string): boolean {
+  return status !== "running";
+}
 
-  const header =
-    kind === "done"
-      ? { icon: "📋", label: "레시피 실행 완료" }
-      : kind === "error"
-        ? { icon: "❌", label: "실행 중단" }
-        : kind === "started"
-          ? { icon: "🔄", label: "레시피 실행 시작" }
-          : { icon: "🔄", label: `API 호출 중...${stepNo ? ` (Step ${stepNo})` : ""}` };
+export function ProgressSteps({ payload }: Props) {
+  const steps = payload.steps ?? [];
+  const total = steps.length;
+  const doneCount = steps.filter((s) => s.status === "success").length;
+  const finished = isFinished(payload.status);
+  const failed = payload.status === "failed";
+  const recipeName = payload.recipeName ?? "레시피";
 
-  // 방금 보고된 스텝 한 줄 (시작/완료 알림엔 스텝 라인 생략)
-  const stepLine =
-    stepNo != null && (kind === "running" || kind === "error")
-      ? {
-          cls: kind === "error" ? "" : "progress-steps__item--done",
-          icon: kind === "error" ? "❌" : "✅",
-          text: `Step ${stepNo} ${kind === "error" ? "실패" : "완료"}`,
-        }
-      : null;
+  const header = finished
+    ? failed
+      ? `📋 ${recipeName} 실행 실패 ❌`
+      : `📋 ${recipeName} 완료 ✅`
+    : `🔄 실행 중 (${doneCount}/${total})`;
 
   return (
     <div className="progress-steps">
-      <div className="progress-steps__header">
-        {header.icon} {header.label}
-      </div>
+      <div className="progress-steps__header">{header}</div>
+      {steps.map((step) => (
+        <StepRow key={step.index} step={step} />
+      ))}
+    </div>
+  );
+}
 
-      {stepLine && (
-        <div
-          className={`progress-steps__item ${stepLine.cls}`}
-          style={stepLine.icon === "❌" ? { color: "var(--color-error)" } : undefined}
-        >
-          {stepLine.icon} {stepLine.text}
-        </div>
-      )}
-
-      {progress.summary && (
-        <div style={{ marginTop: "var(--space-2)", fontSize: "var(--font-size-sm)" }}>{progress.summary}</div>
-      )}
+function StepRow({ step }: { step: ProgressStepPayload }) {
+  const { icon, mod } = stepView(step.status);
+  const label = step.name ?? `스텝 ${step.index + 1}`;
+  return (
+    <div className={`progress-steps__item ${mod}`}>
+      <span className="progress-steps__icon" aria-hidden>
+        {icon}
+      </span>
+      <span className="progress-steps__label">
+        {step.index + 1}. {label}
+      </span>
+      {step.summary && <span className="progress-steps__summary">— {step.summary}</span>}
     </div>
   );
 }

@@ -1,13 +1,13 @@
 // 메시지 리스트 (디자인 명세 chat.html .chat-messages > .messages-container).
 // store.messages(seq 오름차순)를 렌더하고 최신 메시지로 스크롤.
-// 실행 진행 상태(executionProgress)가 있으면 하단에 ProgressSteps 를 함께 노출.
+// 진행/결과 블록은 messages 안의 PROGRESS/RESULT 메시지로 MessageItem 이 렌더한다
+// (별도 store 상태 없음 — 새로고침 시 메시지 로드만으로 복원됨).
 
 import { useEffect, useRef } from "react";
 import type { MessageResponse } from "../../api/types";
 import { useChatStore } from "../../store/chatStore";
 import { ActionPicker } from "./ActionPicker";
 import { AuthRequiredCard } from "./AuthRequiredCard";
-import { ProgressSteps } from "./ProgressSteps";
 import { MessageItem } from "./MessageItem";
 
 interface Props {
@@ -16,13 +16,12 @@ interface Props {
 
 export function MessageList({ messages }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
-  const executionProgress = useChatStore((state) => state.executionProgress);
   const authPause = useChatStore((state) => state.authPause);
   const actionPicker = useChatStore((state) => state.actionPicker);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, executionProgress, authPause, actionPicker]);
+  }, [messages.length, authPause, actionPicker]);
 
   return (
     <div className="chat-messages">
@@ -30,15 +29,6 @@ export function MessageList({ messages }: Props) {
         {messages.map((message) => (
           <MessageItem key={`${message.id}-${message.seq}`} message={message} />
         ))}
-
-        {executionProgress && (
-          <div className="message message--ai">
-            <div className="message__avatar">🤖</div>
-            <div className="message__content" style={{ maxWidth: "100%", flex: 1 }}>
-              <ProgressSteps progress={executionProgress} />
-            </div>
-          </div>
-        )}
 
         {/* 인증 필요(401/403) 안내 — 있으면 표시(현재 대화방 것만) */}
         <AuthRequiredCard />

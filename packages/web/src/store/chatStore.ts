@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import type { ActionPickerVariable, ConversationSummary, MessageResponse, StatusView } from "../api/types";
-import type { ConversationRuntimeStatus, ExecutionProgress } from "./types";
+import type { ConversationRuntimeStatus } from "./types";
 
 // auth 미구현 — 임시 하드코딩 사용자
 const DEFAULT_USER_ID = 1;
@@ -58,18 +58,6 @@ export interface ActionPickerState {
   mode: string;
 }
 
-/**
- * execution_complete 이벤트 data (messaging.md):
- * { sessionId, executionId, outcome: StatusView, retriable, failedStepIndex }
- */
-export interface ExecutionCompletePayload {
-  sessionId: number;
-  executionId: number;
-  outcome: StatusView | null;
-  retriable: boolean | null;
-  failedStepIndex: number | null;
-}
-
 // ---------------------------------------------------------------------------
 // State + Actions
 // ---------------------------------------------------------------------------
@@ -98,7 +86,6 @@ interface ChatState {
   conversations: ConversationSummary[];
   messages: MessageResponse[];
   conversationStatus: ConversationRuntimeStatus;
-  executionProgress: ExecutionProgress | null;
   /** 인증 대기 상태 (있으면 인증 안내 카드 표시) */
   authPause: AuthPauseState | null;
   /** 액션 피커 대기 상태 (있으면 입력 폼 표시) */
@@ -121,8 +108,6 @@ interface ChatState {
   onMessageUpdate: (message: MessageResponse) => void;
   onSessionStatus: (payload: SessionStatusPayload) => void;
   onSessionListUpdate: (payload: SessionListUpdatePayload) => void;
-  onExecutionProgress: (progress: ExecutionProgress) => void;
-  onExecutionComplete: (payload: ExecutionCompletePayload) => void;
 }
 
 /** 런타임 상태(StatusView 또는 문자열) → FE 상태 머신 매핑 */
@@ -160,7 +145,6 @@ export const useChatStore = create<ChatState>((set) => ({
   conversations: [],
   messages: [],
   conversationStatus: "idle",
-  executionProgress: null,
   authPause: null,
   actionPicker: null,
 
@@ -169,7 +153,6 @@ export const useChatStore = create<ChatState>((set) => ({
       currentConversationId: conversationId,
       messages: [],
       conversationStatus: "idle",
-      executionProgress: null,
       authPause: null,
       actionPicker: null,
     }),
@@ -190,7 +173,6 @@ export const useChatStore = create<ChatState>((set) => ({
       currentConversationId: null,
       messages: [],
       conversationStatus: "idle",
-      executionProgress: null,
       authPause: null,
       actionPicker: null,
     }),
@@ -273,29 +255,4 @@ export const useChatStore = create<ChatState>((set) => ({
       return { conversations: next };
     }),
 
-  onExecutionProgress: (progress) =>
-    set((state) => {
-      // BE 계약: { sessionId, executionId, stepIndex, status, summary }
-      if (progress.sessionId !== state.currentConversationId) {
-        return {};
-      }
-      return { executionProgress: progress, conversationStatus: "executing" };
-    }),
-
-  onExecutionComplete: (payload) =>
-    set((state) => {
-      // BE 계약: { sessionId, executionId, outcome: StatusView, retriable, failedStepIndex }
-      if (payload.sessionId !== state.currentConversationId) {
-        return {};
-      }
-      // 완료 진행 상태로 정규화: outcome.code 를 status 로 반영해 ProgressSteps 가 완료/실패를 그린다.
-      const finished: ExecutionProgress = {
-        sessionId: payload.sessionId,
-        executionId: payload.executionId,
-        stepIndex: payload.failedStepIndex ?? null,
-        status: payload.outcome?.code ?? "COMPLETED",
-        summary: payload.outcome?.description ?? null,
-      };
-      return { executionProgress: finished, conversationStatus: "idle" };
-    }),
 }));

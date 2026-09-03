@@ -95,8 +95,8 @@ public class ExecutionController {
 
     /**
      * 스텝 결과 보고. FE가 한 스텝을 실행한 뒤 결과를 보고하면 EXECUTION_STEP을 갱신하고 context를
-     * 누적하며 execution_progress를 발행한다. 스텝이 실행에 속하지 않거나 종료된 실행이면 400,
-     * 실행/스텝 없으면 404.
+     * 누적하며 진행 블록(PROGRESS 메시지)을 message_update로 갱신한다. 스텝이 실행에 속하지 않거나
+     * 종료된 실행이면 400, 실행/스텝 없으면 404.
      */
     @PostMapping("/executions/{executionId}/steps/{stepId}")
     public ExecutionStepView reportStep(@PathVariable Long executionId,

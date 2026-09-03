@@ -244,16 +244,95 @@ public class ChatProcessor {
     }
 
     /**
-     * execution_mode 카드: 실행 진입점 ([자동 실행]/[직접 입력]).
-     * extractedValues는 발화에서 추출된 초기 입력값으로, 실행 시작 시 initialContext로 전달된다.
+     * execution_mode 카드: 실행 진입점 ([바로 실행]/[값 확인 후 실행]).
+     * "뭘 실행하는지, 어떤 값이 필요한지"를 카드에서 바로 보여준다(messaging.md execution_mode 카드 상세).
+     * extractedValues는 발화에서 추출된 초기 입력값으로, 실행 시작 시 initialContext로 전달되고
+     * 여기서는 각 입력 변수의 현재 값/출처(source) 산출에도 사용된다.
+     *
+     * <p>레시피가 없으면(삭제 등) 최소 정보(recipeId/buttons/extractedValues)만 담는다.
      */
     private String executionModeCard(Long recipeId, Map<String, Object> extractedValues) {
+        Map<String, Object> values = extractedValues == null ? Map.of() : extractedValues;
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("cardType", "execution_mode");
         meta.put("recipeId", recipeId);
+
+        Recipe recipe = recipeId == null ? null
+                : recipeRepository.findByIdAndDeletedAtIsNull(recipeId).orElse(null);
+        if (recipe != null) {
+            meta.put("recipeName", recipe.getName());
+            meta.put("description", recipe.getDescription());
+            meta.put("inputVariables", buildInputVariables(recipe.getVariablesJson(), values));
+        }
+
         meta.put("buttons", List.of("auto", "manual"));
-        meta.put("extractedValues", extractedValues == null ? Map.of() : extractedValues);
+        meta.put("extractedValues", values);
         return RecipeJsonUtil.toJsonString(meta);
+    }
+
+    /**
+     * 레시피의 사용자 입력 변수 정의(variablesJson)를 카드용 항목으로 변환한다
+     * (messaging.md inputVariables: {@code {key, label, value, source, required}}).
+     * 값/출처(source) 산출 규칙:
+     * <ul>
+     *   <li>{@code extractedValues}에 값이 있으면 → value=그 값, source={@code "utterance"}(🗣️ 발화)</li>
+     *   <li>없고 변수 정의에 {@code default}가 있으면 → value=기본값, source={@code "default"}(📌 기본값)</li>
+     *   <li>둘 다 없으면 → value=null, source={@code "none"}(✏️ 미입력)</li>
+     * </ul>
+     * 변수 매칭 키는 {@code key} 우선, 없으면 {@code name}(ExecutionService.variableKey와 정합).
+     */
+    private List<Map<String, Object>> buildInputVariables(String variablesJson,
+                                                          Map<String, Object> extractedValues) {
+        List<Map<String, Object>> variables = RecipeJsonUtil.parseSteps(variablesJson);
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Map<String, Object> variable : variables) {
+            String key = variableKey(variable);
+            if (key == null) {
+                continue;
+            }
+            Object label = variable.get("label");
+
+            Object value;
+            String source;
+            if (extractedValues != null && extractedValues.containsKey(key)
+                    && extractedValues.get(key) != null) {
+                value = extractedValues.get(key);
+                source = "utterance";
+            } else if (variable.containsKey("default") && variable.get("default") != null) {
+                value = variable.get("default");
+                source = "default";
+            } else {
+                value = null;
+                source = "none";
+            }
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("key", key);
+            item.put("label", label == null ? key : label);
+            item.put("value", value);
+            item.put("source", source);
+            item.put("required", isRequired(variable));
+            items.add(item);
+        }
+        return items;
+    }
+
+    /** 변수 정의에서 매칭 키를 얻는다. {@code key} 우선, 없으면 {@code name}(ExecutionService와 정합). */
+    private String variableKey(Map<String, Object> variable) {
+        Object key = variable.get("key");
+        if (key == null) {
+            key = variable.get("name");
+        }
+        return key == null ? null : key.toString();
+    }
+
+    /** required=true 여부. Boolean/문자열("true") 모두 허용. 값 없으면 false. */
+    private boolean isRequired(Map<String, Object> variable) {
+        Object required = variable.get("required");
+        if (required instanceof Boolean b) {
+            return b;
+        }
+        return required != null && "true".equalsIgnoreCase(required.toString());
     }
 
     /** plan 카드: 순차 실행 레시피 목록 (플랜 UI 진입) */
