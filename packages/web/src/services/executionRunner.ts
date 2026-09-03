@@ -29,6 +29,19 @@ const DEFAULT_BASE_URL = "http://localhost:9101";
 /** endpointId → { method, path } 해석 맵 (스펙 상세에서 구성) */
 type EndpointMap = Map<number, { method: string; path: string }>;
 
+/**
+ * 인증 필요(401/403) 스텝에서 던지는 오류. 실행을 "실패"가 아닌 "인증 대기"로 다루기 위해
+ * 일반 오류와 구분한다. 로그인 후 이 스텝부터 이어서 재개한다.
+ */
+export class AuthRequiredError extends Error {
+  readonly httpStatus: number;
+  constructor(httpStatus: number, message: string) {
+    super(message);
+    this.name = "AuthRequiredError";
+    this.httpStatus = httpStatus;
+  }
+}
+
 /** 스텝 상태 코드 (EXECUTION_STEP.STATUS) */
 type StepStatus = "SUCCESS" | "FAILED" | "SKIPPED";
 /** 실행 최종 상태 코드 (EXECUTION.STATUS) */
@@ -70,24 +83,49 @@ export interface RunExecutionOptions {
   mode: string;
   /** MANUAL 모드에서 사용자 입력을 수집하는 콜백. 미지정 시 window.prompt 사용 */
   collectInput?: (vars: InputVarDef[], stepName: string) => Promise<Record<string, any>>;
+  /**
+   * 재개 상태. 인증(401) 대기 후 "계속 진행" 시, 중단된 스텝 인덱스와 그때까지의 context 를
+   * 넘겨 이미 성공한 스텝을 재실행하지 않고 이어서 실행한다(중복 호출 방지 — UX).
+   */
+  resume?: { startIndex: number; context: RunContext; anySucceeded?: boolean };
 }
 
 /**
- * 실행 응답을 받아 스텝을 순차 실행한다.
- * @returns 최종 실행 상태
+ * 실행 결과.
+ * - outcome=AUTH_REQUIRED: 401/403 로 중단. auth 정보로 인증 안내 카드를 띄우고,
+ *   로그인 후 resumeState 를 넘겨 runExecution 을 다시 호출하면 그 지점부터 재개한다.
+ *   이 경우 completeExecution 을 호출하지 않는다(실행은 아직 끝나지 않음).
+ * - 그 외: 실행이 종료되어 completeExecution 까지 마쳤다.
+ */
+export interface RunResult {
+  outcome: ExecutionStatus | "AUTH_REQUIRED";
+  auth?: {
+    httpStatus: number;
+    /** 인증이 필요한 스텝 인덱스 (0-based) */
+    stepIndex: number;
+    /** 재개용 상태 */
+    resumeState: { startIndex: number; context: RunContext; anySucceeded: boolean };
+  };
+}
+
+/**
+ * 실행 응답을 받아 스텝을 순차 실행한다. 401/403 을 만나면 실행을 "실패"가 아닌
+ * "인증 대기(AUTH_REQUIRED)"로 반환하여, 로그인 후 그 스텝부터 재개할 수 있게 한다.
  */
 export async function runExecution(
   execution: ExecutionResponse,
   options: RunExecutionOptions
-): Promise<ExecutionStatus> {
+): Promise<RunResult> {
   const recipe = execution.recipes?.[0];
   if (!recipe) {
     await safeComplete(execution.id, "FAILED", "실행할 레시피가 없습니다");
-    return "FAILED";
+    return { outcome: "FAILED" };
   }
 
   const snapshotSteps = extractSnapshotSteps(recipe);
-  const context: RunContext = { userInput: {} };
+  // 재개면 이전 context 를 이어받고, 아니면 새로 시작한다.
+  const context: RunContext = options.resume?.context ?? { userInput: {} };
+  const startIndex = options.resume?.startIndex ?? 0;
 
   // 스펙 상세를 조회해 baseUrl 과 endpointId→{method,path} 맵을 구성한다.
   // 레시피 스텝은 path/method 를 직접 담지 않고 endpointId 만 가지므로 이 해석이 필요하다.
@@ -101,9 +139,9 @@ export async function runExecution(
   const baseUrl = resolveBaseUrl(execution, recipe, spec);
 
   let anyFailed = false;
-  let anySucceeded = false;
+  let anySucceeded = options.resume?.anySucceeded ?? false;
 
-  for (let index = 0; index < recipe.steps.length; index += 1) {
+  for (let index = startIndex; index < recipe.steps.length; index += 1) {
     const stepRecord = recipe.steps[index];
     const snapshot = snapshotSteps[index] ?? {};
     const stepType = normalizeStepType(stepRecord.stepType?.code ?? snapshot.type ?? "API");
@@ -140,6 +178,19 @@ export async function runExecution(
       });
       anySucceeded = true;
     } catch (error) {
+      // 인증 필요(401/403): 실행을 종료하지 않고 인증 대기로 반환한다.
+      // 이 스텝은 아직 성공/실패로 보고하지 않는다(로그인 후 이 스텝부터 재개).
+      if (error instanceof AuthRequiredError) {
+        return {
+          outcome: "AUTH_REQUIRED",
+          auth: {
+            httpStatus: error.httpStatus,
+            stepIndex: index,
+            resumeState: { startIndex: index, context, anySucceeded },
+          },
+        };
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       await safeReport(execution.id, stepRecord.id, {
         status: "FAILED",
@@ -164,7 +215,7 @@ export async function runExecution(
     buildResultSummary(recipe, finalStatus)
   );
 
-  return finalStatus;
+  return { outcome: finalStatus };
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +297,10 @@ async function executeApiStep(
     }
   }
 
+  if (response.status === 401 || response.status === 403) {
+    // 인증/권한 부족 — 실패가 아닌 인증 대기로 구분(로그인 후 이 스텝부터 재개)
+    throw new AuthRequiredError(response.status, `${method} ${path} → ${response.status}`);
+  }
   if (!response.ok) {
     throw new Error(`${method} ${path} 실패 (HTTP ${response.status})`);
   }

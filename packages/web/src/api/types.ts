@@ -97,6 +97,11 @@ export interface SpecEndpointItem {
   confirmRequired: boolean;
 }
 
+export interface SpecAuthProfileItem {
+  name: string;
+  loginPageUrl: string | null;
+}
+
 export interface SpecDetail {
   id: number;
   name: string;
@@ -104,7 +109,7 @@ export interface SpecDetail {
   status: StatusView;
   serviceInfo: unknown;
   endpoints: SpecEndpointItem[];
-  authProfiles: unknown[];
+  authProfiles: SpecAuthProfileItem[];
   diagnostics: unknown;
 }
 

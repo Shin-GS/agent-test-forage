@@ -60,6 +60,24 @@ export interface ExecutionCompletePayload {
 // State + Actions
 // ---------------------------------------------------------------------------
 
+/**
+ * 인증 대기 상태 (레시피 실행 중 401/403). 인증 안내 카드가 이 상태를 읽어
+ * 로그인 링크와 "계속 진행"(재개) 버튼을 렌더한다. execution/resumeState 는 재개에 필요한
+ * 런타임 객체라 직렬화하지 않고 메모리에만 둔다.
+ */
+export interface AuthPauseState {
+  conversationId: number;
+  httpStatus: number;
+  /** 인증이 필요한 서비스 이름 (스펙 name) */
+  serviceName: string | null;
+  /** 로그인 안내 링크 [{name, loginPageUrl}] */
+  loginProfiles: { name: string; loginPageUrl: string }[];
+  /** 재개에 필요한 실행/상태 (executionRunner 로 전달) */
+  execution: unknown;
+  resumeState: unknown;
+  mode: string;
+}
+
 interface ChatState {
   userId: number;
   currentConversationId: number | null;
@@ -67,6 +85,8 @@ interface ChatState {
   messages: MessageResponse[];
   conversationStatus: ConversationRuntimeStatus;
   executionProgress: ExecutionProgress | null;
+  /** 인증 대기 상태 (있으면 인증 안내 카드 표시) */
+  authPause: AuthPauseState | null;
 
   // --- 일반 액션 ---
   setCurrentConversation: (conversationId: number | null) => void;
@@ -75,6 +95,8 @@ interface ChatState {
   /** 낙관적 임시 메시지 추가 (음수 seq 등으로 구분) */
   addMessage: (message: MessageResponse) => void;
   clearConversation: () => void;
+  /** 인증 대기 상태 설정/해제 */
+  setAuthPause: (pause: AuthPauseState | null) => void;
 
   // --- SSE 라우팅 액션 ---
   onMessageNew: (message: MessageResponse) => void;
@@ -120,6 +142,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   conversationStatus: "idle",
   executionProgress: null,
+  authPause: null,
 
   setCurrentConversation: (conversationId) =>
     set({
@@ -127,11 +150,14 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [],
       conversationStatus: "idle",
       executionProgress: null,
+      authPause: null,
     }),
 
   setConversations: (conversations) => set({ conversations }),
 
   setMessages: (messages) => set({ messages: normalizeMessages(messages) }),
+
+  setAuthPause: (pause) => set({ authPause: pause }),
 
   addMessage: (message) =>
     set((state) => ({ messages: normalizeMessages([...state.messages, message]) })),
@@ -142,6 +168,7 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [],
       conversationStatus: "idle",
       executionProgress: null,
+      authPause: null,
     }),
 
   // --- SSE 라우팅 ---

@@ -5,6 +5,7 @@
 import { useEffect, useRef } from "react";
 import type { MessageResponse } from "../../api/types";
 import { useChatStore } from "../../store/chatStore";
+import { AuthRequiredCard } from "./AuthRequiredCard";
 import { ProgressSteps } from "./ProgressSteps";
 import { MessageItem } from "./MessageItem";
 
@@ -15,10 +16,11 @@ interface Props {
 export function MessageList({ messages }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const executionProgress = useChatStore((state) => state.executionProgress);
+  const authPause = useChatStore((state) => state.authPause);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, executionProgress]);
+  }, [messages.length, executionProgress, authPause]);
 
   return (
     <div className="chat-messages">
@@ -35,6 +37,9 @@ export function MessageList({ messages }: Props) {
             </div>
           </div>
         )}
+
+        {/* 인증 필요(401/403) 안내 — 있으면 표시(현재 대화방 것만) */}
+        <AuthRequiredCard />
 
         <div ref={endRef} />
       </div>
