@@ -4,6 +4,7 @@
 // - 데이터는 각 뷰가 React Query 로 스스로 조회(채팅 store 와 분리).
 // - 반응형: Desktop 고정 열(항상 열림), Tablet/Mobile 은 is-open 오버레이(헤더 토글 버튼).
 
+import type { CSSProperties } from "react";
 import { ExecutionDetailView } from "./detail/ExecutionDetailView";
 import { HomeView } from "./home/HomeView";
 import { HistoryView } from "./history/HistoryView";
@@ -11,7 +12,18 @@ import { usePanelStore, type PanelTab } from "./panelStore";
 import { RecipesView } from "./recipes/RecipesView";
 import type { PanelContext } from "./types";
 
-type Props = PanelContext;
+interface Props extends PanelContext {
+  /** 완전 접힘 여부 (접히면 펼치기 핸들만 노출) */
+  collapsed?: boolean;
+  /** 펼치기 핸들 클릭 */
+  onExpand?: () => void;
+  /** 접기 버튼 클릭 (탭 바 우측) */
+  onCollapse?: () => void;
+  /** 리사이즈된 폭 등 인라인 스타일 (Desktop 펼침 상태) */
+  style?: CSSProperties;
+  /** 오버레이 모드(<1200px). true 면 접기 버튼이 완전 접기 대신 오버레이만 닫는다. */
+  overlayMode?: boolean;
+}
 
 const TABS: { key: PanelTab; label: string }[] = [
   { key: "home", label: "🏠 홈" },
@@ -19,7 +31,7 @@ const TABS: { key: PanelTab; label: string }[] = [
   { key: "history", label: "🕘 히스토리" },
 ];
 
-export function SidePanel(props: Props) {
+export function SidePanel({ collapsed, onExpand, onCollapse, style, overlayMode, ...props }: Props) {
   const tab = usePanelStore((s) => s.tab);
   const open = usePanelStore((s) => s.open);
   const detailExecutionId = usePanelStore((s) => s.detailExecutionId);
@@ -29,7 +41,20 @@ export function SidePanel(props: Props) {
   const closeDetail = usePanelStore((s) => s.closeDetail);
 
   return (
-    <aside className={`side-panel${open ? " is-open" : ""}`}>
+    <aside
+      className={`side-panel${collapsed ? " hidden" : ""}${open ? " is-open" : ""}`}
+      style={collapsed ? undefined : style}
+    >
+      {/* 접힘 상태: 우측 가장자리 펼치기 핸들(◀)만 노출 */}
+      <button
+        type="button"
+        className="side-panel__reveal"
+        aria-label="패널 펼치기"
+        onClick={() => onExpand?.()}
+      >
+        ◀
+      </button>
+
       <div className="side-panel__inner">
         {/* 상단 가로 탭 (상세 드릴다운 중에는 숨겨 목록 컨텍스트 혼동 방지) */}
         {detailExecutionId == null && (
@@ -46,12 +71,18 @@ export function SidePanel(props: Props) {
                 {t.label}
               </button>
             ))}
-            {/* Tablet/Mobile 오버레이 닫기 (Desktop 에선 CSS 로 숨김) */}
+            {/* Desktop: 완전 접기(hidden). Tablet/Mobile(overlayMode): 오버레이만 닫기. */}
             <button
               type="button"
               className="side-panel__close"
-              aria-label="패널 닫기"
-              onClick={() => setOpen(false)}
+              aria-label="패널 접기"
+              onClick={() => {
+                if (overlayMode) {
+                  setOpen(false);
+                } else {
+                  onCollapse?.();
+                }
+              }}
             >
               ✕
             </button>

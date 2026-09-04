@@ -95,3 +95,23 @@ export function deleteConversation(conversationId: number): Promise<void> {
     method: "DELETE",
   });
 }
+
+/** 대화방 삭제 (deleteConversation alias — 개편 API 명칭) */
+export function remove(conversationId: number): Promise<void> {
+  return deleteConversation(conversationId);
+}
+
+export interface UpdateTitlePayload {
+  title: string;
+}
+
+/**
+ * 대화방 이름 변경 (인라인 편집 저장).
+ * BE: PATCH /conversations/{id}/title. 서버도 동일 검증(트림/길이/제어문자 제거) 수행 가정.
+ */
+export function updateTitle(conversationId: number, title: string): Promise<ConversationDetail> {
+  return request<ConversationDetail>(`/conversations/${conversationId}/title`, {
+    method: "PATCH",
+    body: { title },
+  });
+}

@@ -15,6 +15,8 @@ public record ConversationSummaryResponse(
         String title,
         // 대상 서비스(스펙) ID (미지정 시 null)
         Long apiSpecId,
+        // 서비스 표시명 (serviceDescription > name, apiSpecId가 null이면 null)
+        String serviceName,
         // 처리 상태 (code + description)
         StatusView status,
         // 마지막 메시지 시각

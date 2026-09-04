@@ -753,6 +753,109 @@
 }
 
 /* ═══════════════════════════════════
+   Sidebar Brand + New Chat + Nav (상단 고정 영역)
+   ChatGPT식 통합 사이드바: [로고+접기] / [+새 채팅] / [메뉴] / [대화 목록]
+   상단은 고정, 대화 목록만 스크롤 (.sidebar-list overflow-y:auto)
+   ═══════════════════════════════════ */
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  flex-shrink: 0;
+}
+
+.sidebar-brand__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.sidebar-brand__collapse {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-brand__collapse:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+/* [+ 새 채팅] */
+.sidebar-new-chat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidebar-new-chat:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+/* 상단 흡수 메뉴 (레시피 관리 / 설정 등 별도 페이지 라우트) */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--space-2) var(--space-2);
+  flex-shrink: 0;
+}
+
+.sidebar-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-nav__item:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.sidebar-nav__item.active {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.sidebar-nav__icon {
+  width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════
    Sidebar Items (대화 목록)
    ═══════════════════════════════════ */
 
@@ -769,6 +872,10 @@
   transition: all var(--transition-fast);
   min-height: 48px;
   position: relative;
+  width: calc(100% - var(--space-4));
+  text-align: left;
+  border: none;
+  background: none;
 }
 
 .sidebar-item:hover {
@@ -830,6 +937,60 @@
 .sidebar-item__status {
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* 더보기(⋮) 버튼 — hover 시 노출, 우측 상단 고정.
+   status 뱃지와 겹치지 않도록 hover 시 status는 숨겨 자리를 양보. */
+.sidebar-item__more {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.sidebar-item:hover .sidebar-item__more,
+.sidebar-item:focus-within .sidebar-item__more {
+  opacity: 1;
+}
+
+.sidebar-item__more:hover {
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+}
+
+/* hover 시 시간/상태는 더보기 버튼에 자리 양보 */
+.sidebar-item:hover .sidebar-item__time {
+  visibility: hidden;
+}
+
+/* 인라인 이름 편집 상태 (ChatGPT식): 항목이 input으로 전환 */
+.sidebar-item--editing {
+  background: var(--color-bg-hover);
+}
+
+.sidebar-item__edit {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
 }
 
 /* Date group in sidebar */

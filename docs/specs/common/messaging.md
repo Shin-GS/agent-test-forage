@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-10
+last-updated: 2026-09-15
 ---
 
 # 메시징 및 SSE 이벤트 정의
@@ -333,6 +333,7 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
     "id": 123,
     "title": "회원가입 테스트",
     "apiSpecId": 1,
+    "serviceName": "사람인",
     "status": "idle | ai_responding | executing | input_waiting",
     "lastMessageAt": "2026-09-01T10:00:00",
     "unread": true,
@@ -340,6 +341,8 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
   }
 }
 ```
+
+- `serviceName`: 대화방의 활성 서비스명(표시용). 대화 목록에서 **서비스 배지**로 노출한다([chat/overview.md 서비스 배지](../chat/overview.md#서비스-배지-표시)). 서비스 미지정 시 null. 목록 조회 API 응답(`ConversationSummaryResponse`)과 이 SSE 스냅샷(`ConversationListSnapshot`) **양쪽에 동일하게 포함**한다.
 
 | op | 의미 | conversation |
 |----|------|--------------|

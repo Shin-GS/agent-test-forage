@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-02
+last-updated: 2026-09-15
 ---
 
 # ai-test-forge 기획 문서
@@ -8,6 +8,8 @@ last-updated: 2026-09-02
 AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도를 전달하면 AI가 적절한 레시피를 찾아 실행하고, 결과를 보여준다.
 
 **핵심 원칙**: 모든 API 호출은 반드시 레시피를 통해서만 수행한다.
+
+**UI 원칙**: ChatGPT 스타일 레이아웃(좌측 사이드바에 네비게이션 통합) + **라이트 테마 기본**. 색상은 tokens 변수 기반이며 다크/라이트 토글은 백로그(`data-theme` 확장 여지만 유지). 상세: [chat/overview.md 레이아웃·테마](chat/overview.md#레이아웃-chatgpt-스타일).
 
 ## 호출 주체 구분
 

@@ -17,6 +17,8 @@ public record ConversationListSnapshot(
         String title,
         // 대상 서비스(스펙) ID (미지정 시 null)
         Long apiSpecId,
+        // 서비스 표시명 (serviceDescription > name, apiSpecId가 null이거나 removed면 null)
+        String serviceName,
         // 처리 상태 (code + description, removed면 null)
         StatusView status,
         // 마지막 메시지 시각
@@ -28,6 +30,6 @@ public record ConversationListSnapshot(
 
     /** removed 이벤트용: id만 채운 스냅샷. */
     public static ConversationListSnapshot removed(Long id) {
-        return new ConversationListSnapshot(id, null, null, null, null, false, null);
+        return new ConversationListSnapshot(id, null, null, null, null, null, false, null);
     }
 }

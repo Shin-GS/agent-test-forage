@@ -128,32 +128,48 @@ img {
   transition: width var(--transition-normal), min-width var(--transition-normal);
 }
 
-/* ─── Responsive: Tablet (768px ~ 1023px) ─── */
+/* ─── Responsive: 자동 접기 (확정 임계값) ───
+   우선순위: 우측 먼저, 그다음 좌측.
+   중앙 채팅 최소 폭(--chat-min-width, 480px)을 항상 보장.
+     < 1200px : 우측 패널 자동 접힘(오버레이 전환)
+     < 768px  : 좌측 사이드바도 아이콘 레일/오버레이로 전환
+   ※ 실제 오버레이 토글(.is-open) 및 상태 저장 JS는 FE 구현 범위. */
 
-@media (max-width: 1023px) {
+@media (max-width: 1199px) {
+  /* 우측 패널 먼저 접힘: 고정 열 대신 오버레이로 열림 */
+  .side-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--panel-width);
+    min-width: var(--panel-width);
+    z-index: var(--z-dropdown);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(100%);
+  }
+
+  .side-panel.is-open {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 767px) {
+  /* 좌측 사이드바도 아이콘 레일로 축소 (모바일은 공식 미지원, 깨지지 않게) */
   .app-sidebar {
     width: var(--sidebar-width-collapsed);
     min-width: var(--sidebar-width-collapsed);
   }
 
   .side-panel {
-    width: 280px;
-    min-width: 280px;
+    width: 100%;
+    min-width: 0;
   }
 }
 
-@media (max-width: 767px) {
-  /* 모바일은 공식 미지원이지만 깨지지는 않게 처리 */
-  .app-sidebar {
-    display: none;
-  }
-
-  .side-panel {
-    display: none;
-  }
-}
-
-/* ─── Sidebar Collapsed State ─── */
+/* ─── Sidebar Collapsed State (아이콘 레일) ───
+   접힘: 펼치기 아이콘 + [+ 새 채팅] 아이콘만 노출.
+   레일 상태에서는 메뉴(레시피/설정)·대화 목록에 직접 진입 불가 — 먼저 펼쳐야 함. */
 
 .app-sidebar.collapsed {
   width: var(--sidebar-width-collapsed);
@@ -163,7 +179,14 @@ img {
 .app-sidebar.collapsed .sidebar-list,
 .app-sidebar.collapsed .sidebar-header__title,
 .app-sidebar.collapsed .sidebar-item__text,
-.app-sidebar.collapsed .sidebar-item__badge {
+.app-sidebar.collapsed .sidebar-item__meta,
+.app-sidebar.collapsed .sidebar-nav__label,
+.app-sidebar.collapsed .sidebar-new-chat__label {
+  display: none;
+}
+
+/* 레일에서는 nav 메뉴 전체를 숨긴다 (펼쳐야 접근) */
+.app-sidebar.collapsed .sidebar-nav {
   display: none;
 }
 
@@ -172,18 +195,56 @@ img {
   padding: var(--space-3) var(--space-2);
 }
 
-.app-sidebar.collapsed .sidebar-footer {
-  flex-direction: column;
-  gap: var(--space-2);
+/* 레일에서 [+ 새 채팅]은 정사각 아이콘 버튼으로 */
+.app-sidebar.collapsed .sidebar-new-chat {
+  justify-content: center;
+  padding: var(--space-2);
 }
 
-/* ─── Side Panel Hidden State ─── */
+/* ─── Side Panel Hidden State (완전 접기 + 펼치기 핸들) ───
+   접힘 시 얇은 펼치기 핸들(◀)만 우측 가장자리에 노출. */
 
 .side-panel.hidden {
-  width: 0;
-  min-width: 0;
+  width: var(--panel-reveal-width);
+  min-width: var(--panel-reveal-width);
+  border-left: 1px solid var(--color-border);
+  overflow: visible;
+  background: var(--color-bg-secondary);
+  position: relative;
+}
+
+/* 접힘 상태에서 내부 콘텐츠 숨김, 펼치기 핸들만 표시 */
+.side-panel.hidden > *:not(.side-panel__reveal) {
+  display: none;
+}
+
+/* 우측 가장자리 펼치기 핸들 (◀) */
+.side-panel__reveal {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: var(--panel-reveal-width);
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
   border-left: none;
-  overflow: hidden;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.side-panel__reveal:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.side-panel.hidden .side-panel__reveal {
+  display: flex;
 }
 
 /* ─── Resize Handle ─── */
@@ -212,7 +273,7 @@ img {
   right: -2px;
 }
 
-/* ─── Scrollbar (다크 테마용) ─── */
+/* ─── Scrollbar (테마 토큰 기반 — 라이트/다크 공통) ─── */
 
 ::-webkit-scrollbar {
   width: 6px;

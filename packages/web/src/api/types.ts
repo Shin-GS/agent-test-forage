@@ -48,6 +48,8 @@ export interface ConversationDetail {
   userId: number;
   title: string | null;
   apiSpecId: number | null;
+  /** 활성 서비스 표시명. 미지정(null)이면 배지 없음 */
+  serviceName?: string | null;
   status: StatusView;
   lastMessageAt: string | null;
   lastReadAt: string | null;
@@ -61,6 +63,8 @@ export interface ConversationSummary {
   userId: number;
   title: string | null;
   apiSpecId: number | null;
+  /** 활성 서비스 표시명. 미지정(null)이면 배지 없음 */
+  serviceName?: string | null;
   status: StatusView;
   lastMessageAt: string | null;
   lastReadAt: string | null;

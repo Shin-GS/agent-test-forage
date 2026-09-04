@@ -1858,3 +1858,406 @@ select.input {
   justify-content: center;
   background: var(--color-bg-primary);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ChatGPT식 통합 사이드바 (개편)
+   docs/design/shared/components.css 신형 taxonomy 이식.
+   [로고+접기] / [+새 채팅] / [메뉴 nav] / [대화 목록(스크롤)]
+   상단은 고정, .sidebar-list 만 overflow-y:auto.
+   ═══════════════════════════════════════════════════════════ */
+
+/* 로고 + 접기 버튼 (최상단, 고정) */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  flex-shrink: 0;
+}
+
+.sidebar-brand__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sidebar-brand__collapse {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-brand__collapse:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.sidebar-brand__collapse:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* [+ 새 채팅] */
+.sidebar-new-chat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidebar-new-chat:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+.sidebar-new-chat:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 상단 흡수 메뉴 (레시피 관리 / 설정 등 별도 페이지 라우트) */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--space-2) var(--space-2);
+  flex-shrink: 0;
+}
+
+.sidebar-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-nav__item:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.sidebar-nav__item.active {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.sidebar-nav__icon {
+  width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 대화 목록 — 이 영역만 스크롤 */
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+  min-height: 0;
+}
+
+.sidebar-list__empty {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* ─── 대화 항목 ─── */
+.sidebar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  margin: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-height: 44px;
+  position: relative;
+  width: calc(100% - var(--space-4));
+  text-align: left;
+  border: none;
+  background: none;
+}
+
+.sidebar-item:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.sidebar-item.active {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.sidebar-item__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sidebar-item__icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+}
+
+.sidebar-item__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.sidebar-item.active .sidebar-item__text {
+  color: var(--color-accent);
+}
+
+.sidebar-item__status {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+}
+
+/* 메타 행: 서비스 배지 */
+.sidebar-item__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: calc(18px + var(--space-2));
+  font-size: 11px;
+  min-width: 0;
+}
+
+.sidebar-item__service {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 더보기(⋮) 버튼 — hover/focus 시 노출 */
+.sidebar-item__more {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.sidebar-item:hover .sidebar-item__more,
+.sidebar-item:focus-within .sidebar-item__more,
+.sidebar-item__more.is-open {
+  opacity: 1;
+}
+
+.sidebar-item__more:hover {
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+}
+
+.sidebar-item__more:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* hover 시 상태 뱃지는 더보기 버튼에 자리 양보 */
+.sidebar-item:hover .sidebar-item__status,
+.sidebar-item:focus-within .sidebar-item__status {
+  visibility: hidden;
+}
+
+/* 인라인 이름 편집 상태 (ChatGPT식) */
+.sidebar-item--editing {
+  background: var(--color-bg-hover);
+}
+
+.sidebar-item__edit {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Dropdown / Menu (대화 항목 더보기)
+   ═══════════════════════════════════════════════════════════ */
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(var(--space-2) + 26px);
+  right: var(--space-2);
+  min-width: 160px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-1);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  animation: fadeIn 0.15s ease;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: none;
+  background: none;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.dropdown-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.dropdown-item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.dropdown-item--danger {
+  color: var(--color-error);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Modal / Dialog (ConfirmModal 재사용)
+   ═══════════════════════════════════════════════════════════ */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-overlay);
+  z-index: var(--z-modal-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  width: 90%;
+  max-width: 440px;
+  max-height: 80vh;
+  overflow-y: auto;
+  z-index: var(--z-modal);
+  box-shadow: var(--shadow-xl);
+  animation: scaleIn 0.2s ease;
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.modal__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.modal__body {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-relaxed);
+}
+
+.modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+/* fadeIn/scaleIn 애니메이션은 아래에서 보장 (없으면 정의) */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}

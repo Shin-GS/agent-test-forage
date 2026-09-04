@@ -22,9 +22,11 @@ import com.testforge.entity.conversation.enums.MessageRole;
 import com.testforge.entity.conversation.enums.MessageStatus;
 import com.testforge.entity.conversation.enums.MessageType;
 import com.testforge.entity.execution.enums.ExecutionStatus;
+import com.testforge.entity.spec.ApiSpec;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
+import com.testforge.repository.spec.ApiSpecRepository;
 import com.testforge.service.execution.ExecutionService;
 import com.testforge.sse.SseEventPublisher;
 import com.testforge.sse.enums.SseEventType;
@@ -40,7 +42,12 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 대화방/메시지 CRUD + 메시지 접수(저장) 로직.
@@ -67,19 +74,22 @@ public class ConversationService {
     private final ConversationLock conversationLock;
     private final ApplicationEventPublisher eventPublisher;
     private final ExecutionService executionService;
+    private final ApiSpecRepository apiSpecRepository;
 
     public ConversationService(ConversationRepository conversationRepository,
                                MessageRepository messageRepository,
                                SseEventPublisher ssePublisher,
                                ConversationLock conversationLock,
                                ApplicationEventPublisher eventPublisher,
-                               ExecutionService executionService) {
+                               ExecutionService executionService,
+                               ApiSpecRepository apiSpecRepository) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.ssePublisher = ssePublisher;
         this.conversationLock = conversationLock;
         this.eventPublisher = eventPublisher;
         this.executionService = executionService;
+        this.apiSpecRepository = apiSpecRepository;
     }
 
     /**
@@ -156,10 +166,12 @@ public class ConversationService {
         if (userId == null) {
             throw ApiException.invalidRequest("userId is required");
         }
-        return conversationRepository
-                .findTop200ByUserIdAndDeletedAtIsNullOrderByLastMessageAtDesc(userId)
-                .stream()
-                .map(this::toSummary)
+        List<Conversation> conversations = conversationRepository
+                .findTop200ByUserIdAndDeletedAtIsNullOrderByLastMessageAtDesc(userId);
+        // apiSpecId → 서비스 표시명 맵을 일괄 조회로 한 번에 만든다 (행별 개별 조회 N+1 방지).
+        Map<Long, String> serviceNames = resolveServiceNames(conversations);
+        return conversations.stream()
+                .map(conversation -> toSummary(conversation, serviceNames))
                 .toList();
     }
 
@@ -170,14 +182,36 @@ public class ConversationService {
         return toDetail(conversation);
     }
 
-    /** 대화방 이름 변경. 없거나 삭제/타인 소유면 404, 빈 제목이면 400. */
+    /** 대화방 제목 최대 길이 (코드포인트 기준, 확정 규칙) */
+    private static final int TITLE_MAX_LENGTH = 50;
+
+    /**
+     * 대화방 이름 변경. 없거나 삭제/타인 소유면 404. 제목 검증(확정 규칙):
+     * <ol>
+     *   <li>제어문자(\p{Cntrl}: 개행/탭 등) 제거 후 트림</li>
+     *   <li>정제 후 빈 문자열이면 400(INVALID_REQUEST)</li>
+     *   <li>길이 1~50자(코드포인트 기준) 초과면 400 (자르지 않고 명확히 거절)</li>
+     * </ol>
+     * 정제된 제목을 저장한다.
+     */
     @Transactional
     public ConversationDetailResponse updateTitle(Long id, Long requesterId, String title) {
-        if (title == null || title.isBlank()) {
+        if (title == null) {
             throw ApiException.invalidRequest("title is required");
         }
+        // 제어문자 제거 후 트림 (개행/탭 등이 제목에 섞이는 것을 방지)
+        String sanitized = title.replaceAll("\\p{Cntrl}", "").trim();
+        if (sanitized.isEmpty()) {
+            throw ApiException.invalidRequest("title is required");
+        }
+        // 길이는 코드포인트 기준으로 계산 (이모지/보조 평면 문자를 1자로 셈)
+        int length = sanitized.codePointCount(0, sanitized.length());
+        if (length > TITLE_MAX_LENGTH) {
+            throw ApiException.invalidRequest(
+                    "title must be at most " + TITLE_MAX_LENGTH + " characters");
+        }
         Conversation conversation = getOwnedOrThrow(id, requesterId);
-        conversation.setTitle(title.trim());
+        conversation.setTitle(sanitized);
         Conversation saved = conversationRepository.save(conversation);
 
         // SSE: 목록 한 줄 갱신 (이름 변경 흡수)
@@ -709,17 +743,62 @@ public class ConversationService {
         return lastReadAt == null || lastMessageAt.isAfter(lastReadAt);
     }
 
-    /** 목록 행 매핑 */
-    private ConversationSummaryResponse toSummary(Conversation conversation) {
+    /** 목록 행 매핑. serviceName은 일괄 조회한 표시명 맵에서 채운다(apiSpecId null이면 null). */
+    private ConversationSummaryResponse toSummary(Conversation conversation, Map<Long, String> serviceNames) {
+        Long apiSpecId = conversation.getApiSpecId();
+        String serviceName = apiSpecId == null ? null : serviceNames.get(apiSpecId);
         return new ConversationSummaryResponse(
                 conversation.getId(),
                 conversation.getTitle(),
-                conversation.getApiSpecId(),
+                apiSpecId,
+                serviceName,
                 StatusView.of(conversation.getStatus()),
                 conversation.getLastMessageAt(),
                 conversation.getLastReadAt(),
                 isUnread(conversation),
                 conversation.getCreatedAt());
+    }
+
+    /**
+     * 대화방들의 apiSpecId를 모아 ApiSpec을 일괄 조회하고, id → 표시명 맵을 만든다(N+1 방지).
+     * 표시명 우선순위: serviceDescription(있으면) > name. apiSpecId가 null인 대화방은 제외.
+     * (ExecutionService.resolveServiceNames와 동형 패턴.)
+     */
+    private Map<Long, String> resolveServiceNames(List<Conversation> conversations) {
+        Set<Long> specIds = conversations.stream()
+                .map(Conversation::getApiSpecId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (specIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> result = new HashMap<>();
+        for (ApiSpec spec : apiSpecRepository.findByIdIn(specIds)) {
+            result.put(spec.getId(), displayName(spec));
+        }
+        return result;
+    }
+
+    /**
+     * 단건 apiSpecId → 서비스 표시명. SSE 실시간 스냅샷(toListSnapshot)처럼 대화 1건 이벤트에서 쓴다
+     * (N+1 우려 없음). apiSpecId가 null이거나 스펙이 없으면 null.
+     */
+    private String serviceNameOf(Long apiSpecId) {
+        if (apiSpecId == null) {
+            return null;
+        }
+        return apiSpecRepository.findByIdAndDeletedAtIsNull(apiSpecId)
+                .map(this::displayName)
+                .orElse(null);
+    }
+
+    /** 사람이 읽는 서비스 표시명: serviceDescription > name (ExecutionService.displayName과 동일). */
+    private String displayName(ApiSpec spec) {
+        String description = spec.getServiceDescription();
+        if (description != null && !description.isBlank()) {
+            return description;
+        }
+        return spec.getName();
     }
 
     /** 상세 매핑 */
@@ -752,12 +831,13 @@ public class ConversationService {
                 message.getCreatedAt());
     }
 
-    /** session_list_update 스냅샷 매핑 (목록 한 줄 전체) */
+    /** session_list_update 스냅샷 매핑 (목록 한 줄 전체). serviceName은 단건 조회로 채운다. */
     private ConversationListSnapshot toListSnapshot(Conversation conversation) {
         return new ConversationListSnapshot(
                 conversation.getId(),
                 conversation.getTitle(),
                 conversation.getApiSpecId(),
+                serviceNameOf(conversation.getApiSpecId()),
                 StatusView.of(conversation.getStatus()),
                 conversation.getLastMessageAt(),
                 isUnread(conversation),

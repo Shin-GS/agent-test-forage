@@ -31,6 +31,8 @@ export interface ConversationListSnapshot {
   id: number;
   title: string | null;
   apiSpecId: number | null;
+  /** 활성 서비스 표시명. 미지정(null)이면 배지 없음 (messaging.md 계약) */
+  serviceName?: string | null;
   status: StatusView | null;
   lastMessageAt: string | null;
   unread: boolean;
@@ -222,6 +224,8 @@ export const useChatStore = create<ChatState>((set) => ({
             ...existing,
             title: snap.title ?? existing.title,
             apiSpecId: snap.apiSpecId ?? existing.apiSpecId,
+            // serviceName 은 null 이 "미지정" 의미이므로 undefined 일 때만 기존값 유지
+            serviceName: snap.serviceName !== undefined ? snap.serviceName : existing.serviceName,
             status: snap.status ?? existing.status,
             lastMessageAt: snap.lastMessageAt ?? existing.lastMessageAt,
             unread: snap.unread,
@@ -233,6 +237,7 @@ export const useChatStore = create<ChatState>((set) => ({
             userId: useAuthStore.getState().user?.id ?? 0,
             title: snap.title,
             apiSpecId: snap.apiSpecId,
+            serviceName: snap.serviceName ?? null,
             status: snap.status ?? { code: "IDLE", description: "" },
             lastMessageAt: snap.lastMessageAt,
             lastReadAt: null,
@@ -243,10 +248,11 @@ export const useChatStore = create<ChatState>((set) => ({
 
       const others = state.conversations.filter((c) => c.id !== snap.id);
       const next = [merged, ...others];
-      // 최근 갱신 순 정렬(내림차순). updatedAt 없으면 뒤로.
+      // 정렬 기준: lastMessageAt 내림차순(기획 chat/overview.md). 없으면 뒤로.
+      // 읽음(markRead)만으로는 lastMessageAt 이 안 바뀌므로 순서가 유지된다.
       next.sort((a, b) => {
-        const ta = a.updatedAt ? Date.parse(a.updatedAt) : 0;
-        const tb = b.updatedAt ? Date.parse(b.updatedAt) : 0;
+        const ta = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
+        const tb = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
         return tb - ta;
       });
       return { conversations: next };

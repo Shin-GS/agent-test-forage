@@ -1,56 +1,68 @@
 /* ===========================
    AI Test Forge — Design Tokens
    ===========================
-   다크 테마 only. 모든 시각값은 여기서 관리.
+   라이트 테마 기본. 모든 시각값은 여기서 관리.
    하드코딩 금지 — 반드시 var() 사용.
+
+   테마 구조:
+   - :root                 → 라이트 팔레트(기본)
+   - [data-theme="dark"]   → 다크 팔레트 오버라이드
+   토글 UI는 아직 없으나(백로그), <html data-theme="dark"> 로 전환 가능하도록 구조만 마련.
+   비색상 토큰(타이포/간격/radius/z-index/layout)은 테마 공통이라 :root 에만 둔다.
    =========================== */
 
 :root {
-  /* ─── Colors ─── */
+  /* ─── Colors (Light, 기본) ─── */
 
   /* Background */
-  --color-bg-primary: #0f1117;
-  --color-bg-secondary: #1a1d27;
-  --color-bg-tertiary: #242834;
-  --color-bg-hover: #2d3140;
-  --color-bg-active: #363b4d;
-  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f7f8fa;
+  --color-bg-tertiary: #f0f1f4;
+  --color-bg-hover: #ececf0;
+  --color-bg-active: #e4e4ea;
+  --color-bg-overlay: rgba(17, 24, 39, 0.4);
 
   /* Text */
-  --color-text-primary: #f0f2f5;
-  --color-text-secondary: #9ca3b4;
-  --color-text-tertiary: #6b7280;
-  --color-text-inverse: #0f1117;
-  --color-text-link: #818cf8;
+  --color-text-primary: #1f2430;
+  --color-text-secondary: #5b6472;
+  --color-text-tertiary: #8b93a1;
+  --color-text-inverse: #ffffff;
+  --color-text-link: #4f46e5;
 
   /* Accent (Indigo) */
   --color-accent: #6366f1;
-  --color-accent-hover: #818cf8;
-  --color-accent-active: #4f46e5;
-  --color-accent-subtle: rgba(99, 102, 241, 0.15);
+  --color-accent-hover: #4f46e5;
+  --color-accent-active: #4338ca;
+  --color-accent-subtle: rgba(99, 102, 241, 0.10);
 
   /* Semantic */
-  --color-success: #22c55e;
-  --color-success-subtle: rgba(34, 197, 94, 0.15);
-  --color-success-border: rgba(34, 197, 94, 0.3);
-  --color-warning: #f59e0b;
-  --color-warning-subtle: rgba(245, 158, 11, 0.15);
-  --color-warning-border: rgba(245, 158, 11, 0.3);
-  --color-error: #ef4444;
-  --color-error-hover: #dc2626;
-  --color-error-subtle: rgba(239, 68, 68, 0.15);
-  --color-error-border: rgba(239, 68, 68, 0.3);
-  --color-info: #3b82f6;
-  --color-info-subtle: rgba(59, 130, 246, 0.15);
-  --color-info-border: rgba(59, 130, 246, 0.3);
+  --color-success: #16a34a;
+  --color-success-subtle: rgba(22, 163, 74, 0.12);
+  --color-success-border: rgba(22, 163, 74, 0.28);
+  --color-warning: #d97706;
+  --color-warning-subtle: rgba(217, 119, 6, 0.12);
+  --color-warning-border: rgba(217, 119, 6, 0.28);
+  --color-error: #dc2626;
+  --color-error-hover: #b91c1c;
+  --color-error-subtle: rgba(220, 38, 38, 0.10);
+  --color-error-border: rgba(220, 38, 38, 0.28);
+  --color-info: #2563eb;
+  --color-info-subtle: rgba(37, 99, 235, 0.10);
+  --color-info-border: rgba(37, 99, 235, 0.28);
 
   /* 강조/위험 버튼 위에 얹는 텍스트 (항상 흰색) */
   --color-text-on-accent: #ffffff;
 
   /* Border */
-  --color-border: #2d3140;
-  --color-border-light: #363b4d;
+  --color-border: #e3e5ea;
+  --color-border-light: #eceef2;
   --color-border-focus: var(--color-accent);
+
+  /* ─── Shadows (Light: 옅게) ─── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.10);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.12);
 
   /* ─── Typography ─── */
 
@@ -100,13 +112,6 @@
   --radius-2xl: 1.5rem;    /* 24px */
   --radius-full: 9999px;
 
-  /* ─── Shadows ─── */
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
-  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.5);
-
   /* ─── Transitions ─── */
 
   --transition-fast: 150ms ease;
@@ -127,11 +132,67 @@
   --sidebar-width: 260px;
   --sidebar-width-collapsed: 60px;
   --panel-width: 320px;
+  --panel-width-min: 240px;
+  --panel-width-max: 640px;
+  --panel-reveal-width: 20px;   /* 우측 패널 접힘 시 펼치기 핸들 폭 */
   --header-height: 56px;
   --input-area-min-height: 60px;
+  --chat-min-width: 480px;
 
   /* ─── Breakpoints (참조용, CSS에서는 media query로 사용) ─── */
-  /* Tablet: 768px ~ 1023px */
-  /* Desktop: 1024px+ */
-  /* Wide: 1440px+ */
+  /* < 768px  : 좌측 사이드바도 레일/오버레이 (Mobile) */
+  /* < 1200px : 우측 패널 자동 접힘/오버레이 (Tablet) */
+  /* >= 1200px: 3열 고정 (Desktop) */
+}
+
+/* ===========================
+   Dark theme override
+   <html data-theme="dark"> 일 때만 적용. 색상/그림자만 재정의.
+   =========================== */
+[data-theme="dark"] {
+  /* Background */
+  --color-bg-primary: #0f1117;
+  --color-bg-secondary: #1a1d27;
+  --color-bg-tertiary: #242834;
+  --color-bg-hover: #2d3140;
+  --color-bg-active: #363b4d;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+
+  /* Text */
+  --color-text-primary: #f0f2f5;
+  --color-text-secondary: #9ca3b4;
+  --color-text-tertiary: #6b7280;
+  --color-text-inverse: #0f1117;
+  --color-text-link: #818cf8;
+
+  /* Accent (Indigo) */
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-accent-active: #4f46e5;
+  --color-accent-subtle: rgba(99, 102, 241, 0.15);
+
+  /* Semantic */
+  --color-success: #22c55e;
+  --color-success-subtle: rgba(34, 197, 94, 0.15);
+  --color-success-border: rgba(34, 197, 94, 0.3);
+  --color-warning: #f59e0b;
+  --color-warning-subtle: rgba(245, 158, 11, 0.15);
+  --color-warning-border: rgba(245, 158, 11, 0.3);
+  --color-error: #ef4444;
+  --color-error-hover: #dc2626;
+  --color-error-subtle: rgba(239, 68, 68, 0.15);
+  --color-error-border: rgba(239, 68, 68, 0.3);
+  --color-info: #3b82f6;
+  --color-info-subtle: rgba(59, 130, 246, 0.15);
+  --color-info-border: rgba(59, 130, 246, 0.3);
+
+  /* Border */
+  --color-border: #2d3140;
+  --color-border-light: #363b4d;
+
+  /* Shadows (Dark: 진하게) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.5);
 }
