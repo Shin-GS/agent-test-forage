@@ -44,6 +44,7 @@
     <button class="case-switcher__btn active" onclick="showCase('specs')">1. 스펙 관리</button>
     <button class="case-switcher__btn" onclick="showCase('spec-detail')">2. 스펙 상세</button>
     <button class="case-switcher__btn" onclick="showCase('users')">3. 사용자 관리</button>
+    <button class="case-switcher__btn" onclick="showCase('user-create')">4. 계정 생성</button>
   </div>
 
   <!-- Case 1: 스펙 관리 -->
@@ -185,11 +186,11 @@
         </div>
 
         <div style="display: flex; justify-content: flex-end; margin-bottom: var(--space-3);">
-          <button class="btn btn--primary btn--sm">+ 사용자 초대</button>
+          <button class="btn btn--primary btn--sm" onclick="showCase('user-create')">+ 사용자 추가</button>
         </div>
 
         <table class="data-table">
-          <thead><tr><th>아이디</th><th>역할</th><th>가입일</th><th>마지막 접속</th><th>상태</th><th>액션</th></tr></thead>
+          <thead><tr><th>아이디</th><th>역할</th><th>생성일</th><th>마지막 접속</th><th>상태</th><th>액션</th></tr></thead>
           <tbody>
             <tr>
               <td style="font-weight: var(--font-weight-medium);">admin</td>
@@ -208,7 +209,7 @@
               <td>
                 <div style="display: flex; gap: var(--space-1);">
                   <button class="btn btn--ghost btn--sm" title="역할 변경">🔄</button>
-                  <button class="btn btn--ghost btn--sm" title="비밀번호 초기화">🔑</button>
+                  <button class="btn btn--ghost btn--sm" title="비밀번호 변경">🔑</button>
                   <button class="btn btn--ghost btn--sm" title="비활성화" style="color: var(--color-error);">⛔</button>
                 </div>
               </td>
@@ -222,12 +223,62 @@
               <td>
                 <div style="display: flex; gap: var(--space-1);">
                   <button class="btn btn--ghost btn--sm" title="활성화" style="color: var(--color-success);">✓</button>
-                  <button class="btn btn--ghost btn--sm" title="비밀번호 초기화">🔑</button>
+                  <button class="btn btn--ghost btn--sm" title="비밀번호 변경">🔑</button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case 4: 계정 생성 -->
+  <div id="case-user-create" class="screen">
+    <div class="page">
+      <div class="page-header"><span class="page-header__title">관리자</span></div>
+      <div class="page-body">
+        <div class="admin-tabs">
+          <button class="admin-tab">🖥️ 스펙 관리</button>
+          <button class="admin-tab active">👥 사용자 관리</button>
+        </div>
+
+        <div class="spec-detail" style="max-width: 480px;">
+          <div class="spec-detail__header">
+            <span class="spec-detail__title">사용자 추가</span>
+            <button class="btn btn--ghost btn--sm" onclick="showCase('users')">← 목록</button>
+          </div>
+
+          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-4);">
+            관리자가 아이디 · 비밀번호 · 역할을 직접 지정하여 계정을 생성합니다. (셀프 회원가입 없음)
+          </p>
+
+          <form onsubmit="return false;" style="display: flex; flex-direction: column; gap: var(--space-4);">
+            <div class="form-group">
+              <label class="form-label" for="new-user-id">아이디</label>
+              <input class="input" type="text" id="new-user-id" name="new-user-id" placeholder="아이디를 입력하세요" autocomplete="off">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="new-user-password">비밀번호</label>
+              <input class="input" type="password" id="new-user-password" name="new-user-password" placeholder="비밀번호를 입력하세요" autocomplete="new-password">
+              <span class="form-hint">관리자가 지정한 비밀번호로 즉시 로그인할 수 있습니다.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="new-user-role">역할</label>
+              <select class="input" id="new-user-role" name="new-user-role">
+                <option value="user">일반 사용자</option>
+                <option value="admin">관리자</option>
+              </select>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2);">
+              <button type="button" class="btn btn--secondary btn--sm" onclick="showCase('users')">취소</button>
+              <button type="submit" class="btn btn--primary btn--sm">생성</button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   </div>

@@ -6,3 +6,4 @@ export * as conversationsApi from "./conversations";
 export * as executionsApi from "./executions";
 export * as recipesApi from "./recipes";
 export * as specsApi from "./specs";
+export * as settingsApi from "./settings";

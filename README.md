@@ -38,6 +38,8 @@ cd packages/server
 # 헬스체크: GET /api/v1/health
 ```
 
+> 셀프 회원가입은 없고 계정은 관리자가 생성한다. 관리 UI에 접근할 **최초 관리자 계정**은 MySQL 쿼리로 직접 만든다 — 방법은 [사용자 도메인 DB 설계](docs/db/user.md#최초-관리자-계정-생성) 참조.
+
 ### web
 ```bash
 cd packages/web

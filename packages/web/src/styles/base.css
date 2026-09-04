@@ -149,9 +149,16 @@ body {
   text-decoration: none;
 }
 
-.tab-nav__item:hover {
+.tab-nav__item:hover:not(:disabled) {
   color: var(--color-text-primary);
   background: var(--color-bg-hover);
+}
+
+/* 준비 중(비활성) 탭 — 클릭 불가, 흐리게 표시 */
+.tab-nav__item:disabled {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .tab-nav__item.active {

@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-08-27
+last-updated: 2026-09-02
 ---
 
 # ai-test-forge 기획 문서
@@ -34,7 +34,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 - [로그인/권한](common/auth.md)
 
 ### 공통
-- [로그인, 회원가입, 권한/역할](common/auth.md)
+- [로그인, 권한/역할](common/auth.md)
 - [에러 처리 정책](common/error-handling.md)
 - [메시징 및 SSE 이벤트](common/messaging.md) — 메시지 포맷, SSE 이벤트 타입, 연결 정책
 - [AI 프롬프트 설계](common/ai-config.md) — 모델 구성, 토큰 절약, 호출 구조

@@ -8,7 +8,7 @@ ref: docs/specs/common/auth.md
 
 ## 참조 기획
 
-- [로그인, 회원가입, 권한/역할](../../specs/common/auth.md)
+- [로그인, 권한/역할](../../specs/common/auth.md)
 
 ## 케이스 목록
 

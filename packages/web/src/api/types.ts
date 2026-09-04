@@ -342,3 +342,30 @@ export interface ExecutionSummaryView {
   finishedAt: string | null;
   durationMs: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Settings (설정 페이지 — 읽기 전용)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/settings 응답. 현재 서버에 적용된 AI/레시피 실행 설정(읽기 전용).
+ * API 키 등 시크릿은 포함하지 않는다. editable=false 이면 화면에서 편집 불가(파일로만 변경).
+ */
+export interface SettingsResponse {
+  /** AI Provider (OpenRouter 고정) */
+  provider: string;
+  /** 의도 분석/플랜/조회 판단용 모델 (예: openai/gpt-4o) */
+  reasoningModel: string;
+  /** 필드 생성/요약용 모델 (예: openai/gpt-4o-mini) */
+  fastModel: string;
+  /** AI 에게 전달하는 최근 대화 건수 */
+  historyLimit: number;
+  /** AI 호출 타임아웃 (초) */
+  aiTimeoutSeconds: number;
+  /** 개별 스텝 타임아웃 (초) */
+  stepTimeoutSeconds: number;
+  /** 레시피 전체 타임아웃 (초) */
+  recipeTimeoutSeconds: number;
+  /** 화면 편집 가능 여부 (현재 정책상 false) */
+  editable: boolean;
+}

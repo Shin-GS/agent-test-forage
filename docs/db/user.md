@@ -52,9 +52,44 @@ AI provider/모델, 대화 이력 전달 수, 스텝/전체 타임아웃 등은 
 
 ---
 
+## 계정 생성 정책
+
+- 셀프 회원가입은 없다. 계정은 **관리자가 관리자 페이지에서 직접 생성**한다 (아이디 + 비밀번호 + 역할).
+  상세는 [관리자 페이지](../specs/pages/admin.md), 정책은 [로그인/권한](../specs/common/auth.md) 참조.
+- 비밀번호는 항상 bcrypt 해시로 저장한다. 평문 저장 금지.
+
+## 최초 관리자 계정 생성
+
+관리자 페이지 자체에 접근하려면 먼저 관리자 계정이 있어야 하므로, **최초 1개 관리자 계정은 MySQL 쿼리로 직접 생성**한다 (지금은 부트스트랩 UI 없음).
+
+`PASSWORD`는 bcrypt 해시값이어야 하므로, 원하는 평문 비밀번호를 먼저 bcrypt로 인코딩한 뒤 그 결과를 INSERT 한다.
+
+### 1) bcrypt 해시 생성
+
+애플리케이션이 사용하는 것과 동일한 인코더로 해시를 만든다. 예시 방법:
+
+- 서버 부팅 셸/테스트에서 Spring Security의 `BCryptPasswordEncoder().encode("원하는비밀번호")` 결과를 복사
+- 또는 CLI: `htpasswd -bnBC 10 "" "원하는비밀번호" | tr -d ':\n' | sed 's/$2y/$2a/'` (결과 `$2a$...` 해시)
+
+> bcrypt는 salt가 포함되므로 실행할 때마다 해시 문자열이 달라지는 것이 정상이다. 아래 예시의 해시는 자리표시자이며 그대로 쓰지 말고 직접 생성한 값으로 교체한다.
+
+### 2) INSERT (파라미터 바인딩 대신 관리자 수동 실행)
+
+```sql
+INSERT INTO APP_USER
+  (USERNAME, PASSWORD, NAME, ROLE, STATUS, CREATED_AT, UPDATED_AT)
+VALUES
+  ('admin', '$2a$10$REPLACE_WITH_REAL_BCRYPT_HASH', '관리자', 'ADMIN', 'ACTIVE', NOW(), NOW());
+```
+
+- `USERNAME`은 UNIQUE 이므로 중복 시 실패한다.
+- 생성 후에는 이 관리자 계정으로 로그인하여, 이후 계정은 관리자 페이지에서 생성한다.
+
+---
+
 ## 확장 고려
 
 - OTP: `IS_OTP_ENABLED`, `OTP_SECRET` 컬럼 추가로 확장 가능 (지금 안 둠)
-- 사용자 초대(admin.md): 임시 비밀번호 발급은 APP_USER에 `MUST_CHANGE_PASSWORD` 플래그 추가로 확장 가능
+- 관리자가 발급한 비밀번호의 최초 로그인 시 변경 강제가 필요해지면 `MUST_CHANGE_PASSWORD` 플래그를 APP_USER에 추가로 확장 가능 (지금 안 둠)
 - 소셜 로그인 등은 별도 `USER_IDENTITY` 테이블로 확장 가능 (지금 불필요)
 - 사용자별 설정 개인화가 필요해지면 `USER_SETTING` 신설 (현재는 전역 파일 설정이라 불필요)
