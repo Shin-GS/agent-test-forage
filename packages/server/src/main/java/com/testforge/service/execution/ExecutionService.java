@@ -26,12 +26,14 @@ import com.testforge.entity.execution.enums.ExecutionStepStatus;
 import com.testforge.entity.execution.enums.ExecutionType;
 import com.testforge.entity.execution.enums.StepType;
 import com.testforge.entity.recipe.Recipe;
+import com.testforge.entity.spec.ApiSpec;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.execution.ExecutionRecipeRepository;
 import com.testforge.repository.execution.ExecutionRepository;
 import com.testforge.repository.execution.ExecutionStepRepository;
 import com.testforge.repository.recipe.RecipeRepository;
+import com.testforge.repository.spec.ApiSpecRepository;
 import com.testforge.service.conversation.ConversationService;
 import com.testforge.sse.SseEventPublisher;
 import com.testforge.sse.enums.SseEventType;
@@ -47,9 +49,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 레시피 실행의 서버측 오케스트레이션. 실제 스텝 실행(API 호출 등)은 FE 브라우저가 수행하고,
@@ -78,6 +83,7 @@ public class ExecutionService {
     private final ExecutionStepRepository executionStepRepository;
     private final RecipeRepository recipeRepository;
     private final ConversationRepository conversationRepository;
+    private final ApiSpecRepository apiSpecRepository;
     private final ConversationLock conversationLock;
     private final SseEventPublisher ssePublisher;
     // 결과 메시지(message_new) 발행용. ConversationService ↔ ExecutionService 상호 의존이라 @Lazy로 끊는다.
@@ -91,6 +97,7 @@ public class ExecutionService {
                             ExecutionStepRepository executionStepRepository,
                             RecipeRepository recipeRepository,
                             ConversationRepository conversationRepository,
+                            ApiSpecRepository apiSpecRepository,
                             ConversationLock conversationLock,
                             SseEventPublisher ssePublisher,
                             @Lazy ConversationService conversationService) {
@@ -99,6 +106,7 @@ public class ExecutionService {
         this.executionStepRepository = executionStepRepository;
         this.recipeRepository = recipeRepository;
         this.conversationRepository = conversationRepository;
+        this.apiSpecRepository = apiSpecRepository;
         this.conversationLock = conversationLock;
         this.ssePublisher = ssePublisher;
         this.conversationService = conversationService;
@@ -360,13 +368,45 @@ public class ExecutionService {
     private CursorPage<ExecutionSummaryView> toCursorPage(List<Execution> rows, int limit) {
         boolean hasNext = rows.size() > limit;
         List<Execution> pageRows = hasNext ? rows.subList(0, limit) : rows;
-        List<ExecutionSummaryView> items = pageRows.stream().map(this::toSummaryView).toList();
+        // apiSpecId → 표시명 맵을 일괄 조회로 한 번에 만든다 (행별 개별 조회 N+1 방지).
+        Map<Long, String> serviceNames = resolveServiceNames(pageRows);
+        List<ExecutionSummaryView> items = pageRows.stream()
+                .map(e -> toSummaryView(e, serviceNames))
+                .toList();
         if (!hasNext) {
             return CursorPage.last(items);
         }
         Execution lastRow = pageRows.get(pageRows.size() - 1);
         // 커서 = 마지막 항목의 id (불투명 문자열). id는 정렬 키이자 유일 키라 이거면 충분하다.
         return CursorPage.of(items, String.valueOf(lastRow.getId()));
+    }
+
+    /**
+     * 페이지 행들의 apiSpecId를 모아 ApiSpec을 일괄 조회하고, id → 표시명 맵을 만든다.
+     * 표시명 우선순위: serviceDescription(있으면) > name > null. apiSpecId가 null인 행(플랜 등)은 제외.
+     */
+    private Map<Long, String> resolveServiceNames(List<Execution> rows) {
+        Set<Long> specIds = rows.stream()
+                .map(Execution::getApiSpecId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (specIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> result = new HashMap<>();
+        for (ApiSpec spec : apiSpecRepository.findByIdIn(specIds)) {
+            result.put(spec.getId(), displayName(spec));
+        }
+        return result;
+    }
+
+    /** 사람이 읽는 서비스 표시명: serviceDescription > name > null */
+    private String displayName(ApiSpec spec) {
+        String description = spec.getServiceDescription();
+        if (description != null && !description.isBlank()) {
+            return description;
+        }
+        return spec.getName();
     }
 
     /** size 정규화: null이면 기본값, 범위(1~MAX)로 클램프 */
@@ -404,12 +444,15 @@ public class ExecutionService {
                 .replace("_", "\\_");
     }
 
-    /** 실행 → 경량 요약 뷰 (스텝 상세 제외) */
-    private ExecutionSummaryView toSummaryView(Execution execution) {
+    /** 실행 → 경량 요약 뷰 (스텝 상세 제외). serviceName은 일괄 조회한 표시명 맵에서 채운다. */
+    private ExecutionSummaryView toSummaryView(Execution execution, Map<Long, String> serviceNames) {
+        Long apiSpecId = execution.getApiSpecId();
+        String serviceName = apiSpecId == null ? null : serviceNames.get(apiSpecId);
         return new ExecutionSummaryView(
                 execution.getId(),
                 execution.getConversationId(),
-                execution.getApiSpecId(),
+                apiSpecId,
+                serviceName,
                 StatusView.of(execution.getType()),
                 execution.getTitle(),
                 StatusView.of(execution.getStatus()),

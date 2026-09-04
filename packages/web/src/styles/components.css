@@ -797,6 +797,32 @@ select.input {
   color: var(--color-text-tertiary);
 }
 
+/* 레시피 설명 1줄 (말줄임) */
+.side-panel__recipe-desc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 선택된 서비스 부가 정보 */
+.side-panel__service-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.side-panel__service-desc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.side-panel__service-domain {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
 /* 히스토리/최근 실행 항목 */
 .side-panel__history-item {
   display: flex;
@@ -975,3 +1001,30 @@ select.input {
     width: 100%;
   }
 }
+
+
+/* --- Toast (인앱 알림) --- */
+.toast-container {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+.toast {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+}
+.toast--warning { border-left: 3px solid var(--color-warning); }
+.toast--error { border-left: 3px solid var(--color-error); }
+.toast--success { border-left: 3px solid var(--color-success); }
+.toast--info { border-left: 3px solid var(--color-info); }

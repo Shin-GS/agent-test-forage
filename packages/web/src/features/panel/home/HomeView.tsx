@@ -79,7 +79,7 @@ export function HomeView({
                       type="button"
                       className="btn btn--secondary btn--sm side-panel__recipe-run"
                       disabled={busy}
-                      title={busy ? "대화방이 처리 중입니다" : "실행"}
+                      title={busy ? "실행 중에는 사용할 수 없어요" : "실행"}
                       onClick={() => onRunRecipe(recipe.id, recipe.name)}
                     >
                       ▶
@@ -106,15 +106,22 @@ export function HomeView({
           {recent.length === 0 ? (
             <div className="side-panel__empty">아직 실행한 레시피가 없어요.</div>
           ) : (
-            recent.map((item) => (
-              <div key={item.id} className="side-panel__history-item">
-                <span aria-hidden>{statusIcon(item.status.code)}</span>
-                <div className="side-panel__history-main">
-                  <span className="side-panel__history-name">{item.title ?? "레시피"}</span>
+            recent.map((item) => {
+              const serviceLabel =
+                item.serviceName ?? (item.apiSpecId == null ? "여러 서비스" : null);
+              return (
+                <div key={item.id} className="side-panel__history-item">
+                  <span aria-hidden>{statusIcon(item.status.code)}</span>
+                  <div className="side-panel__history-main">
+                    <span className="side-panel__history-name">{item.title ?? "레시피"}</span>
+                    {serviceLabel && (
+                      <span className="side-panel__history-summary">🌐 {serviceLabel}</span>
+                    )}
+                  </div>
+                  <span className="side-panel__history-time">{formatTime(item.startedAt)}</span>
                 </div>
-                <span className="side-panel__history-time">{formatTime(item.startedAt)}</span>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

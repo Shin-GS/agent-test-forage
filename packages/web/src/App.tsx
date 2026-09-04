@@ -16,9 +16,11 @@ import { ChatInput } from "./components/chat/ChatInput";
 import { ConversationSidebar } from "./components/chat/ConversationSidebar";
 import { MessageList } from "./components/chat/MessageList";
 import { Onboarding } from "./components/chat/Onboarding";
+import { ToastContainer } from "./components/common/ToastContainer";
 import { SidePanel } from "./features/panel/SidePanel";
 import { useSse } from "./hooks/useSse";
 import { useChatStore } from "./store/chatStore";
+import { useToastStore } from "./store/toastStore";
 
 // 새 대화 시작 시 사용할 기본 서비스(apiSpecId).
 // 프로토타입: 하드코딩. 실제로는 상단 서비스 선택 UI 로 대체 예정.
@@ -65,6 +67,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+  const showToast = useToastStore((state) => state.show);
 
   // 전역 SSE 구독
   useSse();
@@ -170,9 +173,14 @@ function App() {
   // 레시피 [▶] 실행: "{name} 실행하기" 발화 + referenceId(=recipeId) 로 채팅 flow 를 탄다.
   const handleRunRecipe = useCallback(
     (recipeId: number, recipeName: string) => {
+      // 대화방 처리 중이면 실행 진입을 막고 안내(대화방 단위 락). 새 대화(null)면 통과.
+      if (currentConversationId != null && conversationStatus !== "idle") {
+        showToast("현재 대화방에 진행 중인 작업이 있어요. 완료 후 다시 시도해주세요.", "warning");
+        return;
+      }
       void handleSend(`${recipeName} 실행하기`, String(recipeId));
     },
-    [handleSend]
+    [handleSend, currentConversationId, conversationStatus, showToast]
   );
 
   return (
@@ -231,6 +239,9 @@ function App() {
           onRunRecipe={handleRunRecipe}
         />
       </div>
+
+      {/* 인앱 토스트 (대화방 락 안내 등) */}
+      <ToastContainer />
     </div>
   );
 }

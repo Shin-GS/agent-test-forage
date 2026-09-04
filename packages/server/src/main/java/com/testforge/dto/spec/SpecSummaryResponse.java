@@ -26,5 +26,9 @@ public record SpecSummaryResponse(
         // 생명주기 상태 (code + description)
         StatusView status,
         // ACTIVE 엔드포인트 수 (DEPRECATED 제외)
-        long apiCount) {
+        long apiCount,
+        // 서비스 설명 (사람이 읽는 표시용, null 허용)
+        String serviceDescription,
+        // 서비스 도메인 영역 (null 허용)
+        String serviceDomain) {
 }

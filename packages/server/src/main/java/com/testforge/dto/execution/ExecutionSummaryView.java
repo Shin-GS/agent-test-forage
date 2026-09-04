@@ -15,6 +15,9 @@ public record ExecutionSummaryView(
         Long id,
         Long conversationId,
         Long apiSpecId,
+        // 사람이 읽는 서비스 표시명. apiSpecId로 ApiSpec을 조회해 채운다.
+        // 우선순위: serviceDescription > name > null. apiSpecId가 null(플랜 등)이면 null.
+        String serviceName,
         StatusView type,
         String title,
         StatusView status,

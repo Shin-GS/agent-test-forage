@@ -35,10 +35,18 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
   const recipesQuery = useRecipes({ apiSpecId, keyword, filter });
   const recipes = useMemo(() => recipesQuery.data ?? [], [recipesQuery.data]);
 
-  const selectedServiceName = useMemo(
-    () => servicesQuery.data?.find((s) => s.id === apiSpecId)?.name ?? null,
+  const selectedService = useMemo(
+    () => servicesQuery.data?.find((s) => s.id === apiSpecId) ?? null,
     [servicesQuery.data, apiSpecId]
   );
+  const selectedServiceName = selectedService?.name ?? null;
+
+  // 레시피 항목 서비스 배지용 id→name 맵
+  const serviceNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const s of servicesQuery.data ?? []) map.set(s.id, s.name);
+    return map;
+  }, [servicesQuery.data]);
 
   const emptyMessage = keyword.trim()
     ? `'${keyword.trim()}'에 해당하는 레시피가 없어요.`
@@ -59,10 +67,25 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
           <option value="">전체 서비스</option>
           {(servicesQuery.data ?? []).map((service) => (
             <option key={service.id} value={service.id}>
-              {service.name}
+              {/* 비개발자 배려: 설명이 있으면 "설명 (기술명)", 없으면 기술명만 */}
+              {service.serviceDescription
+                ? `${service.serviceDescription} (${service.name})`
+                : service.name}
             </option>
           ))}
         </select>
+
+        {/* 선택된 서비스 부가 정보 (설명 + 도메인) */}
+        {selectedService && (selectedService.serviceDescription || selectedService.serviceDomain) && (
+          <div className="side-panel__service-info">
+            {selectedService.serviceDescription && (
+              <span className="side-panel__service-desc">{selectedService.serviceDescription}</span>
+            )}
+            {selectedService.serviceDomain && (
+              <span className="side-panel__service-domain">{selectedService.serviceDomain}</span>
+            )}
+          </div>
+        )}
 
         <div className="side-panel__search">
           <span aria-hidden>🔍</span>
@@ -99,23 +122,36 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
         ) : (
           recipes.map((recipe) => {
             const relative = formatRelative(recipe.lastUsedAt);
+            const serviceBadge =
+              recipe.apiSpecId != null ? serviceNameById.get(recipe.apiSpecId) : undefined;
+            const usageParts = [
+              relative && `🕒 ${relative}`,
+              recipe.usageCount > 0 && `${recipe.usageCount}회`,
+            ]
+              .filter(Boolean)
+              .join(" · ");
             return (
               <div key={recipe.id} className="side-panel__recipe">
                 <div className="side-panel__recipe-top">
                   <span className="side-panel__recipe-name">{recipe.name}</span>
-                  <span className="badge badge--neutral">{recipe.visibility.description}</span>
+                  {serviceBadge && (
+                    <span className="badge badge--neutral">{serviceBadge}</span>
+                  )}
                   <button
                     type="button"
                     className="btn btn--secondary btn--sm side-panel__recipe-run"
                     disabled={busy}
-                    title={busy ? "대화방이 처리 중입니다" : "실행"}
+                    title={busy ? "실행 중에는 사용할 수 없어요" : "실행"}
                     onClick={() => onRunRecipe(recipe.id, recipe.name)}
                   >
                     ▶
                   </button>
                 </div>
-                {relative && (
-                  <span className="side-panel__recipe-meta">최근 사용: {relative}</span>
+                {recipe.description && (
+                  <span className="side-panel__recipe-desc">{recipe.description}</span>
+                )}
+                {usageParts && (
+                  <span className="side-panel__recipe-meta">{usageParts}</span>
                 )}
               </div>
             );

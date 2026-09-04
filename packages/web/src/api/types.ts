@@ -124,6 +124,10 @@ export interface SpecListItem {
   baseUrl?: string;
   status?: StatusView | string;
   description?: string | null;
+  /** 서비스 설명 (사람이 읽는 표시용, BE SpecSummaryResponse.serviceDescription) */
+  serviceDescription?: string | null;
+  /** 서비스 도메인 영역 (BE SpecSummaryResponse.serviceDomain) */
+  serviceDomain?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +325,8 @@ export interface ExecutionSummaryView {
   id: number;
   conversationId: number | null;
   apiSpecId: number | null;
+  /** 사람이 읽는 서비스 표시명. apiSpecId가 null(플랜 등)이면 null */
+  serviceName?: string | null;
   type: StatusView;
   title: string | null;
   status: StatusView;

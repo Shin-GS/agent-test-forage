@@ -4,11 +4,27 @@
 // 실행이 시작/완료되면 재클릭을 막는다(executed 상태로 버튼 잠금 + 배지).
 
 import { useState } from "react";
-import { executionsApi } from "../../api";
+import { ApiError, executionsApi } from "../../api";
 import type { ExecutionModeCard as ExecutionModeCardMeta } from "../../api/types";
 import { runExecution } from "../../services/executionRunner";
 import { applyRunResult } from "../../services/executionResult";
 import { useChatStore } from "../../store/chatStore";
+import { useToastStore } from "../../store/toastStore";
+import type { ConversationRuntimeStatus } from "../../store/types";
+
+/** 대화방 처리 중 안내 문구 (상태별) */
+function conversationLockMessage(status: ConversationRuntimeStatus): string {
+  switch (status) {
+    case "ai_responding":
+      return "AI가 응답 중이에요. 완료 후 다시 시도해주세요.";
+    case "executing":
+      return "레시피 실행 중이에요. 완료 후 다시 시도해주세요.";
+    case "input_waiting":
+      return "입력 대기 중이에요. 먼저 진행 중인 작업을 마쳐주세요.";
+    default:
+      return "현재 작업이 진행 중이에요. 완료 후 다시 시도해주세요.";
+  }
+}
 
 interface Props {
   card: ExecutionModeCardMeta;
@@ -36,18 +52,13 @@ function renderValue(value: unknown | null): string {
 export function ExecutionModeCard({ card }: Props) {
   const conversationId = useChatStore((state) => state.currentConversationId);
   const userId = useChatStore((state) => state.userId);
+  const conversationStatus = useChatStore((state) => state.conversationStatus);
   const setActionPicker = useChatStore((state) => state.setActionPicker);
   const authPause = useChatStore((state) => state.authPause);
-  // 실행 흔적: 이 대화에 진행/결과(PROGRESS/RESULT) 메시지가 하나라도 있으면 이미 실행된 것으로 본다.
-  // 새로고침으로 로컬 started 가 초기화돼도 메시지 기반으로 재활성을 막는다(메시지 로드로 복원됨).
-  const hasRunMessage = useChatStore((state) =>
-    state.messages.some((m) => {
-      const t = (m.type?.code ?? "").toUpperCase();
-      return t === "PROGRESS" || t === "RESULT";
-    })
-  );
+  const showToast = useToastStore((state) => state.show);
   const [running, setRunning] = useState(false);
-  // 한 번 실행을 시작하면 이 카드로 다시 실행할 수 없다(중복 실행 방지).
+  // 이 카드로 실행을 시작하면(이 세션에서) 재실행을 막는다(중복 방지). 로컬 상태만 사용한다.
+  // 새로고침 후에는 다시 활성화되며, 실행 중복은 대화방 락(아래 processing 체크 + BE 409)으로 방어한다.
   const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,11 +67,15 @@ export function ExecutionModeCard({ card }: Props) {
   const authPending = authPause != null && authPause.conversationId === conversationId;
 
   const buttons = card.buttons?.length ? card.buttons : ["auto", "manual"];
-  const alreadyRun = started || hasRunMessage;
-  const disabled = running || alreadyRun || conversationId == null;
+  const disabled = running || started || conversationId == null;
 
   const handleRun = async (buttonCode: string) => {
     if (disabled) return;
+    // 대화방 락: 이미 처리 중(AI 응답/실행/입력 대기)이면 새 실행을 막고 안내한다(기획: 대화방 단위 락).
+    if (conversationStatus !== "idle") {
+      showToast(conversationLockMessage(conversationStatus), "warning");
+      return;
+    }
     const spec = MODE_LABELS[buttonCode] ?? { label: buttonCode, mode: buttonCode.toUpperCase() };
     const convId = conversationId!;
     setRunning(true);
@@ -97,7 +112,12 @@ export function ExecutionModeCard({ card }: Props) {
       // 실행이 시작되면(성공/실패/인증대기 무관) 이 카드로 재실행하지 않는다.
       setStarted(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "실행에 실패했습니다");
+      // 대화방 락 경합(409 CONVERSATION_BUSY): 다른 탭/요청이 선점한 경우. 토스트로 안내.
+      if (err instanceof ApiError && err.status === 409) {
+        showToast("현재 대화방에 진행 중인 작업이 있어요. 완료 후 다시 시도해주세요.", "warning");
+      } else {
+        setError(err instanceof Error ? err.message : "실행에 실패했습니다");
+      }
     } finally {
       setRunning(false);
     }
@@ -162,7 +182,7 @@ export function ExecutionModeCard({ card }: Props) {
             </button>
           );
         })}
-        {alreadyRun && (
+        {started && (
           <span className={`badge ${authPending ? "badge--warning" : "badge--info"}`}>
             {authPending ? "인증 대기" : "실행됨"}
           </span>

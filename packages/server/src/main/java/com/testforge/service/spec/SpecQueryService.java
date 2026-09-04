@@ -114,7 +114,9 @@ public class SpecQueryService {
                 spec.getName(),
                 spec.getBaseUrl(),
                 StatusView.of(spec.getStatus()),
-                apiCount);
+                apiCount,
+                spec.getServiceDescription(),
+                spec.getServiceDomain());
     }
 
     /** 상세 매핑 */
