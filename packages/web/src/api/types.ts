@@ -369,3 +369,187 @@ export interface SettingsResponse {
   /** 화면 편집 가능 여부 (현재 정책상 false) */
   editable: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Recipe editing (레시피 편집 페이지 — 목록/생성/수정/삭제)
+// steps/variables/resultDefinition 는 BE 에서 Object(자유 JSON)로 주고받는다.
+// authoring.md / structure.md 의 폼 스키마대로 FE 타입을 정의한다.
+// ---------------------------------------------------------------------------
+
+/** 값 소스 4종 (요청 필드 매핑 / 서브레시피 입력 매핑) — authoring.md ③ */
+export type MappingSourceType = "prev_step" | "user_input" | "literal" | "ai_generate";
+
+/** 요청 필드/입력 매핑 한 줄 */
+export interface FieldMapping {
+  /** FE 전용 안정 로컬 id (React key용, 서버 직렬화 제외) */
+  _uid?: string;
+  /** 매핑 대상 필드명 (요청 필드명 또는 서브레시피 변수명) */
+  field: string;
+  /** 필수 필드 여부 (스키마 유래, 검증용) */
+  required?: boolean;
+  /** 값 소스 */
+  source: MappingSourceType;
+  /**
+   * 매핑 값.
+   * - prev_step: "스텝참조.변수명" (예: "step1.email") 또는 extract 변수명
+   * - user_input: "userInput.xxx"
+   * - literal: 직접 입력 문자열
+   * - ai_generate: 사용 안 함(자동)
+   */
+  value?: string;
+}
+
+/** Extract 추출 방식 (API 스텝 응답값 추출) — authoring.md ③ */
+export type ExtractMethod = "jsonpath" | "full_response" | "status_code" | "header";
+
+/** Extract 한 줄 */
+export interface ExtractDef {
+  /** FE 전용 안정 로컬 id (React key용, 서버 직렬화 제외) */
+  _uid?: string;
+  /** 추출한 값을 담을 변수명 */
+  variable: string;
+  method: ExtractMethod;
+  /** jsonpath 경로 또는 header 이름. full_response/status_code 는 미사용 */
+  value?: string;
+}
+
+/** 스크립트 스텝 출력 변수 정의 */
+export interface ScriptOutputDef {
+  /** FE 전용 안정 로컬 id (React key용, 서버 직렬화 제외) */
+  _uid?: string;
+  variable: string;
+  description?: string;
+}
+
+/** 스텝 공통 필드 */
+interface RecipeStepBase {
+  /** FE 전용 안정 로컬 id (React key/expanded용, 서버 직렬화 제외) */
+  _uid?: string;
+  /** 스텝명 (내부 식별) */
+  name: string;
+  /** 실행 조건 (선택). 비우면 항상 실행 */
+  condition?: string | null;
+}
+
+/** API 스텝 — 외부 API 호출 */
+export interface ApiRecipeStep extends RecipeStepBase {
+  type: "api";
+  /** 스텝 표시명 (선택). 비우면 summary → method+path 폴백 */
+  label?: string | null;
+  /** 대상 스펙(서브도메인) ID */
+  apiSpecId?: number | null;
+  /** 선택한 엔드포인트 ID (SpecEndpointItem.id) */
+  endpointId?: number | null;
+  /** 경로 파라미터 매핑 목록 (path의 {id} 등). 서버 pathParams 객체 맵과 왕복 */
+  pathParamMappings: FieldMapping[];
+  /** 요청 필드 매핑 목록 */
+  requestMappings: FieldMapping[];
+  /** 응답 추출 목록 */
+  extracts: ExtractDef[];
+}
+
+/** 스크립트 스텝 — JavaScript 실행 */
+export interface ScriptRecipeStep extends RecipeStepBase {
+  type: "script";
+  /** context 에서 사용할 변수 키 목록 (체크박스 선택) */
+  inputVariables: string[];
+  /** 실행 코드 */
+  code: string;
+  /** 출력 변수 정의 */
+  outputs: ScriptOutputDef[];
+}
+
+/** 서브레시피 스텝 — 다른 레시피 호출 */
+export interface SubRecipeStep extends RecipeStepBase {
+  type: "recipe";
+  /** 호출할 레시피 ID */
+  recipeId?: number | null;
+  /** 서브레시피 사용자 입력 변수에 대한 입력 매핑 */
+  inputMappings: FieldMapping[];
+}
+
+export type RecipeStep = ApiRecipeStep | ScriptRecipeStep | SubRecipeStep;
+
+/** 사용자 입력 변수 타입 (authoring.md ②) */
+export type RecipeVariableType =
+  | "text"
+  | "number"
+  | "textarea"
+  | "select"
+  | "radio"
+  | "checkbox"
+  | "date";
+
+/** 사용자 입력 변수 정의 (레시피 메타 ②) */
+export interface RecipeVariable {
+  /** FE 전용 안정 로컬 id (React key용, 서버 직렬화 제외) */
+  _uid?: string;
+  key: string;
+  label: string;
+  type: RecipeVariableType;
+  required?: boolean;
+  default?: string | null;
+}
+
+/** 결과 정의 한 줄 (authoring.md ④) */
+export interface ResultDefinitionItem {
+  /** FE 전용 안정 로컬 id (React key용, 서버 직렬화 제외) */
+  _uid?: string;
+  /** 결과키 (변수명) */
+  key: string;
+  /** 표시명(선택). 비우면 key 로 폴백 */
+  label?: string | null;
+  /** 소스: "스텝참조.변수명" (예: "step2.orderId") */
+  source: string;
+}
+
+/** 레시피 상세 (BE RecipeDetailResponse). steps/variables/resultDefinition 는 자유 JSON */
+export interface RecipeDetail {
+  id: number;
+  ownerUserId: number | null;
+  apiSpecId: number | null;
+  name: string;
+  description: string;
+  visibility: StatusView;
+  tags: string[];
+  variables: RecipeVariable[] | null;
+  steps: RecipeStep[] | null;
+  resultDefinition: ResultDefinitionItem[] | null;
+  resultTemplate: string | null;
+  currentVersion: number;
+  validationStatus: StatusView;
+  validationMessage: string | null;
+  usageCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 레시피 생성 요청 (BE RecipeCreateRequest) */
+export interface RecipeCreateRequest {
+  ownerUserId: number;
+  apiSpecId: number | null;
+  name: string;
+  description: string;
+  /** COMMON / PRIVATE */
+  visibility: string;
+  tags: string[];
+  variables: RecipeVariable[];
+  /** 서버 저장용 스텝 JSON(자유 스키마). 폼 스텝 → formStepToServer 로 직렬화한 형태 */
+  steps: any[];
+  resultDefinition: ResultDefinitionItem[];
+  resultTemplate: string | null;
+}
+
+/** 레시피 수정 요청 (BE RecipeUpdateRequest — apiSpecId/ownerUserId 없음) */
+export interface RecipeUpdateRequest {
+  name: string;
+  description: string;
+  visibility: string;
+  tags: string[];
+  variables: RecipeVariable[];
+  /** 서버 저장용 스텝 JSON(자유 스키마). 폼 스텝 → formStepToServer 로 직렬화한 형태 */
+  steps: any[];
+  resultDefinition: ResultDefinitionItem[];
+  resultTemplate: string | null;
+}

@@ -1321,3 +1321,469 @@ select.input {
 .settings-state--error {
   color: var(--color-error);
 }
+
+/* ===========================================================================
+   Recipe Editor (docs/design/web/recipe-editor.html 포팅)
+   목록 페이지 + 생성/수정 폼. tokens 변수만 사용.
+   =========================================================================== */
+
+/* --- 페이지 셸 (채팅 레이아웃 벗어난 전체 화면) --- */
+/* app-container(flex column) 안에서 tab-nav 아래 남은 영역을 채우고 자체 스크롤 */
+.recipe-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--color-bg-primary);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.page-header__back {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.page-header__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.page-header__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.page-body {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* --- 섹션 카드 --- */
+.section {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.section__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section__number {
+  width: 24px;
+  height: 24px;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+/* --- 메타 필드 그리드 --- */
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.field-full {
+  grid-column: 1 / -1;
+}
+
+/* --- 텍스트에어리어 (input 과 동일 톤) --- */
+.textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  line-height: var(--line-height-relaxed);
+  resize: vertical;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* --- 에러 상태 입력 --- */
+.input--error {
+  border-color: var(--color-error) !important;
+}
+
+/* --- 컴팩트 입력 (테이블 셀 안) --- */
+.input--sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+/* --- 데이터 테이블 (목록/변수/결과 정의) --- */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.data-table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-weight-medium);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+}
+
+.data-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+
+.data-table tr:hover td {
+  background: var(--color-bg-hover);
+}
+
+.data-table__actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.data-table__empty {
+  text-align: center;
+  color: var(--color-text-tertiary);
+  padding: var(--space-4);
+}
+
+/* --- 목록 필터 바 --- */
+.list-filters {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+/* --- 상태(로딩/에러/빈) 표시 --- */
+.recipe-state {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.recipe-state--error {
+  color: var(--color-error);
+}
+
+.recipe-empty {
+  text-align: center;
+  padding: var(--space-6);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+.recipe-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* --- 스텝 카드 --- */
+.step-card {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+}
+
+.step-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.step-card__number {
+  width: 24px;
+  height: 24px;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.step-card__name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.step-card__type {
+  font-size: var(--font-size-xs);
+  padding: 2px var(--space-2);
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+}
+
+.step-card__controls {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.step-card__body {
+  padding: var(--space-4);
+}
+
+.step-add-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* --- 2단 레이아웃 (스텝 편집: 설정 + 데이터 탐색기) --- */
+.split-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: var(--space-4);
+}
+
+.step-editor__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* --- 데이터 탐색기 (우측 패널) --- */
+.data-explorer {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.data-explorer__group {
+  margin-bottom: var(--space-3);
+}
+
+.data-explorer__group--muted {
+  opacity: 0.6;
+}
+
+.data-explorer__group--schema {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.data-explorer__title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.data-explorer__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.data-explorer__item:hover {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.data-explorer__item--readonly {
+  color: var(--color-text-tertiary);
+  cursor: default;
+}
+
+.data-explorer__item--readonly:hover {
+  background: none;
+  color: var(--color-text-tertiary);
+}
+
+.data-explorer__empty {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  padding: 2px var(--space-2);
+}
+
+/* --- 매핑 테이블 (요청 필드 / Extract / 출력) --- */
+.mapping-table {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  border-collapse: collapse;
+}
+
+.mapping-table td {
+  padding: var(--space-1) var(--space-2);
+  vertical-align: middle;
+}
+
+.mapping-table__row--error td {
+  background: var(--color-error-subtle);
+}
+
+.mapping-table__field {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+
+.mapping-table__required {
+  color: var(--color-error);
+  margin-left: 2px;
+}
+
+/* --- 태그 입력 (칩) --- */
+.tag-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-height: 36px;
+  align-items: center;
+}
+
+.tag-input__field {
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  flex: 1;
+  min-width: 100px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+}
+
+.tag-chip__remove {
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.tag-chip__remove:hover {
+  opacity: 1;
+}
+
+/* --- 라디오 행 / 체크박스 목록 --- */
+.radio-row {
+  display: flex;
+  gap: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  padding-top: var(--space-1);
+}
+
+.radio-row__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  cursor: pointer;
+}
+
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+.checkbox-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+/* --- 코드 편집 textarea --- */
+.code-textarea {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+  min-height: 140px;
+  white-space: pre;
+  background: var(--color-bg-primary);
+}
+
+/* --- 에러 요약 목록 --- */
+.alert__list {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  font-size: var(--font-size-sm);
+}

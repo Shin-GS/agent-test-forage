@@ -1,6 +1,6 @@
 ---
 status: done
-last-updated: 2026-09-08
+last-updated: 2026-09-09
 ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/specs/recipe/structure.md
 ---
 
@@ -28,6 +28,12 @@ ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/spe
 └──────────────────────────────────────────────────────────┘
 ```
 
+## 스텝 타입 (확정)
+
+프로토타입 스텝 타입은 **API / 스크립트 / 서브레시피 3종**이다.
+"사용자 입력"은 별도 스텝 타입이 아니라 레시피 메타의 **② 사용자 입력 변수**로 대체한다.
+(실행 중 입력을 받는 별도 스텝 타입은 추후 확장 — 이번 프로토타입 범위 아님)
+
 ## 케이스 목록
 
 | # | 케이스 | 설명 |
@@ -38,7 +44,6 @@ ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/spe
 | 4 | 스텝 편집 (스크립트 타입) | 코드 에디터 + 변수 선택 + 출력 정의 |
 | 5 | 유효성 에러 | 저장 시 검증 실패 표시 |
 | 6 | 스텝 편집 (서브레시피 타입) | 대상 레시피 선택 + 입력 매핑 + 조건 빌더 |
-| 7 | 스텝 편집 (사용자 입력 타입) | 변수 정의 테이블 + 타입/필수/기본값 |
 
 ## 케이스 상세
 

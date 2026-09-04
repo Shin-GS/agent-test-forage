@@ -1,7 +1,7 @@
 // 앱 공통 레이아웃.
 // - 상단 헤더(로고 + 워크스페이스 + 아바타) + 탭 내비게이션(tab-nav) 을 렌더한다.
 // - 탭은 NavLink 로 실제 라우팅한다(활성 탭은 현재 경로 기준 active 클래스).
-//   채팅(/)·설정(/settings)만 실제 라우트. 서브도메인/레시피는 아직 화면이 없어
+//   채팅(/)·레시피(/recipes)·설정(/settings)이 실제 라우트. 서브도메인은 아직 화면이 없어
 //   "준비 중"으로 비활성(클릭 시 이동 안 함) 처리한다.
 // - 자식 라우트는 <Outlet> 위치에 렌더된다.
 //
@@ -18,7 +18,7 @@ import { useSse } from "../../hooks/useSse";
 const TABS = [
   { key: "chat", label: "💬 채팅", path: "/" },
   { key: "subdomain", label: "📡 서브도메인", path: null },
-  { key: "recipe", label: "📋 레시피", path: null },
+  { key: "recipe", label: "📋 레시피", path: "/recipes" },
   { key: "settings", label: "⚙️ 설정", path: "/settings" },
 ] as const;
 

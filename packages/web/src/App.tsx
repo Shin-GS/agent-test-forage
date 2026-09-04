@@ -12,12 +12,17 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ChatPage } from "./pages/ChatPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { RecipeListPage } from "./pages/RecipeListPage";
+import { RecipeEditPage } from "./pages/RecipeEditPage";
 
 function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<ChatPage />} />
+        <Route path="/recipes" element={<RecipeListPage />} />
+        <Route path="/recipes/new" element={<RecipeEditPage />} />
+        <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

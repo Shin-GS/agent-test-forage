@@ -79,8 +79,9 @@
     <button class="case-switcher__btn" onclick="showCase('step-script')">4. 스텝: 스크립트</button>
     <button class="case-switcher__btn" onclick="showCase('validation')">5. 유효성 에러</button>
     <button class="case-switcher__btn" onclick="showCase('step-sub')">6. 스텝: 서브레시피</button>
-    <button class="case-switcher__btn" onclick="showCase('step-input')">7. 스텝: 사용자입력</button>
   </div>
+  <!-- 스텝 타입은 API / 스크립트 / 서브레시피 3종 (확정). "사용자 입력"은 별도 스텝 타입이 아니라
+       레시피 메타의 ② 사용자 입력 변수로 대체. 실행 중 입력 스텝은 추후 확장 (기존 Case 7 제거). -->
 
   <!-- ═══ Case 1: 레시피 목록 ═══ -->
   <div id="case-list" class="screen active">
@@ -621,92 +622,8 @@
     </div>
   </div>
 
-  <!-- ═══ Case 7: 스텝 편집 (사용자 입력 타입) ═══ -->
-  <div id="case-step-input" class="screen">
-    <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">결제 플로우 레시피 편집</span>
-        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
-      </div>
-      <div class="page-body">
-        <div class="section">
-          <div class="section__title"><span class="section__number">3</span> 스텝 (3개)</div>
-
-          <!-- 스텝 1 (펼침 — 사용자 입력 타입) -->
-          <div class="step-card" style="border-color: var(--color-accent);">
-            <div class="step-card__header" style="background: var(--color-accent-subtle);">
-              <span class="step-card__number">1</span>
-              <span class="step-card__name">주문 정보 입력</span>
-              <span class="step-card__type">사용자 입력</span>
-              <button class="btn btn--ghost btn--sm">▴</button>
-            </div>
-            <div class="step-card__body">
-              <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-4);">이 스텝에서 사용자에게 물어볼 변수를 정의합니다. 실행 시 액션 피커로 표시됩니다.</p>
-
-              <!-- 변수 정의 테이블 -->
-              <table class="data-table" style="margin-bottom: var(--space-3);">
-                <thead>
-                  <tr><th>변수명</th><th>라벨</th><th>타입</th><th>필수</th><th>기본값</th><th></th></tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><span style="font-family: var(--font-mono); font-size: var(--font-size-xs);">productId</span></td>
-                    <td>상품 ID</td>
-                    <td><select class="input" style="max-width: 100px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"><option>text</option><option>number</option><option>select</option></select></td>
-                    <td><input type="checkbox" checked></td>
-                    <td><span style="color: var(--color-text-tertiary); font-size: var(--font-size-xs);">(없음)</span></td>
-                    <td class="data-table__actions"><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
-                  </tr>
-                  <tr>
-                    <td><span style="font-family: var(--font-mono); font-size: var(--font-size-xs);">quantity</span></td>
-                    <td>수량</td>
-                    <td><select class="input" style="max-width: 100px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"><option>number</option><option>text</option><option>select</option></select></td>
-                    <td><input type="checkbox" checked></td>
-                    <td><input class="input" type="text" value="1" style="max-width: 80px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"></td>
-                    <td class="data-table__actions"><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
-                  </tr>
-                </tbody>
-              </table>
-              <button class="btn btn--ghost btn--sm">+ 변수 추가</button>
-
-              <!-- 조건 (선택) -->
-              <div style="margin-top: var(--space-4);">
-                <label class="form-label" style="margin-bottom: var(--space-2);">조건 (선택)</label>
-                <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">조건 없음 (항상 실행)</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- 스텝 2 (접힘) -->
-          <div class="step-card">
-            <div class="step-card__header">
-              <span class="step-card__number">2</span>
-              <span class="step-card__name">재고 확인 API</span>
-              <span class="step-card__type">API</span>
-              <button class="btn btn--ghost btn--sm">▾</button>
-            </div>
-          </div>
-
-          <!-- 스텝 3 (접힘) -->
-          <div class="step-card">
-            <div class="step-card__header">
-              <span class="step-card__number">3</span>
-              <span class="step-card__name">결제 처리</span>
-              <span class="step-card__type">API</span>
-              <button class="btn btn--ghost btn--sm">▾</button>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);">
-            <button class="btn btn--secondary btn--sm">+ API 스텝</button>
-            <button class="btn btn--secondary btn--sm">+ 스크립트 스텝</button>
-            <button class="btn btn--secondary btn--sm">+ 서브레시피 스텝</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Case 7 (스텝: 사용자 입력 타입) 제거됨 — 확정 결정에 따라 "사용자 입력"은 별도 스텝 타입이
+       아니라 레시피 메타 ② 사용자 입력 변수로 대체. 실행 중 입력 스텝은 추후 확장. -->
 
   <script>
     function showCase(caseId) {
