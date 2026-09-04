@@ -14,11 +14,15 @@ export interface StartMessagePayload {
   userId: number;
   content: string;
   apiSpecId?: number;
+  /** 참조 태그 (사이드 패널 레시피 실행 시 recipeId 를 문자열로 전달) */
+  referenceId?: string;
 }
 
 export interface SendMessagePayload {
   userId: number;
   content: string;
+  /** 참조 태그 (사이드 패널 레시피 실행 시 recipeId 를 문자열로 전달) */
+  referenceId?: string;
 }
 
 /** 새 대화방 시작 + 첫 메시지 전송. 응답: { accepted, conversation, message } */

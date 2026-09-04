@@ -89,3 +89,31 @@ export function respondActionPicker(payload: ActionPickerRespondPayload): Promis
     body: payload,
   });
 }
+
+/** 사용자 실행 히스토리 (커서 페이지). 최근순. 사이드 패널/전체 히스토리 소비용 */
+export function history(
+  userId: number,
+  params?: { status?: string; keyword?: string; cursor?: string; size?: number }
+): Promise<import("./types").CursorPage<import("./types").ExecutionSummaryView>> {
+  return request(`/executions`, {
+    method: "GET",
+    query: {
+      userId,
+      status: params?.status,
+      keyword: params?.keyword,
+      cursor: params?.cursor,
+      size: params?.size,
+    },
+  });
+}
+
+/** 특정 대화방의 실행 히스토리 (커서 페이지). 최근순 */
+export function historyByConversation(
+  conversationId: number,
+  params?: { cursor?: string; size?: number }
+): Promise<import("./types").CursorPage<import("./types").ExecutionSummaryView>> {
+  return request(`/conversations/${conversationId}/executions`, {
+    method: "GET",
+    query: { cursor: params?.cursor, size: params?.size },
+  });
+}

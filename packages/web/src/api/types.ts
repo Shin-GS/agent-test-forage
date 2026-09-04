@@ -113,6 +113,19 @@ export interface SpecDetail {
   diagnostics: unknown;
 }
 
+/**
+ * 스펙(서비스) 목록 항목 (BE GET /specs 의 SpecResponse). 사이드 패널 서비스 드롭다운 소비용.
+ * status 는 BE 가 enum 문자열 또는 StatusView 로 내려줄 수 있어 느슨하게 둔다(드롭다운은 id/name 만 사용).
+ */
+export interface SpecListItem {
+  id: number;
+  name: string;
+  environment?: string;
+  baseUrl?: string;
+  status?: StatusView | string;
+  description?: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Execution
 // ---------------------------------------------------------------------------
@@ -283,4 +296,36 @@ export interface SseEnvelope {
   nature: SseNature;
   sessionId: number | null;
   data: any;
+}
+
+// ---------------------------------------------------------------------------
+// 사이드 패널 (레시피 목록 + 실행 히스토리)
+// ---------------------------------------------------------------------------
+
+/** 레시피 목록 항목 (BE RecipeSummaryResponse). 스텝 상세 제외 */
+export interface RecipeSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  apiSpecId: number | null;
+  visibility: StatusView;
+  tags: string[];
+  validationStatus: StatusView;
+  currentVersion: number;
+  usageCount: number;
+  lastUsedAt: string | null;
+}
+
+/** 실행 히스토리 항목 (BE ExecutionSummaryView). 스텝 상세 제외 */
+export interface ExecutionSummaryView {
+  id: number;
+  conversationId: number | null;
+  apiSpecId: number | null;
+  type: StatusView;
+  title: string | null;
+  status: StatusView;
+  resultSummary: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
 }

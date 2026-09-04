@@ -37,7 +37,7 @@ docs/test/
 │   └── test-manifest.js   ← 기능별 테스트 파일 매니페스트
 └── web/
     ├── chat.js            ← 채팅 + 레시피 실행 + 플랜 (22개 케이스)
-    ├── panel.js           ← 사이드 패널 (9개 케이스)
+    ├── panel.js           ← 사이드 패널 재설계 (19개 케이스)
     ├── recipe-editor.js   ← 레시피 편집/관리 (14개 케이스)
     ├── login.js           ← 로그인/인증 (8개 케이스)
     ├── spec.js            ← 스펙 등록/관리 (12개 케이스)
@@ -51,14 +51,14 @@ docs/test/
 | 기능 | 우선순위 | 케이스 수 | ID 접두사 |
 |------|----------|-----------|-----------|
 | 채팅 + 레시피 + 플랜 | critical | 22 | CHAT-xxx |
-| 사이드 패널 | high | 9 | PANEL-xxx |
+| 사이드 패널 (재설계) | high | 19 | PANEL-xxx |
 | 레시피 편집/관리 | high | 14 | RECIPE-xxx |
 | 로그인/인증 | high | 8 | LOGIN-xxx |
 | 스펙 등록/관리 | high | 12 | SPEC-xxx |
 | 설정 | medium | 7 | SETTINGS-xxx |
 | 전체 히스토리 페이지 | medium | 6 | HISTORY-xxx |
 | 관리자 페이지 | medium | 8 | ADMIN-xxx |
-| **합계** | | **87** | |
+| **합계** | | **97** | |
 
 ## 새 테스트 추가 방법
 

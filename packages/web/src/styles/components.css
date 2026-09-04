@@ -653,3 +653,325 @@ select.input {
   appearance: none;
   cursor: pointer;
 }
+
+/* --- Side Panel (독립 미니 페이지: 홈/레시피/히스토리 3탭)
+       docs/design/web/chat.html .side-panel__* 이식 --- */
+.side-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  background: var(--color-bg-primary);
+  border-left: 1px solid var(--color-border);
+}
+
+.side-panel__inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 상단 가로 탭 3개 */
+.side-panel__tabs {
+  display: flex;
+  height: var(--header-height);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.side-panel__tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.side-panel__tab:hover {
+  color: var(--color-text-primary);
+}
+
+.side-panel__tab.is-active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* 오버레이 닫기 버튼 (Desktop 숨김, Tablet/Mobile 노출) */
+.side-panel__close {
+  display: none;
+  flex-shrink: 0;
+  width: var(--header-height);
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.side-panel__close:hover {
+  color: var(--color-text-primary);
+}
+
+/* 탭 패널 (선택 탭이 전체 차지) */
+.side-panel__view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.side-panel__view[hidden] {
+  display: none;
+}
+
+.side-panel__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-4);
+  gap: var(--space-5);
+}
+
+.side-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.side-panel__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.side-panel__section-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+}
+
+/* 레시피 항목 */
+.side-panel__recipe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.side-panel__recipe-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.side-panel__recipe-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.side-panel__recipe-run {
+  margin-left: auto;
+}
+
+.side-panel__recipe-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* 히스토리/최근 실행 항목 */
+.side-panel__history-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.side-panel__history-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.side-panel__history-name {
+  color: var(--color-text-primary);
+}
+
+.side-panel__history-summary {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-panel__history-time {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* 레시피 탭 툴바 (드롭다운 + 검색 + 필터) */
+.side-panel__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.side-panel__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.side-panel__search input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+}
+
+.side-panel__search input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.side-panel__filters {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.side-panel__filter {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.side-panel__filter.is-active {
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+}
+
+/* 무한스크롤 로딩 표시 */
+.side-panel__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.side-panel__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border-light);
+  border-top-color: var(--color-accent);
+  border-radius: var(--radius-full);
+  animation: side-panel-spin 0.7s linear infinite;
+}
+
+@keyframes side-panel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 링크 & empty */
+.side-panel__link {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.side-panel__link:hover {
+  color: var(--color-accent-hover);
+}
+
+.side-panel__empty {
+  padding: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  text-align: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* ─── 반응형 (기획 overview.md) ───
+   Desktop (1201px+) : 채팅 옆 고정 열, 항상 열림
+   Tablet  (≤1200px) : 기본 닫힘 + is-open 오버레이
+   Mobile  (≤768px)  : is-open 시 전체화면 시트 */
+@media (max-width: 1200px) {
+  .side-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--panel-width, 320px);
+    z-index: var(--z-dropdown, 100);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(100%);
+    transition: transform var(--transition-fast);
+  }
+
+  .side-panel.is-open {
+    transform: translateX(0);
+  }
+
+  .side-panel__close {
+    display: flex;
+  }
+}
+
+@media (max-width: 768px) {
+  .side-panel {
+    width: 100%;
+  }
+}

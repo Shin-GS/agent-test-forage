@@ -5,15 +5,18 @@
 // - 대화 선택 시 메시지 로드
 // - 전송: 현재 대화방 없으면 startMessage 로 새 대화 생성, 있으면 sendMessage
 //   AI 응답은 SSE(message_new)로 도착하므로 POST 응답에서 기대하지 않는다
-// - 사이드 패널(우측 레시피/히스토리)은 이번 범위 밖 — 생략
+// - 우측 사이드 패널(features/panel)은 홈/레시피/히스토리 3탭의 독립 모듈 (Desktop 항상 열림)
+//   실행 완료(executing→idle) 시 executions 쿼리를 무효화해 히스토리를 갱신한다
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { conversationsApi } from "./api";
 import type { MessageResponse } from "./api/types";
 import { ChatInput } from "./components/chat/ChatInput";
 import { ConversationSidebar } from "./components/chat/ConversationSidebar";
 import { MessageList } from "./components/chat/MessageList";
 import { Onboarding } from "./components/chat/Onboarding";
+import { SidePanel } from "./features/panel/SidePanel";
 import { useSse } from "./hooks/useSse";
 import { useChatStore } from "./store/chatStore";
 
@@ -61,8 +64,21 @@ function App() {
 
   const [error, setError] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
+
   // 전역 SSE 구독
   useSse();
+
+  // 채팅 ↔ 패널 연동: 대화방 상태가 executing → idle 로 전이하면 실행 완료로 보고
+  // 패널의 실행 히스토리 쿼리를 무효화한다(패널은 구독만).
+  const prevStatusRef = useRef(conversationStatus);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = conversationStatus;
+    if (prev === "executing" && conversationStatus === "idle") {
+      void queryClient.invalidateQueries({ queryKey: ["executions"] });
+    }
+  }, [conversationStatus, queryClient]);
 
   // 대화 목록 로드
   const loadConversations = useCallback(async () => {
@@ -98,9 +114,9 @@ function App() {
     setError(null);
   }, [clearConversation]);
 
-  // 전송
+  // 전송. referenceId 는 사이드 패널 레시피 실행 시 recipeId(문자열)로 전달된다.
   const handleSend = useCallback(
-    async (content: string) => {
+    async (content: string, referenceId?: string) => {
       setError(null);
       try {
         if (currentConversationId == null) {
@@ -109,6 +125,7 @@ function App() {
             userId,
             content,
             apiSpecId: DEFAULT_API_SPEC_ID,
+            referenceId,
           });
           // 응답 형태: { accepted, conversation, message }. 대화방 id 는 conversation.id.
           const newId = started.conversation.id;
@@ -128,7 +145,7 @@ function App() {
           await loadConversations();
         } else {
           addMessage(optimisticUserMessage(currentConversationId, content));
-          await conversationsApi.sendMessage(currentConversationId, { userId, content });
+          await conversationsApi.sendMessage(currentConversationId, { userId, content, referenceId });
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "메시지 전송에 실패했습니다");
@@ -149,6 +166,14 @@ function App() {
   }, [currentConversationId]);
 
   const isOnboarding = currentConversationId == null && messages.length === 0;
+
+  // 레시피 [▶] 실행: "{name} 실행하기" 발화 + referenceId(=recipeId) 로 채팅 flow 를 탄다.
+  const handleRunRecipe = useCallback(
+    (recipeId: number, recipeName: string) => {
+      void handleSend(`${recipeName} 실행하기`, String(recipeId));
+    },
+    [handleSend]
+  );
 
   return (
     <div className="app-container">
@@ -199,6 +224,12 @@ function App() {
 
           <ChatInput status={conversationStatus} onSend={handleSend} onStop={handleStop} />
         </div>
+
+        <SidePanel
+          userId={userId}
+          conversationStatus={conversationStatus}
+          onRunRecipe={handleRunRecipe}
+        />
       </div>
     </div>
   );
