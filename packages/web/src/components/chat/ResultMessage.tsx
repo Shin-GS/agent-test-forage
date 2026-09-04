@@ -3,6 +3,7 @@
 // [결과 보기] 는 프로토타입에서 비활성(패널 상세 보기는 추후).
 
 import type { ResultPayload } from "../../api/types";
+import { usePanelStore } from "../../features/panel/panelStore";
 
 interface Props {
   payload: ResultPayload;
@@ -12,6 +13,9 @@ interface Props {
 
 export function ResultMessage({ payload, content }: Props) {
   const entries = Object.entries(payload.resultValues ?? {});
+  const openDetail = usePanelStore((s) => s.openDetail);
+  // executionId 가 유효할 때만 [결과 보기] 활성화(사이드 패널 상세 드릴다운으로 진입).
+  const canView = typeof payload.executionId === "number" && payload.executionId > 0;
 
   return (
     <div className="result-message" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
@@ -31,7 +35,13 @@ export function ResultMessage({ payload, content }: Props) {
       )}
 
       <div>
-        <button type="button" className="btn btn--secondary btn--sm" disabled title="추후 제공">
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm"
+          disabled={!canView}
+          title={canView ? "결과 상세 보기" : "상세를 볼 수 없어요"}
+          onClick={() => canView && openDetail(payload.executionId)}
+        >
           결과 보기
         </button>
       </div>

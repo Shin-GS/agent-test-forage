@@ -1028,3 +1028,186 @@ select.input {
 .toast--error { border-left: 3px solid var(--color-error); }
 .toast--success { border-left: 3px solid var(--color-success); }
 .toast--info { border-left: 3px solid var(--color-info); }
+
+/* ---------------------------------------------------------------------------
+   결과 상세 드릴다운 (사이드 패널 스택 top)
+   - 클릭 가능한 히스토리 항목 + 상세 뷰 헤더/본문
+   --------------------------------------------------------------------------- */
+
+/* 클릭 가능한 히스토리 항목: button 리셋 + 좌측 정렬 + 호버 강조 */
+.side-panel__history-item--clickable {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-family);
+  color: inherit;
+}
+
+.side-panel__history-item--clickable:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.side-panel__history-item--clickable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* 상세 뷰 헤더: 뒤로가기 + 제목 */
+.exec-detail__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.exec-detail__back {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: border-color var(--transition-fast);
+}
+
+.exec-detail__back:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.exec-detail__title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.exec-detail__title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.exec-detail__subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* 상세 본문 섹션 */
+.exec-detail__recipe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.exec-detail__recipe-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.exec-detail__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.exec-detail__section-title {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* 결과값 key-value */
+.exec-detail__kv {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.exec-detail__kv-row {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.exec-detail__kv-key {
+  color: var(--color-text-tertiary);
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.exec-detail__kv-value {
+  color: var(--color-text-primary);
+  word-break: break-word;
+  min-width: 0;
+}
+
+/* 스텝 리스트 */
+.exec-detail__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.exec-detail__step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.exec-detail__step-icon {
+  flex-shrink: 0;
+}
+
+.exec-detail__step-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.exec-detail__step-name {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.exec-detail__step-summary {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  word-break: break-word;
+}
+
+.exec-detail__step-error {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  word-break: break-word;
+}
+
+.exec-detail__step-status {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}

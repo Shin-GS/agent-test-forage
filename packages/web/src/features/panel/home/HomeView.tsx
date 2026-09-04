@@ -13,6 +13,8 @@ import type { PanelContext } from "../types";
 interface Props extends PanelContext {
   onGoRecipes: () => void;
   onGoHistory: () => void;
+  /** 최근 실행 항목 클릭 시 결과 상세 드릴다운 열기 */
+  onOpenDetail: (executionId: number) => void;
 }
 
 const TOP_N = 5;
@@ -35,6 +37,7 @@ export function HomeView({
   onRunRecipe,
   onGoRecipes,
   onGoHistory,
+  onOpenDetail,
 }: Props) {
   const busy = conversationStatus !== "idle";
 
@@ -110,7 +113,13 @@ export function HomeView({
               const serviceLabel =
                 item.serviceName ?? (item.apiSpecId == null ? "여러 서비스" : null);
               return (
-                <div key={item.id} className="side-panel__history-item">
+                <button
+                  key={item.id}
+                  type="button"
+                  className="side-panel__history-item side-panel__history-item--clickable"
+                  onClick={() => onOpenDetail(item.id)}
+                  title="결과 상세 보기"
+                >
                   <span aria-hidden>{statusIcon(item.status.code)}</span>
                   <div className="side-panel__history-main">
                     <span className="side-panel__history-name">{item.title ?? "레시피"}</span>
@@ -119,7 +128,7 @@ export function HomeView({
                     )}
                   </div>
                   <span className="side-panel__history-time">{formatTime(item.startedAt)}</span>
-                </div>
+                </button>
               );
             })
           )}

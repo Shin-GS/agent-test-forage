@@ -9,7 +9,12 @@ import { useInfiniteScroll } from "../shared/useInfiniteScroll";
 import type { PanelContext } from "../types";
 import { useHistory } from "./useHistory";
 
-export function HistoryView({ userId }: PanelContext) {
+interface Props extends PanelContext {
+  /** 항목 클릭 시 결과 상세 드릴다운 열기 */
+  onOpenDetail: (executionId: number) => void;
+}
+
+export function HistoryView({ userId, onOpenDetail }: Props) {
   const query = useHistory(userId);
   const {
     data,
@@ -51,7 +56,13 @@ export function HistoryView({ userId }: PanelContext) {
                 .join(" · ");
               const metaParts = [relative, duration].filter(Boolean).join(" · ");
               return (
-                <div key={item.id} className="side-panel__history-item">
+                <button
+                  key={item.id}
+                  type="button"
+                  className="side-panel__history-item side-panel__history-item--clickable"
+                  onClick={() => onOpenDetail(item.id)}
+                  title="결과 상세 보기"
+                >
                   <span aria-hidden>{statusIcon(item.status.code)}</span>
                   <div className="side-panel__history-main">
                     <span className="side-panel__history-name">{item.title ?? "레시피"}</span>
@@ -62,7 +73,7 @@ export function HistoryView({ userId }: PanelContext) {
                   {metaParts && (
                     <span className="side-panel__history-time">{metaParts}</span>
                   )}
-                </div>
+                </button>
               );
             })}
 

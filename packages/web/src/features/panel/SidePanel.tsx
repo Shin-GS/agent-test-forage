@@ -4,6 +4,7 @@
 // - 데이터는 각 뷰가 React Query 로 스스로 조회(채팅 store 와 분리).
 // - 반응형: Desktop 고정 열(항상 열림), Tablet/Mobile 은 is-open 오버레이(헤더 토글 버튼).
 
+import { ExecutionDetailView } from "./detail/ExecutionDetailView";
 import { HomeView } from "./home/HomeView";
 import { HistoryView } from "./history/HistoryView";
 import { usePanelStore, type PanelTab } from "./panelStore";
@@ -21,46 +22,59 @@ const TABS: { key: PanelTab; label: string }[] = [
 export function SidePanel(props: Props) {
   const tab = usePanelStore((s) => s.tab);
   const open = usePanelStore((s) => s.open);
+  const detailExecutionId = usePanelStore((s) => s.detailExecutionId);
   const setTab = usePanelStore((s) => s.setTab);
   const setOpen = usePanelStore((s) => s.setOpen);
+  const openDetail = usePanelStore((s) => s.openDetail);
+  const closeDetail = usePanelStore((s) => s.closeDetail);
 
   return (
     <aside className={`side-panel${open ? " is-open" : ""}`}>
       <div className="side-panel__inner">
-        {/* 상단 가로 탭 */}
-        <div className="side-panel__tabs" role="tablist" aria-label="사이드 패널">
-          {TABS.map((t) => (
+        {/* 상단 가로 탭 (상세 드릴다운 중에는 숨겨 목록 컨텍스트 혼동 방지) */}
+        {detailExecutionId == null && (
+          <div className="side-panel__tabs" role="tablist" aria-label="사이드 패널">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                className={`side-panel__tab${tab === t.key ? " is-active" : ""}`}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+            {/* Tablet/Mobile 오버레이 닫기 (Desktop 에선 CSS 로 숨김) */}
             <button
-              key={t.key}
               type="button"
-              role="tab"
-              aria-selected={tab === t.key}
-              className={`side-panel__tab${tab === t.key ? " is-active" : ""}`}
-              onClick={() => setTab(t.key)}
+              className="side-panel__close"
+              aria-label="패널 닫기"
+              onClick={() => setOpen(false)}
             >
-              {t.label}
+              ✕
             </button>
-          ))}
-          {/* Tablet/Mobile 오버레이 닫기 (Desktop 에선 CSS 로 숨김) */}
-          <button
-            type="button"
-            className="side-panel__close"
-            aria-label="패널 닫기"
-            onClick={() => setOpen(false)}
-          >
-            ✕
-          </button>
-        </div>
-
-        {tab === "home" && (
-          <HomeView
-            {...props}
-            onGoRecipes={() => setTab("recipes")}
-            onGoHistory={() => setTab("history")}
-          />
+          </div>
         )}
-        {tab === "recipes" && <RecipesView {...props} />}
-        {tab === "history" && <HistoryView {...props} />}
+
+        {/* 상세 드릴다운이 있으면 최우선으로 상세 뷰를 렌더(스택 top) */}
+        {detailExecutionId != null ? (
+          <ExecutionDetailView executionId={detailExecutionId} onBack={closeDetail} />
+        ) : (
+          <>
+            {tab === "home" && (
+              <HomeView
+                {...props}
+                onGoRecipes={() => setTab("recipes")}
+                onGoHistory={() => setTab("history")}
+                onOpenDetail={openDetail}
+              />
+            )}
+            {tab === "recipes" && <RecipesView {...props} />}
+            {tab === "history" && <HistoryView {...props} onOpenDetail={openDetail} />}
+          </>
+        )}
       </div>
     </aside>
   );
