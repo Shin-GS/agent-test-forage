@@ -10,7 +10,9 @@
 
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
+import { RequireAuth } from "./components/auth/RequireAuth";
 import { ChatPage } from "./pages/ChatPage";
+import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { RecipeListPage } from "./pages/RecipeListPage";
 import { RecipeEditPage } from "./pages/RecipeEditPage";
@@ -18,13 +20,19 @@ import { RecipeEditPage } from "./pages/RecipeEditPage";
 function App() {
   return (
     <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<ChatPage />} />
-        <Route path="/recipes" element={<RecipeListPage />} />
-        <Route path="/recipes/new" element={<RecipeEditPage />} />
-        <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+      {/* 인증 불필요 (레이아웃 밖) */}
+      <Route path="/login" element={<LoginPage />} />
+
+      {/* 인증 필요 — RequireAuth 가 세션을 확인하고, 그 아래 AppLayout 전체를 보호한다 */}
+      <Route element={<RequireAuth />}>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<ChatPage />} />
+          <Route path="/recipes" element={<RecipeListPage />} />
+          <Route path="/recipes/new" element={<RecipeEditPage />} />
+          <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
   );

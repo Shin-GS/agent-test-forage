@@ -527,7 +527,6 @@ export interface RecipeDetail {
 
 /** 레시피 생성 요청 (BE RecipeCreateRequest) */
 export interface RecipeCreateRequest {
-  ownerUserId: number;
   apiSpecId: number | null;
   name: string;
   description: string;

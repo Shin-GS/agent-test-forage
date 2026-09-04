@@ -1,6 +1,6 @@
 // Global SSE 구독 훅.
-// - GET {API_BASE}/sse/connect?userId={userId} 를 EventSource 로 구독
-// - EventSource 는 커스텀 헤더를 실을 수 없으므로 userId 를 쿼리로 전달
+// - GET {API_BASE}/sse/connect 를 EventSource 로 구독 (사용자는 세션 쿠키로 식별)
+// - withCredentials:true 로 세션 쿠키를 실어 서버가 사용자를 도출한다
 // - 백엔드는 named event(SseEmitter.event().name("message_new") 등)로 전송하므로
 //   각 이벤트명마다 addEventListener 로 개별 리스너를 등록해야 한다.
 //   (기본 "message" 리스너로는 named event 를 받지 못한다 — 이전 버그)
@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { API_BASE } from "../api/client";
 import type { SseEnvelope } from "../api/types";
 import { useChatStore } from "../store/chatStore";
+import { useAuthStore } from "../store/authStore";
 
 interface UseSseOptions {
   /** false 면 구독하지 않음 (예: 로그인 전) */
@@ -27,18 +28,19 @@ const SSE_EVENT_TYPES = [
 
 /**
  * 전역 SSE 연결을 열고, 수신 이벤트를 chatStore 액션으로 라우팅한다.
- * userId 는 스토어에서 가져온다.
+ * 사용자는 세션 쿠키(withCredentials)로 서버가 식별한다.
+ * 인증(authenticated) 상태에서만 연결하며, 로그인/로그아웃 시 재연결한다.
  */
 export function useSse(options: UseSseOptions = {}): void {
   const { enabled = true } = options;
-  const userId = useChatStore((state) => state.userId);
+  const authStatus = useAuthStore((state) => state.status);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || authStatus !== "authenticated") {
       return;
     }
 
-    const url = `${API_BASE}/sse/connect?userId=${encodeURIComponent(String(userId))}`;
+    const url = `${API_BASE}/sse/connect`;
     const source = new EventSource(url, { withCredentials: true });
 
     const handleEvent = (event: MessageEvent<string>) => {
@@ -63,8 +65,8 @@ export function useSse(options: UseSseOptions = {}): void {
       }
       source.close();
     };
-    // userId/enabled 변경 시 재연결
-  }, [enabled, userId]);
+    // enabled/인증 상태 변경 시 재연결
+  }, [enabled, authStatus]);
 }
 
 /** envelope.type 에 따라 스토어 액션 호출 */

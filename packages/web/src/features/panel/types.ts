@@ -6,7 +6,6 @@ import type { ConversationRuntimeStatus } from "../../store/types";
 export type RunRecipeFn = (recipeId: number, recipeName: string) => void;
 
 export interface PanelContext {
-  userId: number;
   /** 대화방 런타임 상태. idle 이 아니면 [▶] 비활성 */
   conversationStatus: ConversationRuntimeStatus;
   onRunRecipe: RunRecipeFn;

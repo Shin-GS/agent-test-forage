@@ -4,7 +4,6 @@ import { request } from "./client";
 import type { ExecutionResponse } from "./types";
 
 export interface StartExecutionPayload {
-  userId: number;
   recipeId: number;
   /** 실행 모드 코드 (예: AUTO / MANUAL) */
   mode: string;
@@ -90,15 +89,13 @@ export function respondActionPicker(payload: ActionPickerRespondPayload): Promis
   });
 }
 
-/** 사용자 실행 히스토리 (커서 페이지). 최근순. 사이드 패널/전체 히스토리 소비용 */
+/** 현재 세션 사용자 실행 히스토리 (커서 페이지). 최근순. userId 는 세션에서 도출 */
 export function history(
-  userId: number,
   params?: { status?: string; keyword?: string; cursor?: string; size?: number }
 ): Promise<import("./types").CursorPage<import("./types").ExecutionSummaryView>> {
   return request(`/executions`, {
     method: "GET",
     query: {
-      userId,
       status: params?.status,
       keyword: params?.keyword,
       cursor: params?.cursor,

@@ -9,6 +9,7 @@ import com.testforge.dto.conversation.ConversationTitleUpdateRequest;
 import com.testforge.dto.conversation.MessageResponse;
 import com.testforge.dto.conversation.MessageSendRequest;
 import com.testforge.dto.conversation.MessageSendResponse;
+import com.testforge.security.CurrentUser;
 import com.testforge.service.conversation.ConversationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,8 +31,8 @@ import java.util.List;
  * 메시지 접수 시 대화방을 ai_responding으로 전이하고 AI 처리(ChatProcessor)를 비동기로 구동한다.
  * 레시피/플랜 실행 엔진(executing 전이, 실제 스텝 실행)은 다음 조각에서 다룬다.
  *
- * <p>TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 접근). 현재 userId는
- * 요청 파라미터/바디로 받되 소유권 검증은 하지 않는다.
+ * <p>인증: 모든 엔드포인트는 세션 인증 필수(SecurityConfig). userId는 세션에서 도출하며
+ * 클라이언트가 보낸 userId는 신뢰하지 않는다(auth.md).
  */
 @RestController
 @RequestMapping("/api/v1/conversations")
@@ -51,16 +52,18 @@ public class ConversationController {
     @PostMapping("/messages")
     public ResponseEntity<ConversationStartResponse> start(
             @RequestBody ConversationStartRequest request) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: userId를 인증 주체에서 도출)
-        ConversationStartResponse response = conversationService.start(request);
+        // userId는 세션에서 도출 (클라이언트 값 무시)
+        ConversationStartRequest secured = new ConversationStartRequest(
+                CurrentUser.id(), request.content(), request.apiSpecId(),
+                request.title(), request.referenceId(), request.metadata());
+        ConversationStartResponse response = conversationService.start(secured);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    /** 대화방 목록 (userId 필터, 미삭제, lastMessageAt DESC). 각 항목에 unread 포함. */
+    /** 대화방 목록 (본인 것만, 미삭제, lastMessageAt DESC). 각 항목에 unread 포함. */
     @GetMapping
-    public List<ConversationSummaryResponse> list(@RequestParam Long userId) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 조회)
-        return conversationService.list(userId);
+    public List<ConversationSummaryResponse> list() {
+        return conversationService.list(CurrentUser.id());
     }
 
     /** 대화방 상세 (없거나 삭제 시 404) */
@@ -112,8 +115,10 @@ public class ConversationController {
     @PostMapping("/{id}/messages")
     public ResponseEntity<MessageSendResponse> sendMessage(@PathVariable Long id,
                                                            @RequestBody MessageSendRequest request) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 전송)
-        MessageSendResponse response = conversationService.sendMessage(id, request);
+        // userId는 세션에서 도출 (클라이언트 값 무시)
+        MessageSendRequest secured = new MessageSendRequest(
+                CurrentUser.id(), request.content(), request.referenceId(), request.metadata());
+        MessageSendResponse response = conversationService.sendMessage(id, secured);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

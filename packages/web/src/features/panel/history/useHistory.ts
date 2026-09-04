@@ -8,12 +8,12 @@ import type { CursorPage, ExecutionSummaryView } from "../../../api/types";
 
 const PAGE_SIZE = 20;
 
-export function useHistory(userId: number) {
+export function useHistory() {
   return useInfiniteQuery<CursorPage<ExecutionSummaryView>>({
-    queryKey: ["executions", userId],
+    queryKey: ["executions"],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
-      executionsApi.history(userId, { cursor: pageParam as string | undefined, size: PAGE_SIZE }),
+      executionsApi.history({ cursor: pageParam as string | undefined, size: PAGE_SIZE }),
     getNextPageParam: (last) => (last.hasNext ? last.nextCursor ?? undefined : undefined),
   });
 }

@@ -12,6 +12,17 @@ const BASE_URL = RAW_BASE_URL.replace(/\/+$/, "");
 /** /api/v1 프리픽스를 붙인 API base */
 export const API_BASE = `${BASE_URL}/api/v1`;
 
+/**
+ * 세션 만료(401) 전역 처리 훅. authStore 가 등록한다.
+ * client → store 를 직접 import 하면 순환 의존이 생기므로, store 가 핸들러를 주입하는 방향으로 둔다.
+ * 로그인 엔드포인트(/auth/login)의 401 은 "로그인 실패"이므로 세션 만료 처리에서 제외한다.
+ */
+type UnauthorizedHandler = () => void;
+let onUnauthorized: UnauthorizedHandler | null = null;
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorized = handler;
+}
+
 /** 서버 표준 에러를 표현하는 예외 */
 export class ApiError extends Error {
   readonly code: string;
@@ -91,6 +102,12 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!response.ok) {
+    // 세션 만료/무효 전역 처리: 로그인 요청이 아닌데 401 이면 로컬 세션을 정리해 로그인 화면으로 유도.
+    // (로그인 자체의 401 은 "로그인 실패"이므로 LoginPage 가 메시지로 처리한다)
+    const isLoginRequest = path.replace(/^\/+/, "").startsWith("auth/login");
+    if (response.status === 401 && !isLoginRequest && onUnauthorized) {
+      onUnauthorized();
+    }
     if (isApiErrorBody(parsed)) {
       throw new ApiError(
         parsed.error.code,

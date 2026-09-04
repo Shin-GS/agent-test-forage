@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-08
+last-updated: 2026-09-10
 ---
 
 # 메시징 및 SSE 이벤트 정의
@@ -230,7 +230,8 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
 
 ### 연결
 
-- 엔드포인트: `GET /api/v1/sse/connect?token={jwt}`
+- 엔드포인트: `GET /api/v1/sse/connect`
+- **세션 쿠키로 자동 인증**(EventSource `withCredentials: true`) — 쿼리 토큰/유저ID 없음. `userId`는 세션에서 도출 (상세: [인증](#인증))
 - Global SSE — 사용자당 1개 연결
 - 모든 대화방의 이벤트가 하나의 스트림으로 전달됨
 - FE가 `sessionId`로 현재 대화방 이벤트만 렌더링, 나머지는 상태만 업데이트
@@ -420,7 +421,7 @@ SSE 왕복을 기다리면 내 메시지가 화면에 늦게 뜨는 체감 지�
 > - heartbeat 전송 실패 시 해당 emitter를 즉시 제거 (좀비 커넥션·메모리 누수 방지)
 > - 브라우저는 도메인당 SSE 동시 연결 6개 제한(HTTP/1.1) — 배포 시 HTTP/2 권장
 > - 프록시(Nginx 등)는 `proxy_buffering off` + 유휴 타임아웃 상향 필요 (SSE 실시간성 보장)
-> - SSE 토큰이 URL 쿼리에 노출됨(EventSource 제약) — 필요 시 SSE 전용 단기 토큰 검토
+> - SSE 인증은 **세션 쿠키**로 하므로 쿼리 토큰을 쓰지 않는다(URL 노출 이슈 없음). same-origin에서 쿠키가 자동 전송되고 `userId`는 세션에서 도출한다(위 [인증](#인증)). 크로스 오리진 배포가 필요해지면 그때 쿠키 도메인/`SameSite` 구성을 검토
 
 ---
 
@@ -438,10 +439,11 @@ MESSAGE가 "화면에 보이는 것"의 진실이라면, **EXECUTION 테이블�
 
 ## 인증
 
-SSE 연결 시 JWT 토큰을 URL 쿼리 파라미터로 전달:
+SSE 연결은 **세션 쿠키로 인증**한다. JWT/쿼리 토큰을 쓰지 않는다.
 ```
-GET /api/v1/sse/connect?token=eyJhbGciOiJ...
+GET /api/v1/sse/connect        // EventSource withCredentials: true
 ```
 
-`EventSource`는 커스텀 헤더를 지원하지 않으므로 쿼리 파라미터 방식 사용.
-토큰 만료 시 서버가 연결 종료 → 클라이언트가 토큰 갱신 후 재연결.
+- `EventSource`는 커스텀 헤더를 지원하지 않지만, **세션 쿠키는 same-origin 요청에서 자동 전송**되므로 헤더 없이 인증된다(로컬은 Vite 프록시로 same-origin). `withCredentials: true`로 쿠키를 함께 보낸다.
+- `userId`는 요청 파라미터가 아니라 **세션에서 도출**한다.
+- 세션 만료/무효화 시 서버가 401로 연결을 거부 → 클라이언트가 재로그인 후 재연결. (인증 방식 전반: [auth.md 인증 방식](auth.md#인증-방식))

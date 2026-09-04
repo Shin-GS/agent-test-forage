@@ -5,6 +5,7 @@ import com.testforge.dto.recipe.RecipeDetailResponse;
 import com.testforge.dto.recipe.RecipeSummaryResponse;
 import com.testforge.dto.recipe.RecipeUpdateRequest;
 import com.testforge.entity.recipe.enums.Visibility;
+import com.testforge.security.CurrentUser;
 import com.testforge.service.recipe.RecipeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,8 +41,13 @@ public class RecipeController {
     /** 레시피 생성 (v1, 생성 시 검증 수행). 순환 참조면 400. */
     @PostMapping
     public ResponseEntity<RecipeDetailResponse> create(@RequestBody RecipeCreateRequest request) {
-        // TODO: 권한 체크 (auth 도메인 구현 후: 관리자만 COMMON 생성, 본인 PRIVATE만 접근)
-        RecipeDetailResponse created = recipeService.create(request);
+        // ownerUserId(작성자)는 세션에서 도출 (클라이언트 값 무시).
+        // TODO: 권한 체크 (관리자만 COMMON 생성 등)는 후속 — 이번 조각은 작성자 세션 도출까지.
+        RecipeCreateRequest secured = new RecipeCreateRequest(
+                CurrentUser.id(), request.apiSpecId(), request.name(), request.description(),
+                request.visibility(), request.tags(), request.variables(), request.steps(),
+                request.resultDefinition(), request.resultTemplate());
+        RecipeDetailResponse created = recipeService.create(secured);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

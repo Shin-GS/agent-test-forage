@@ -28,6 +28,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    // 인증/인가 (세션 쿠키 + BCrypt). 세션은 인메모리 HttpSession, JWT/OAuth 미사용.
+    implementation("org.springframework.boot:spring-boot-starter-security")
 
     // OpenAPI 3.0/3.1 파싱 (specJson의 paths → endpoint 분해)
     implementation("io.swagger.parser.v3:swagger-parser:2.1.22")

@@ -14,8 +14,8 @@ interface Props extends PanelContext {
   onOpenDetail: (executionId: number) => void;
 }
 
-export function HistoryView({ userId, onOpenDetail }: Props) {
-  const query = useHistory(userId);
+export function HistoryView({ onOpenDetail }: Props) {
+  const query = useHistory();
   const {
     data,
     isLoading,

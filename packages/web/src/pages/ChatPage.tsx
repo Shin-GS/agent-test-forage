@@ -42,7 +42,6 @@ function optimisticUserMessage(conversationId: number, content: string): Message
 }
 
 export function ChatPage() {
-  const userId = useChatStore((state) => state.userId);
   const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore((state) => state.currentConversationId);
   const messages = useChatStore((state) => state.messages);
@@ -73,12 +72,12 @@ export function ChatPage() {
   // 대화 목록 로드
   const loadConversations = useCallback(async () => {
     try {
-      const list = await conversationsApi.listConversations(userId);
+      const list = await conversationsApi.listConversations();
       setConversations(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : "대화 목록을 불러오지 못했습니다");
     }
-  }, [userId, setConversations]);
+  }, [setConversations]);
 
   useEffect(() => {
     void loadConversations();
@@ -112,7 +111,6 @@ export function ChatPage() {
         if (currentConversationId == null) {
           // 새 대화 생성 + 첫 메시지
           const started = await conversationsApi.startMessage({
-            userId,
             content,
             apiSpecId: DEFAULT_API_SPEC_ID,
             referenceId,
@@ -135,13 +133,13 @@ export function ChatPage() {
           await loadConversations();
         } else {
           addMessage(optimisticUserMessage(currentConversationId, content));
-          await conversationsApi.sendMessage(currentConversationId, { userId, content, referenceId });
+          await conversationsApi.sendMessage(currentConversationId, { content, referenceId });
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "메시지 전송에 실패했습니다");
       }
     },
-    [currentConversationId, userId, setCurrentConversation, addMessage, loadConversations]
+    [currentConversationId, setCurrentConversation, addMessage, loadConversations]
   );
 
   // 실행 중지: 현재 대화방의 진행 실행을 서버에 중지 요청한다(상태/진행은 SSE 로 반영).
@@ -198,7 +196,6 @@ export function ChatPage() {
       </div>
 
       <SidePanel
-        userId={userId}
         conversationStatus={conversationStatus}
         onRunRecipe={handleRunRecipe}
       />

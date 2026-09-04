@@ -32,7 +32,6 @@ function rankRecipes(list: RecipeSummary[]): RecipeSummary[] {
 }
 
 export function HomeView({
-  userId,
   conversationStatus,
   onRunRecipe,
   onGoRecipes,
@@ -47,8 +46,8 @@ export function HomeView({
   });
 
   const recentQuery = useQuery<CursorPage<ExecutionSummaryView>>({
-    queryKey: ["executions", userId, "home"],
-    queryFn: () => executionsApi.history(userId, { size: TOP_N }),
+    queryKey: ["executions", "home"],
+    queryFn: () => executionsApi.history({ size: TOP_N }),
   });
 
   const topRecipes = useMemo(() => rankRecipes(recipesQuery.data ?? []), [recipesQuery.data]);

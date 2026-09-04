@@ -9,6 +9,7 @@ import com.testforge.dto.execution.ExecutionStepView;
 import com.testforge.dto.execution.ExecutionSummaryView;
 import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.entity.execution.enums.ExecutionStatus;
+import com.testforge.security.CurrentUser;
 import com.testforge.service.execution.ExecutionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>히스토리 목록은 커서 기반 무한 스크롤로 제공한다(부하 방지). 이어서 실행/플랜 실행은 다음 조각.
  *
- * <p>TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방/실행만 접근).
+ * <p>인증: 모든 엔드포인트는 세션 인증 필수(SecurityConfig). userId는 세션에서 도출한다(auth.md).
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -45,8 +46,11 @@ public class ExecutionController {
     @PostMapping("/conversations/{conversationId}/executions")
     public ResponseEntity<ExecutionResponse> start(@PathVariable Long conversationId,
                                                    @RequestBody ExecutionStartRequest request) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: userId를 인증 주체에서 도출)
-        ExecutionResponse response = executionService.start(conversationId, request);
+        // userId는 세션에서 도출 (클라이언트 값 무시)
+        ExecutionStartRequest secured = new ExecutionStartRequest(
+                CurrentUser.id(), request.recipeId(), request.mode(),
+                request.messageId(), request.initialContext());
+        ExecutionResponse response = executionService.start(conversationId, secured);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -66,13 +70,12 @@ public class ExecutionController {
      * 응답은 경량 요약 목록 + nextCursor/hasNext.
      */
     @GetMapping("/executions")
-    public CursorPage<ExecutionSummaryView> history(@RequestParam Long userId,
-                                                    @RequestParam(required = false) ExecutionStatus status,
+    public CursorPage<ExecutionSummaryView> history(@RequestParam(required = false) ExecutionStatus status,
                                                     @RequestParam(required = false) String keyword,
                                                     @RequestParam(required = false) String cursor,
                                                     @RequestParam(required = false) Integer size) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 히스토리만 조회)
-        return executionService.history(userId, status, keyword, cursor, size);
+        // 본인 히스토리만 조회 (userId는 세션에서 도출)
+        return executionService.history(CurrentUser.id(), status, keyword, cursor, size);
     }
 
     /** 실행 상세 조회 (진행 상태 블록/히스토리 상세용). 없으면 404. */

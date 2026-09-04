@@ -11,7 +11,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, recipesApi } from "../api";
 import type { RecipeCreateRequest, RecipeUpdateRequest } from "../api/types";
-import { useChatStore } from "../store/chatStore";
 import { MetaSection } from "../components/recipe/MetaSection";
 import { VariablesSection } from "../components/recipe/VariablesSection";
 import { StepsSection } from "../components/recipe/StepsSection";
@@ -42,7 +41,6 @@ export function RecipeEditPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const params = useParams<{ id?: string }>();
-  const ownerUserId = useChatStore((s) => s.userId);
 
   const recipeId = params.id ? Number(params.id) : null;
   const isEdit = recipeId != null;
@@ -127,7 +125,7 @@ export function RecipeEditPage() {
     const result = validateRecipe(form);
     setValidation(result);
     if (!result.valid) return;
-    const body = isEdit ? formToUpdateRequest(form) : formToCreateRequest(form, ownerUserId);
+    const body = isEdit ? formToUpdateRequest(form) : formToCreateRequest(form);
     saveMutation.mutate(body);
   }
 

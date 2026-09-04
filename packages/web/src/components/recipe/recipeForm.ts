@@ -84,10 +84,9 @@ export function detailToForm(detail: RecipeDetail): RecipeFormState {
   };
 }
 
-/** 폼 상태 → 생성 요청 바디 */
-export function formToCreateRequest(form: RecipeFormState, ownerUserId: number): RecipeCreateRequest {
+/** 폼 상태 → 생성 요청 바디 (ownerUserId 는 서버 세션에서 도출) */
+export function formToCreateRequest(form: RecipeFormState): RecipeCreateRequest {
   return {
-    ownerUserId,
     apiSpecId: form.apiSpecId,
     name: form.name.trim(),
     description: form.description.trim(),

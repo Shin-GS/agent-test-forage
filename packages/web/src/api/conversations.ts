@@ -11,7 +11,6 @@ import type {
 } from "./types";
 
 export interface StartMessagePayload {
-  userId: number;
   content: string;
   apiSpecId?: number;
   /** 참조 태그 (사이드 패널 레시피 실행 시 recipeId 를 문자열로 전달) */
@@ -19,7 +18,6 @@ export interface StartMessagePayload {
 }
 
 export interface SendMessagePayload {
-  userId: number;
   content: string;
   /** 참조 태그 (사이드 패널 레시피 실행 시 recipeId 를 문자열로 전달) */
   referenceId?: string;
@@ -44,11 +42,10 @@ export function sendMessage(
   });
 }
 
-/** 사용자의 대화방 목록 조회 */
-export function listConversations(userId: number): Promise<ConversationSummary[]> {
+/** 현재 세션 사용자의 대화방 목록 조회 (userId 는 세션에서 도출) */
+export function listConversations(): Promise<ConversationSummary[]> {
   return request<ConversationSummary[]>("/conversations", {
     method: "GET",
-    query: { userId },
   });
 }
 

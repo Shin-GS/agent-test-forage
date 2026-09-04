@@ -5,9 +5,7 @@
 import { create } from "zustand";
 import type { ActionPickerVariable, ConversationSummary, MessageResponse, StatusView } from "../api/types";
 import type { ConversationRuntimeStatus } from "./types";
-
-// auth 미구현 — 임시 하드코딩 사용자
-const DEFAULT_USER_ID = 1;
+import { useAuthStore } from "./authStore";
 
 // ---------------------------------------------------------------------------
 // SSE 이벤트 payload (envelope.data) 형태
@@ -81,7 +79,6 @@ export interface AuthPauseState {
 }
 
 interface ChatState {
-  userId: number;
   currentConversationId: number | null;
   conversations: ConversationSummary[];
   messages: MessageResponse[];
@@ -140,7 +137,6 @@ function normalizeMessages(messages: MessageResponse[]): MessageResponse[] {
 }
 
 export const useChatStore = create<ChatState>((set) => ({
-  userId: DEFAULT_USER_ID,
   currentConversationId: null,
   conversations: [],
   messages: [],
@@ -233,7 +229,8 @@ export const useChatStore = create<ChatState>((set) => ({
           }
         : {
             id: snap.id,
-            userId: state.userId,
+            // userId 는 세션 사용자로 채운다(스냅샷에는 userId 가 없음). 없으면 0(표시에 미사용).
+            userId: useAuthStore.getState().user?.id ?? 0,
             title: snap.title,
             apiSpecId: snap.apiSpecId,
             status: snap.status ?? { code: "IDLE", description: "" },

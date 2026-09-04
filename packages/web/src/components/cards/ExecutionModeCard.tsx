@@ -51,7 +51,6 @@ function renderValue(value: unknown | null): string {
 
 export function ExecutionModeCard({ card }: Props) {
   const conversationId = useChatStore((state) => state.currentConversationId);
-  const userId = useChatStore((state) => state.userId);
   const conversationStatus = useChatStore((state) => state.conversationStatus);
   const setActionPicker = useChatStore((state) => state.setActionPicker);
   const authPause = useChatStore((state) => state.authPause);
@@ -82,7 +81,6 @@ export function ExecutionModeCard({ card }: Props) {
     setError(null);
     try {
       const execution = await executionsApi.startExecution(convId, {
-        userId,
         recipeId: card.recipeId,
         mode: spec.mode,
         // AI 가 발화에서 추출한 값을 실행 시작 시 시드(BE 가 recipe 변수 기본값과 병합).
