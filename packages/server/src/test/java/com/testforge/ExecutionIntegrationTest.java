@@ -6,16 +6,19 @@ import com.testforge.entity.execution.Execution;
 import com.testforge.entity.execution.enums.ExecutionRecipeStatus;
 import com.testforge.entity.execution.enums.ExecutionStatus;
 import com.testforge.entity.recipe.Recipe;
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.execution.ExecutionRecipeRepository;
 import com.testforge.repository.execution.ExecutionRepository;
 import com.testforge.repository.execution.ExecutionStepRepository;
 import com.testforge.repository.recipe.RecipeRepository;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -25,6 +28,7 @@ import org.springframework.web.context.WebApplicationContext;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -43,6 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestAuthSupport.class)
 class ExecutionIntegrationTest {
 
     @Autowired
@@ -66,17 +71,22 @@ class ExecutionIntegrationTest {
     @Autowired
     private ConversationLock conversationLock;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
     private static final long USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         executionStepRepository.deleteAll();
         executionRecipeRepository.deleteAll();
         executionRepository.deleteAll();
         recipeRepository.deleteAll();
         conversationRepository.deleteAll();
+        // 인증 주체와 동일 id의 ACTIVE 계정 보장
+        testAuth.ensureUser(USER_ID, UserRole.USER);
     }
 
     /** 두 스텝짜리 레시피 생성 (API + SCRIPT) */
@@ -103,7 +113,7 @@ class ExecutionIntegrationTest {
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + ",\"mode\":\"AUTO\"}"))
                 .andExpect(status().isCreated())
@@ -138,7 +148,7 @@ class ExecutionIntegrationTest {
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
 
-        String startResponse = mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        String startResponse = mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated())
@@ -146,7 +156,7 @@ class ExecutionIntegrationTest {
         Long executionId = executionRepository.findAll().get(0).getId();
 
         // 종료 보고 (SUCCESS)
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId)
+        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUCCESS\",\"resultSummary\":\"완료\"}"))
                 .andExpect(status().isOk())
@@ -165,7 +175,7 @@ class ExecutionIntegrationTest {
                 .get(0).getStatus()).isEqualTo(ExecutionRecipeStatus.SUCCESS);
 
         // 멱등: 이미 종료된 실행 재호출 → 200 no-op, 상태 유지
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId)
+        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"FAILED\"}"))
                 .andExpect(status().isOk())
@@ -178,13 +188,13 @@ class ExecutionIntegrationTest {
         Long specId = 10L;
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId)
+        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"RUNNING\"}"))
                 .andExpect(status().isBadRequest())
@@ -197,7 +207,7 @@ class ExecutionIntegrationTest {
         Long specId = 10L;
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated());
@@ -205,7 +215,7 @@ class ExecutionIntegrationTest {
 
         // STOPPED, CANCELLED 모두 complete로는 거부된다 (반드시 stop/cancel API 경유)
         for (String interrupt : new String[]{"STOPPED", "CANCELLED"}) {
-            mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId)
+            mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"status\":\"" + interrupt + "\"}"))
                     .andExpect(status().isBadRequest())
@@ -223,7 +233,7 @@ class ExecutionIntegrationTest {
         // 다른 처리가 점유 중인 상황 시뮬레이션
         assertThat(conversationLock.tryLock(conversationId)).isTrue();
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isConflict())
@@ -235,7 +245,7 @@ class ExecutionIntegrationTest {
     void start_unknownRecipe_returns404_andReleasesLock() throws Exception {
         Long conversationId = newConversation(10L, ConversationStatus.IDLE);
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":999999}"))
                 .andExpect(status().isNotFound())
@@ -251,19 +261,19 @@ class ExecutionIntegrationTest {
         Long specId = 10L;
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
         // 실행 종료 후 대화방 삭제 (실행 중 삭제는 다음 조각의 중지 흐름)
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId)
+        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUCCESS\"}"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(delete("/api/v1/conversations/{id}", conversationId))
+        mockMvc.perform(delete("/api/v1/conversations/{id}", conversationId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNoContent());
 
         // 소프트 삭제라 대화방 row는 남고, 실행의 대화 연결도 그대로 유지된다.
@@ -277,13 +287,13 @@ class ExecutionIntegrationTest {
         Long specId = 10L;
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        mockMvc.perform(get("/api/v1/executions/{id}", executionId))
+        mockMvc.perform(get("/api/v1/executions/{id}", executionId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(executionId))
                 .andExpect(jsonPath("$.recipes[0].recipeName").value("회원가입"));
@@ -292,14 +302,14 @@ class ExecutionIntegrationTest {
     // ── 실행 상세: 없는 실행 → 404 ──
     @Test
     void detail_unknownExecution_returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/executions/{id}", 999999L))
+        mockMvc.perform(get("/api/v1/executions/{id}", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("EXECUTION_NOT_FOUND"));
     }
 
     /** 실행을 시작하고 첫 스텝 ID를 돌려주는 헬퍼 */
     private long startAndFirstStepId(Long conversationId, Long recipeId) throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId)
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated());
@@ -320,7 +330,7 @@ class ExecutionIntegrationTest {
         long stepId = startAndFirstStepId(conversationId, recipeId);
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepId)
+        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUCCESS\",\"summary\":\"가입 성공\","
                                 + "\"extractedValues\":{\"memberId\":123},"
@@ -331,7 +341,7 @@ class ExecutionIntegrationTest {
                 .andExpect(jsonPath("$.finishedAt").isNotEmpty());
 
         // context에 extractedValues가 누적됨
-        mockMvc.perform(get("/api/v1/executions/{id}", executionId))
+        mockMvc.perform(get("/api/v1/executions/{id}", executionId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.context.memberId").value(123));
     }
@@ -345,7 +355,7 @@ class ExecutionIntegrationTest {
         long stepId = startAndFirstStepId(conversationId, recipeId);
 
         // 존재하지 않는 실행 ID로 보고 → 404 (실행 없음)
-        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", 999999L, stepId)
+        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", 999999L, stepId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUCCESS\"}"))
                 .andExpect(status().isNotFound())
@@ -361,7 +371,7 @@ class ExecutionIntegrationTest {
         long stepId = startAndFirstStepId(conversationId, recipeId);
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepId)
+        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PENDING\"}"))
                 .andExpect(status().isBadRequest())
@@ -377,7 +387,7 @@ class ExecutionIntegrationTest {
         startAndFirstStepId(conversationId, recipeId);
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/stop", conversationId))
+        mockMvc.perform(post("/api/v1/conversations/{id}/stop", conversationId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.code").value("IDLE"));
 
@@ -400,7 +410,7 @@ class ExecutionIntegrationTest {
         startAndFirstStepId(conversationId, recipeId);
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", conversationId))
+        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", conversationId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.code").value("IDLE"));
 
@@ -424,13 +434,13 @@ class ExecutionIntegrationTest {
         Long executionId = executionRepository.findAll().get(0).getId();
 
         // 첫 스텝 성공 보고
-        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepId)
+        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUCCESS\",\"summary\":\"ok\"}"))
                 .andExpect(status().isOk());
 
         // 중지
-        mockMvc.perform(post("/api/v1/conversations/{id}/stop", conversationId))
+        mockMvc.perform(post("/api/v1/conversations/{id}/stop", conversationId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk());
 
         Execution execution = executionRepository.findById(executionId).orElseThrow();
@@ -448,7 +458,7 @@ class ExecutionIntegrationTest {
         startAndFirstStepId(conversationId, recipeId);
 
         // 대화방이 EXECUTING 상태이므로 삭제 차단
-        mockMvc.perform(delete("/api/v1/conversations/{id}", conversationId))
+        mockMvc.perform(delete("/api/v1/conversations/{id}", conversationId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_EXECUTING"));
     }

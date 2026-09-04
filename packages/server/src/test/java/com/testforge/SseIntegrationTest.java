@@ -1,11 +1,14 @@
 package com.testforge;
 
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.sse.GlobalSseRegistry;
 import com.testforge.sse.SseEventPublisher;
 import com.testforge.sse.enums.SseEventType;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -44,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestAuthSupport.class)
 class SseIntegrationTest {
 
     @Autowired
@@ -55,18 +60,24 @@ class SseIntegrationTest {
     @Autowired
     private SseEventPublisher publisher;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
 
     /** 테스트 간 격리를 위한 userId 발급기 (공유 컨텍스트 오염 방지). */
     private static final AtomicLong USER_SEQ = new AtomicLong(1000L);
 
+    /** 고유 userId 발급 + 해당 id의 ACTIVE 계정 보장 (SessionUserRecheckFilter 통과) */
     private long uniqueUserId() {
-        return USER_SEQ.incrementAndGet();
+        long id = USER_SEQ.incrementAndGet();
+        testAuth.ensureUser(id, UserRole.USER);
+        return id;
     }
 
     private MockMvc mvc() {
         if (mockMvc == null) {
-            mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+            mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         }
         return mockMvc;
     }
@@ -77,7 +88,7 @@ class SseIntegrationTest {
         long userId = uniqueUserId();
         int before = registry.activeConnectionCount();
 
-        MvcResult result = mvc().perform(get("/api/v1/sse/connect").param("userId", String.valueOf(userId)))
+        MvcResult result = mvc().perform(get("/api/v1/sse/connect").with(testAuth.as(userId)).param("userId", String.valueOf(userId)))
                 .andExpect(status().isOk())
                 .andExpect(request().asyncStarted())
                 .andReturn();
@@ -97,7 +108,7 @@ class SseIntegrationTest {
     void connect_thenPublish_streamsEventWithLowercaseWireName() throws Exception {
         long userId = uniqueUserId();
 
-        MvcResult result = mvc().perform(get("/api/v1/sse/connect").param("userId", String.valueOf(userId)))
+        MvcResult result = mvc().perform(get("/api/v1/sse/connect").with(testAuth.as(userId)).param("userId", String.valueOf(userId)))
                 .andExpect(status().isOk())
                 .andExpect(request().asyncStarted())
                 .andReturn();
@@ -137,7 +148,7 @@ class SseIntegrationTest {
 
         // Last-Event-ID=1 로 재연결하면 컨트롤러(SseController.connect)가 eventId>1 인 것만 replay.
         // 실제 HTTP 재연결 경로로 검증한다.
-        MvcResult result = mvc().perform(get("/api/v1/sse/connect")
+        MvcResult result = mvc().perform(get("/api/v1/sse/connect").with(testAuth.as(userId))
                         .param("userId", String.valueOf(userId))
                         .header("Last-Event-ID", "1"))
                 .andExpect(status().isOk())
@@ -164,14 +175,14 @@ class SseIntegrationTest {
         long userId = uniqueUserId();
         int before = registry.activeConnectionCount();
 
-        MvcResult first = mvc().perform(get("/api/v1/sse/connect").param("userId", String.valueOf(userId)))
+        MvcResult first = mvc().perform(get("/api/v1/sse/connect").with(testAuth.as(userId)).param("userId", String.valueOf(userId)))
                 .andExpect(status().isOk())
                 .andExpect(request().asyncStarted())
                 .andReturn();
         assertThat(registry.activeConnectionCount()).isEqualTo(before + 1);
 
         // 같은 사용자로 재연결 → 이전 emitter는 complete되고 새 emitter로 교체 (총 count 불변)
-        MvcResult second = mvc().perform(get("/api/v1/sse/connect").param("userId", String.valueOf(userId)))
+        MvcResult second = mvc().perform(get("/api/v1/sse/connect").with(testAuth.as(userId)).param("userId", String.valueOf(userId)))
                 .andExpect(status().isOk())
                 .andExpect(request().asyncStarted())
                 .andReturn();
@@ -190,7 +201,7 @@ class SseIntegrationTest {
     void heartbeat_isSentAsCommentWithoutIdOrEvent() throws Exception {
         long userId = uniqueUserId();
 
-        MvcResult result = mvc().perform(get("/api/v1/sse/connect").param("userId", String.valueOf(userId)))
+        MvcResult result = mvc().perform(get("/api/v1/sse/connect").with(testAuth.as(userId)).param("userId", String.valueOf(userId)))
                 .andExpect(status().isOk())
                 .andExpect(request().asyncStarted())
                 .andReturn();

@@ -1,14 +1,18 @@
 package com.testforge;
 
+import com.testforge.entity.user.enums.UserRole;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -18,16 +22,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestAuthSupport.class)
 class SettingsIntegrationTest {
 
     @Autowired
     private WebApplicationContext context;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
+    private static final long USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+        testAuth.ensureUser(USER_ID, UserRole.USER);
     }
 
     // ── 설정 조회: 고정 계약(provider/editable) + 값 존재/타입 ──
@@ -35,7 +45,7 @@ class SettingsIntegrationTest {
     // (환경 의존 단언은 CI/다른 개발자 환경에서 깨진다) 계약상 고정된 것만 값으로 검증한다.
     @Test
     void getSettings_returnsReadOnlyContract() throws Exception {
-        mockMvc.perform(get("/api/v1/settings"))
+        mockMvc.perform(get("/api/v1/settings").with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 // Provider는 OpenRouter 고정, 편집 불가(설정 파일로만 변경) — 계약
                 .andExpect(jsonPath("$.provider").value("OpenRouter"))
@@ -52,7 +62,7 @@ class SettingsIntegrationTest {
     // ── 시크릿 미노출: 응답 어디에도 apiKey/시크릿이 없어야 함 ──
     @Test
     void getSettings_doesNotExposeSecrets() throws Exception {
-        String body = mockMvc.perform(get("/api/v1/settings"))
+        String body = mockMvc.perform(get("/api/v1/settings").with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 

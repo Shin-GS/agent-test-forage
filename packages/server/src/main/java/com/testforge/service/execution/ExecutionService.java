@@ -127,12 +127,21 @@ public class ExecutionService {
      * 처리 중 예외로 실제 시작에 이르지 못하면 락을 해제한다(영구 잠금 방지).
      */
     @Transactional
-    public ExecutionResponse start(Long conversationId, ExecutionStartRequest request) {
+    public ExecutionResponse start(Long conversationId, Long requesterId, ExecutionStartRequest request) {
         if (request.userId() == null) {
             throw ApiException.invalidRequest("userId is required");
         }
         if (request.recipeId() == null) {
             throw ApiException.invalidRequest("recipeId is required");
+        }
+
+        // 소유자 검증을 락 획득보다 먼저 수행한다. 타인이 남의 conversationId로 호출해도
+        // 락을 건드리지 않고 404로 거절되어, 정당한 소유자가 락 경합(409)을 겪지 않는다.
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElseThrow(() -> ApiException.conversationNotFound(conversationId));
+        if (requesterId == null || !requesterId.equals(conversation.getUserId())) {
+            // 남의 대화방에 실행 생성 방지 (타인 소유면 존재 노출 없이 404)
+            throw ApiException.conversationNotFound(conversationId);
         }
 
         // 대화방 선점: 이미 처리 중이면(락 경합) 이중 실행이므로 409로 거절
@@ -141,16 +150,15 @@ public class ExecutionService {
         }
         boolean started = false;
         try {
-            Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
-                    .orElseThrow(() -> ApiException.conversationNotFound(conversationId));
-
             Recipe recipe = recipeRepository.findByIdAndDeletedAtIsNull(request.recipeId())
                     .orElseThrow(() -> ApiException.recipeNotFound(request.recipeId()));
 
             ExecutionMode mode = request.mode() == null ? ExecutionMode.AUTO : request.mode();
 
             // 1) EXECUTION 생성 (단일 = 레시피 1개짜리 플랜)
-            Execution execution = new Execution(request.userId(), ExecutionType.SINGLE, mode);
+            //    소유자는 세션 주체(requesterId)로 저장한다. 위에서 conversation.getUserId()와
+            //    일치함을 검증했으므로 request.userId()가 아닌 requesterId를 신뢰값으로 사용한다.
+            Execution execution = new Execution(requesterId, ExecutionType.SINGLE, mode);
             execution.setConversationId(conversationId);
             // MESSAGE_ID는 진행 블록(PROGRESS) 메시지를 가리킨다. 실제 실행 시작(executing 전이) 시점에
             // PROGRESS 메시지를 만들며 setMessageId로 채운다(입력 대기면 respond 재개 시점).
@@ -253,7 +261,7 @@ public class ExecutionService {
      * 상태로 보고하면 400. 실행/대화방이 없으면 404.
      */
     @Transactional
-    public ExecutionResponse complete(Long executionId, ExecutionCompleteRequest request) {
+    public ExecutionResponse complete(Long executionId, Long requesterId, ExecutionCompleteRequest request) {
         // complete는 정상 완료 보고 전용(SUCCESS/PARTIAL/FAILED). 중지/취소(STOPPED/CANCELLED)는
         // 반드시 stop/cancel API 경유여야 대화방 해제·안내 메시지·요약이 일관되게 처리되므로 거부한다.
         if (request.status() == null
@@ -265,6 +273,7 @@ public class ExecutionService {
         }
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> ApiException.executionNotFound(executionId));
+        requireOwner(execution, requesterId);
 
         // 멱등: 이미 종료된 실행이면 상태 변경 없이 그대로 반환 (락/발행 재수행 안 함)
         if (execution.getStatus().isTerminal()) {
@@ -320,9 +329,10 @@ public class ExecutionService {
 
     /** 실행 상세 조회 (없으면 404) */
     @Transactional(readOnly = true)
-    public ExecutionResponse detail(Long executionId) {
+    public ExecutionResponse detail(Long executionId, Long requesterId) {
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> ApiException.executionNotFound(executionId));
+        requireOwner(execution, requesterId);
         return toResponse(execution);
     }
 
@@ -361,10 +371,14 @@ public class ExecutionService {
      * 커서 페이지를 돌려준다.
      */
     @Transactional(readOnly = true)
-    public CursorPage<ExecutionSummaryView> historyByConversation(Long conversationId, String cursor,
-                                                                  Integer size) {
-        conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+    public CursorPage<ExecutionSummaryView> historyByConversation(Long conversationId, Long requesterId,
+                                                                  String cursor, Integer size) {
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
                 .orElseThrow(() -> ApiException.conversationNotFound(conversationId));
+        // 소유자 검증: 타인 대화방이면 존재 노출 없이 404
+        if (requesterId == null || !requesterId.equals(conversation.getUserId())) {
+            throw ApiException.conversationNotFound(conversationId);
+        }
         int limit = normalizeSize(size);
         Long cursorId = decodeCursor(cursor);
 
@@ -552,13 +566,15 @@ public class ExecutionService {
      * @param stepId      보고 대상 스텝
      */
     @Transactional
-    public ExecutionStepView reportStep(Long executionId, Long stepId, StepReportRequest request) {
+    public ExecutionStepView reportStep(Long executionId, Long stepId, Long requesterId,
+                                        StepReportRequest request) {
         if (request.status() == null || request.status() == ExecutionStepStatus.PENDING) {
             throw ApiException.invalidRequest("terminal step status is required (not PENDING)");
         }
 
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> ApiException.executionNotFound(executionId));
+        requireOwner(execution, requesterId);
         if (execution.getStatus().isTerminal()) {
             throw ApiException.invalidRequest("execution is already terminal: " + executionId);
         }
@@ -616,13 +632,14 @@ public class ExecutionService {
      * <p>{@code stepIndex}는 pre-run 수집이면 {@code -1}로 온다. 프로토타입은 값 병합에 사용하지 않는다.
      */
     @Transactional
-    public ExecutionResponse respondActionPicker(ActionPickerRespondRequest request) {
+    public ExecutionResponse respondActionPicker(Long requesterId, ActionPickerRespondRequest request) {
         if (request.executionId() == null) {
             throw ApiException.invalidRequest("executionId is required");
         }
 
         Execution execution = executionRepository.findById(request.executionId())
                 .orElseThrow(() -> ApiException.executionNotFound(request.executionId()));
+        requireOwner(execution, request.executionId(), requesterId);
 
         Long conversationId = execution.getConversationId();
         if (conversationId == null) {
@@ -1557,6 +1574,22 @@ public class ExecutionService {
     /** 실행 소유자 ID. execution.userId를 신뢰(대화 삭제로 conversation이 없어도 SSE 대상 유지) */
     private Long resolveOwnerId(Execution execution) {
         return execution.getUserId();
+    }
+
+    /**
+     * 실행 소유자 검증 (IDOR 방지). 요청자가 실행 소유자({@code Execution.userId})가 아니면
+     * <b>존재를 노출하지 않도록</b> 404({@code executionNotFound})로 처리한다.
+     * 사용자 요청 진입점 전용 — 시스템/스케줄러/SSE 내부 경로에는 쓰지 않는다.
+     */
+    private void requireOwner(Execution execution, Long requesterId) {
+        requireOwner(execution, execution.getId(), requesterId);
+    }
+
+    /** 소유자 검증 오버로드: 404에 노출할 식별자를 명시(요청 바디의 executionId 등)한다. */
+    private void requireOwner(Execution execution, Long executionId, Long requesterId) {
+        if (requesterId == null || !requesterId.equals(execution.getUserId())) {
+            throw ApiException.executionNotFound(executionId);
+        }
     }
 
     /** 실행 상세를 응답으로 매핑 (하위 레시피/스텝 포함). pendingInputs 없이(빈 리스트) 매핑 */

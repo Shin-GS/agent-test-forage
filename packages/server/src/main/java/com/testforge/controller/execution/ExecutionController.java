@@ -47,10 +47,11 @@ public class ExecutionController {
     public ResponseEntity<ExecutionResponse> start(@PathVariable Long conversationId,
                                                    @RequestBody ExecutionStartRequest request) {
         // userId는 세션에서 도출 (클라이언트 값 무시)
+        Long requesterId = CurrentUser.id();
         ExecutionStartRequest secured = new ExecutionStartRequest(
-                CurrentUser.id(), request.recipeId(), request.mode(),
+                requesterId, request.recipeId(), request.mode(),
                 request.messageId(), request.initialContext());
-        ExecutionResponse response = executionService.start(conversationId, secured);
+        ExecutionResponse response = executionService.start(conversationId, requesterId, secured);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -61,7 +62,7 @@ public class ExecutionController {
     @PostMapping("/executions/{executionId}/complete")
     public ExecutionResponse complete(@PathVariable Long executionId,
                                       @RequestBody ExecutionCompleteRequest request) {
-        return executionService.complete(executionId, request);
+        return executionService.complete(executionId, CurrentUser.id(), request);
     }
 
     /**
@@ -81,7 +82,7 @@ public class ExecutionController {
     /** 실행 상세 조회 (진행 상태 블록/히스토리 상세용). 없으면 404. */
     @GetMapping("/executions/{executionId}")
     public ExecutionResponse detail(@PathVariable Long executionId) {
-        return executionService.detail(executionId);
+        return executionService.detail(executionId, CurrentUser.id());
     }
 
     /**
@@ -93,7 +94,7 @@ public class ExecutionController {
             @PathVariable Long conversationId,
             @RequestParam(required = false) String cursor,
             @RequestParam(required = false) Integer size) {
-        return executionService.historyByConversation(conversationId, cursor, size);
+        return executionService.historyByConversation(conversationId, CurrentUser.id(), cursor, size);
     }
 
     /**
@@ -105,7 +106,7 @@ public class ExecutionController {
     public ExecutionStepView reportStep(@PathVariable Long executionId,
                                         @PathVariable Long stepId,
                                         @RequestBody StepReportRequest request) {
-        return executionService.reportStep(executionId, stepId, request);
+        return executionService.reportStep(executionId, stepId, CurrentUser.id(), request);
     }
 
     /**
@@ -115,6 +116,6 @@ public class ExecutionController {
      */
     @PostMapping("/action-picker/respond")
     public ExecutionResponse respondActionPicker(@RequestBody ActionPickerRespondRequest request) {
-        return executionService.respondActionPicker(request);
+        return executionService.respondActionPicker(CurrentUser.id(), request);
     }
 }

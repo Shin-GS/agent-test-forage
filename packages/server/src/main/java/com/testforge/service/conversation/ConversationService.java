@@ -163,20 +163,20 @@ public class ConversationService {
                 .toList();
     }
 
-    /** 미삭제 대화방 상세. 없거나 삭제된 경우 404. */
+    /** 미삭제 대화방 상세. 없거나 삭제/타인 소유면 404. */
     @Transactional(readOnly = true)
-    public ConversationDetailResponse detail(Long id) {
-        Conversation conversation = getActiveOrThrow(id);
+    public ConversationDetailResponse detail(Long id, Long requesterId) {
+        Conversation conversation = getOwnedOrThrow(id, requesterId);
         return toDetail(conversation);
     }
 
-    /** 대화방 이름 변경. 없거나 삭제 시 404, 빈 제목이면 400. */
+    /** 대화방 이름 변경. 없거나 삭제/타인 소유면 404, 빈 제목이면 400. */
     @Transactional
-    public ConversationDetailResponse updateTitle(Long id, String title) {
+    public ConversationDetailResponse updateTitle(Long id, Long requesterId, String title) {
         if (title == null || title.isBlank()) {
             throw ApiException.invalidRequest("title is required");
         }
-        Conversation conversation = getActiveOrThrow(id);
+        Conversation conversation = getOwnedOrThrow(id, requesterId);
         conversation.setTitle(title.trim());
         Conversation saved = conversationRepository.save(conversation);
 
@@ -188,10 +188,10 @@ public class ConversationService {
         return toDetail(saved);
     }
 
-    /** 읽음 처리 (lastReadAt = now). 없거나 삭제 시 404. */
+    /** 읽음 처리 (lastReadAt = now). 없거나 삭제/타인 소유면 404. */
     @Transactional
-    public ConversationDetailResponse markRead(Long id) {
-        Conversation conversation = getActiveOrThrow(id);
+    public ConversationDetailResponse markRead(Long id, Long requesterId) {
+        Conversation conversation = getOwnedOrThrow(id, requesterId);
         conversation.setLastReadAt(LocalDateTime.now());
         Conversation saved = conversationRepository.save(conversation);
 
@@ -211,8 +211,8 @@ public class ConversationService {
      * 호출해 idle로 만든 뒤 삭제한다. (AI 응답 중 등 다른 처리 상태는 짧게 끝나므로 차단하지 않는다.)
      */
     @Transactional
-    public void softDelete(Long id) {
-        Conversation conversation = getActiveOrThrow(id);
+    public void softDelete(Long id, Long requesterId) {
+        Conversation conversation = getOwnedOrThrow(id, requesterId);
         if (conversation.getStatus() == ConversationStatus.EXECUTING) {
             throw ApiException.conversationExecuting(id);
         }
@@ -243,8 +243,9 @@ public class ConversationService {
      * @param size 페이지 크기 (기본 20, 최대 50)
      */
     @Transactional(readOnly = true)
-    public CursorPage<MessageResponse> listMessages(Long conversationId, String cursor, Integer size) {
-        getActiveOrThrow(conversationId);
+    public CursorPage<MessageResponse> listMessages(Long conversationId, Long requesterId,
+                                                    String cursor, Integer size) {
+        getOwnedOrThrow(conversationId, requesterId);
         int limit = normalizeMessageSize(size);
         Long cursorSeq = decodeSeqCursor(cursor);
 
@@ -294,7 +295,12 @@ public class ConversationService {
      * 점유(AI 응답 중 락 유지 + {@code AI_RESPONDING} 전이)는 다음 조각(chat 실행 엔진)에서 다룬다.
      */
     @Transactional
-    public MessageSendResponse sendMessage(Long conversationId, MessageSendRequest request) {
+    public MessageSendResponse sendMessage(Long conversationId, Long requesterId,
+                                           MessageSendRequest request) {
+        // 소유자 검증을 락 획득보다 먼저 수행한다. 타인이 남의 conversationId로 호출해도
+        // 락을 건드리지 않고 404로 거절되어, 정당한 소유자가 락 경합(409)을 겪지 않는다.
+        Conversation conversation = getOwnedOrThrow(conversationId, requesterId);
+
         // 대화방 선점. 이미 처리 중이면(락 경합) 이중 전송이므로 409로 거절한다.
         // 인메모리 락은 트랜잭션 자원이 아니므로 트랜잭션 안에서 잡아도 안전하다.
         if (!conversationLock.tryLock(conversationId)) {
@@ -304,8 +310,6 @@ public class ConversationService {
         // 정상 접수 시에는 락을 유지하고, AI 처리가 종결(completeAssistantTurn)될 때 해제한다.
         boolean accepted = false;
         try {
-            Conversation conversation = getActiveOrThrow(conversationId);
-
             if (request.content() == null || request.content().isBlank()) {
                 throw ApiException.invalidRequest("content is required");
             }
@@ -584,8 +588,8 @@ public class ConversationService {
      * ExecutionService가, 대화방 상태/락/안내 메시지는 releaseToIdle이 담당한다.
      */
     @Transactional
-    public ConversationDetailResponse cancel(Long conversationId) {
-        getActiveOrThrow(conversationId);
+    public ConversationDetailResponse cancel(Long conversationId, Long requesterId) {
+        getOwnedOrThrow(conversationId, requesterId);
         executionService.terminateRunningForConversation(conversationId, ExecutionStatus.CANCELLED);
         return releaseToIdle(conversationId, "취소되었습니다.");
     }
@@ -597,9 +601,9 @@ public class ConversationService {
      * 상태/락/안내 메시지는 releaseToIdle이 담당한다. 취소(CANCELLED)와 구분해 히스토리에 남긴다.
      */
     @Transactional
-    public ConversationDetailResponse stop(Long conversationId) {
-        // 존재/삭제 검증 (없으면 404). execution 종료를 먼저 처리한 뒤 대화방을 해제한다.
-        getActiveOrThrow(conversationId);
+    public ConversationDetailResponse stop(Long conversationId, Long requesterId) {
+        // 존재/삭제/소유자 검증 (없거나 타인 소유면 404). execution 종료를 먼저 처리한 뒤 대화방을 해제한다.
+        getOwnedOrThrow(conversationId, requesterId);
         executionService.terminateRunningForConversation(conversationId, ExecutionStatus.STOPPED);
         return releaseToIdle(conversationId, "실행이 중지되었습니다.");
     }
@@ -670,10 +674,23 @@ public class ConversationService {
 
     // ── helpers ──
 
-    /** 미삭제 대화방 조회 (없거나 삭제 시 404) */
+    /** 미삭제 대화방 조회 (없거나 삭제 시 404). 내부 오케스트레이션 경로 전용(소유자 검증 없음). */
     private Conversation getActiveOrThrow(Long id) {
         return conversationRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> ApiException.conversationNotFound(id));
+    }
+
+    /**
+     * 사용자 진입용 대화방 조회 (IDOR 방지). 존재/미삭제 확인 후 소유자({@code userId})가
+     * 요청자와 다르면 <b>존재를 노출하지 않도록</b> 404({@code conversationNotFound})로 처리한다.
+     * 시스템/오케스트레이션 내부 경로에는 쓰지 않는다({@link #getActiveOrThrow} 사용).
+     */
+    private Conversation getOwnedOrThrow(Long id, Long requesterId) {
+        Conversation conversation = getActiveOrThrow(id);
+        if (requesterId == null || !requesterId.equals(conversation.getUserId())) {
+            throw ApiException.conversationNotFound(id);
+        }
+        return conversation;
     }
 
     /** 대화방 내 다음 SEQ (max+1, 첫 메시지는 1) */

@@ -40,8 +40,16 @@ dependencies {
     runtimeOnly("com.mysql:mysql-connector-j")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // 세션 인증 도입에 따른 통합 테스트 지원 (SecurityMockMvcRequestPostProcessors, springSecurity())
+    testImplementation("org.springframework.security:spring-security-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testRuntimeOnly("com.h2database:h2")
+}
+
+// 소스에 한글 주석/문자열이 있어 javac 인코딩을 UTF-8로 고정한다.
+// (미지정 시 Windows 기본 인코딩이 적용되어 test 컴파일에서 unmappable character로 실패)
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
 }
 
 tasks.withType<Test> {

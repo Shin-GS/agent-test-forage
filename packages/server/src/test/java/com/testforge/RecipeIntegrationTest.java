@@ -6,14 +6,17 @@ import com.testforge.entity.spec.enums.EndpointStatus;
 import com.testforge.entity.recipe.Recipe;
 import com.testforge.entity.recipe.enums.ValidationStatus;
 import com.testforge.entity.recipe.enums.Visibility;
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.repository.spec.ApiEndpointRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
 import com.testforge.repository.recipe.RecipeRepository;
 import com.testforge.repository.recipe.RecipeVersionRepository;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,6 +24,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -35,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestAuthSupport.class)
 class RecipeIntegrationTest {
 
     @Autowired
@@ -52,18 +57,23 @@ class RecipeIntegrationTest {
     @Autowired
     private ApiEndpointRepository endpointRepository;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
     private Long specId;
     private Long activeEndpointId;
     private Long deprecatedEndpointId;
+    private static final long USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         versionRepository.deleteAll();
         recipeRepository.deleteAll();
         endpointRepository.deleteAll();
         specRepository.deleteAll();
+        testAuth.ensureUser(USER_ID, UserRole.USER);
 
         ApiSpec spec = new ApiSpec("https://svc.example.com");
         spec.setName("svc");
@@ -85,7 +95,7 @@ class RecipeIntegrationTest {
         String body = createBody("주문조회", Visibility.PRIVATE,
                 "[{\"name\":\"조회\",\"type\":\"api\",\"endpointId\":" + activeEndpointId + "}]");
 
-        mockMvc.perform(post("/api/v1/recipes")
+        mockMvc.perform(post("/api/v1/recipes").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("주문조회"))
@@ -101,7 +111,7 @@ class RecipeIntegrationTest {
         String body = createBody("깨진레시피", Visibility.PRIVATE,
                 "[{\"name\":\"조회\",\"type\":\"api\",\"endpointId\":999999}]");
 
-        mockMvc.perform(post("/api/v1/recipes")
+        mockMvc.perform(post("/api/v1/recipes").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.validationStatus.code").value("INVALID"))
@@ -117,7 +127,7 @@ class RecipeIntegrationTest {
         String body = createBody("구버전참조", Visibility.PRIVATE,
                 "[{\"name\":\"레거시\",\"type\":\"api\",\"endpointId\":" + deprecatedEndpointId + "}]");
 
-        mockMvc.perform(post("/api/v1/recipes")
+        mockMvc.perform(post("/api/v1/recipes").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.validationStatus.code").value("INVALID"))
@@ -131,7 +141,7 @@ class RecipeIntegrationTest {
         String body = createBody("필드누락", Visibility.PRIVATE,
                 "[{\"name\":\"조회\",\"type\":\"api\"}]");
 
-        mockMvc.perform(post("/api/v1/recipes")
+        mockMvc.perform(post("/api/v1/recipes").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_RECIPE"));
@@ -159,7 +169,7 @@ class RecipeIntegrationTest {
         String body = "{\"name\":\"A\",\"visibility\":\"PRIVATE\",\"steps\":"
                 + "[{\"name\":\"callB\",\"type\":\"recipe\",\"recipeId\":" + idB + "}]}";
 
-        mockMvc.perform(put("/api/v1/recipes/{id}", idA)
+        mockMvc.perform(put("/api/v1/recipes/{id}", idA).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("RECIPE_CYCLE"));
@@ -180,12 +190,12 @@ class RecipeIntegrationTest {
         save("타서비스", other.getId(), Visibility.COMMON, "무관");
 
         // apiSpecId 필터 → 2건
-        mockMvc.perform(get("/api/v1/recipes").param("apiSpecId", specId.toString()))
+        mockMvc.perform(get("/api/v1/recipes").with(testAuth.as(USER_ID)).param("apiSpecId", specId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
 
         // visibility 필터 → COMMON 1건
-        mockMvc.perform(get("/api/v1/recipes")
+        mockMvc.perform(get("/api/v1/recipes").with(testAuth.as(USER_ID))
                         .param("apiSpecId", specId.toString())
                         .param("visibility", "COMMON"))
                 .andExpect(status().isOk())
@@ -193,7 +203,7 @@ class RecipeIntegrationTest {
                 .andExpect(jsonPath("$[0].name").value("결제레시피"));
 
         // keyword 필터 (description LIKE) → "가입" 1건
-        mockMvc.perform(get("/api/v1/recipes").param("keyword", "가입"))
+        mockMvc.perform(get("/api/v1/recipes").with(testAuth.as(USER_ID)).param("keyword", "가입"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].name").value("회원가입"));
@@ -202,7 +212,7 @@ class RecipeIntegrationTest {
     // ── detail: 없는 ID → 404 ──
     @Test
     void detail_unknownId_returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/recipes/{id}", 999999L))
+        mockMvc.perform(get("/api/v1/recipes/{id}", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("RECIPE_NOT_FOUND"));
     }
@@ -216,7 +226,7 @@ class RecipeIntegrationTest {
         String body = "{\"name\":\"수정본\",\"description\":\"바뀐설명\",\"visibility\":\"COMMON\",\"steps\":"
                 + "[{\"name\":\"조회\",\"type\":\"api\",\"endpointId\":" + activeEndpointId + "}]}";
 
-        mockMvc.perform(put("/api/v1/recipes/{id}", id)
+        mockMvc.perform(put("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("수정본"))
@@ -235,12 +245,12 @@ class RecipeIntegrationTest {
         Recipe recipe = save("삭제대상", specId, Visibility.PRIVATE, "x");
         Long id = recipe.getId();
 
-        mockMvc.perform(delete("/api/v1/recipes/{id}", id))
+        mockMvc.perform(delete("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNoContent());
 
         assertThat(recipeRepository.findById(id).orElseThrow().getDeletedAt()).isNotNull();
 
-        mockMvc.perform(get("/api/v1/recipes/{id}", id))
+        mockMvc.perform(get("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound());
     }
 

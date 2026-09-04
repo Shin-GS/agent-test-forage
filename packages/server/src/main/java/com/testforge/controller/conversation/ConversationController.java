@@ -66,32 +66,29 @@ public class ConversationController {
         return conversationService.list(CurrentUser.id());
     }
 
-    /** 대화방 상세 (없거나 삭제 시 404) */
+    /** 대화방 상세 (없거나 삭제/타인 소유면 404) */
     @GetMapping("/{id}")
     public ConversationDetailResponse detail(@PathVariable Long id) {
-        return conversationService.detail(id);
+        return conversationService.detail(id, CurrentUser.id());
     }
 
-    /** 대화방 이름 변경 */
+    /** 대화방 이름 변경 (본인 대화방만; 타인 소유면 404) */
     @PatchMapping("/{id}/title")
     public ConversationDetailResponse updateTitle(@PathVariable Long id,
                                                   @RequestBody ConversationTitleUpdateRequest request) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 수정)
-        return conversationService.updateTitle(id, request.title());
+        return conversationService.updateTitle(id, CurrentUser.id(), request.title());
     }
 
-    /** 읽음 처리 (lastReadAt = now) */
+    /** 읽음 처리 (lastReadAt = now; 본인 대화방만) */
     @PatchMapping("/{id}/read")
     public ConversationDetailResponse markRead(@PathVariable Long id) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 읽음 처리)
-        return conversationService.markRead(id);
+        return conversationService.markRead(id, CurrentUser.id());
     }
 
-    /** 대화방 소프트 삭제 (DELETED_AT = now) */
+    /** 대화방 소프트 삭제 (DELETED_AT = now; 본인 대화방만) */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 삭제)
-        conversationService.softDelete(id);
+        conversationService.softDelete(id, CurrentUser.id());
         return ResponseEntity.noContent().build();
     }
 
@@ -104,7 +101,7 @@ public class ConversationController {
     public CursorPage<MessageResponse> listMessages(@PathVariable Long id,
                                                     @RequestParam(required = false) String cursor,
                                                     @RequestParam(required = false) Integer size) {
-        return conversationService.listMessages(id, cursor, size);
+        return conversationService.listMessages(id, CurrentUser.id(), cursor, size);
     }
 
     /**
@@ -116,9 +113,10 @@ public class ConversationController {
     public ResponseEntity<MessageSendResponse> sendMessage(@PathVariable Long id,
                                                            @RequestBody MessageSendRequest request) {
         // userId는 세션에서 도출 (클라이언트 값 무시)
+        Long requesterId = CurrentUser.id();
         MessageSendRequest secured = new MessageSendRequest(
-                CurrentUser.id(), request.content(), request.referenceId(), request.metadata());
-        MessageSendResponse response = conversationService.sendMessage(id, secured);
+                requesterId, request.content(), request.referenceId(), request.metadata());
+        MessageSendResponse response = conversationService.sendMessage(id, requesterId, secured);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -128,8 +126,7 @@ public class ConversationController {
      */
     @PostMapping("/{id}/cancel")
     public ConversationDetailResponse cancel(@PathVariable Long id) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 취소)
-        return conversationService.cancel(id);
+        return conversationService.cancel(id, CurrentUser.id());
     }
 
     /**
@@ -138,7 +135,6 @@ public class ConversationController {
      */
     @PostMapping("/{id}/stop")
     public ConversationDetailResponse stop(@PathVariable Long id) {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 본인 대화방만 중지)
-        return conversationService.stop(id);
+        return conversationService.stop(id, CurrentUser.id());
     }
 }

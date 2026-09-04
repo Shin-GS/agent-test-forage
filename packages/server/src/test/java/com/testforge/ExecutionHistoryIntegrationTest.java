@@ -5,12 +5,15 @@ import com.testforge.entity.execution.Execution;
 import com.testforge.entity.execution.enums.ExecutionMode;
 import com.testforge.entity.execution.enums.ExecutionStatus;
 import com.testforge.entity.execution.enums.ExecutionType;
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.execution.ExecutionRepository;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -18,6 +21,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.time.LocalDateTime;
 
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -33,6 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestAuthSupport.class)
 class ExecutionHistoryIntegrationTest {
 
     @Autowired
@@ -44,14 +49,18 @@ class ExecutionHistoryIntegrationTest {
     @Autowired
     private ConversationRepository conversationRepository;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
     private static final long USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         executionRepository.deleteAll();
         conversationRepository.deleteAll();
+        testAuth.ensureUser(USER_ID, UserRole.USER);
     }
 
     /**
@@ -75,7 +84,7 @@ class ExecutionHistoryIntegrationTest {
         }
 
         // 1페이지: size=2 → 최신 2건(실행4, 실행3), hasNext=true
-        String firstResp = mockMvc.perform(get("/api/v1/executions")
+        String firstResp = mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID))
                         .param("size", "2"))
                 .andExpect(status().isOk())
@@ -89,7 +98,7 @@ class ExecutionHistoryIntegrationTest {
         String cursor1 = readCursor(firstResp);
 
         // 2페이지: 실행2, 실행1
-        String secondResp = mockMvc.perform(get("/api/v1/executions")
+        String secondResp = mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID))
                         .param("size", "2")
                         .param("cursor", cursor1))
@@ -103,7 +112,7 @@ class ExecutionHistoryIntegrationTest {
         String cursor2 = readCursor(secondResp);
 
         // 3페이지: 실행0 하나 남고 hasNext=false, nextCursor=null
-        mockMvc.perform(get("/api/v1/executions")
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID))
                         .param("size", "2")
                         .param("cursor", cursor2))
@@ -121,7 +130,7 @@ class ExecutionHistoryIntegrationTest {
         newExecution("취소건", ExecutionStatus.CANCELLED, 2);
         newExecution("중지건", ExecutionStatus.STOPPED, 3);
 
-        mockMvc.perform(get("/api/v1/executions")
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID))
                         .param("status", "CANCELLED"))
                 .andExpect(status().isOk())
@@ -138,7 +147,7 @@ class ExecutionHistoryIntegrationTest {
         newExecution("회원 탈퇴", ExecutionStatus.SUCCESS, 3);
 
         // 정렬은 id DESC(최신 저장 우선) → "회원 탈퇴"(나중 저장)가 먼저
-        mockMvc.perform(get("/api/v1/executions")
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID))
                         .param("keyword", "회원"))
                 .andExpect(status().isOk())
@@ -154,7 +163,7 @@ class ExecutionHistoryIntegrationTest {
         newExecution("완전 다른 건", ExecutionStatus.SUCCESS, 2);
 
         // "50%"는 리터럴로 매칭되어야 함 (와일드카드로 "50"+아무거나가 아니라)
-        mockMvc.perform(get("/api/v1/executions")
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID))
                         .param("keyword", "50%"))
                 .andExpect(status().isOk())
@@ -169,7 +178,7 @@ class ExecutionHistoryIntegrationTest {
             newExecution("실행" + i, ExecutionStatus.SUCCESS, i);
         }
         // size=1000 요청해도 에러 없이 정상 응답 (전 건이 50 이하라 전부 반환)
-        mockMvc.perform(get("/api/v1/executions")
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID))
                         .param("size", "1000"))
                 .andExpect(status().isOk())
@@ -180,18 +189,21 @@ class ExecutionHistoryIntegrationTest {
     // ── 빈 목록 ──
     @Test
     void history_empty_returnsEmptyPage() throws Exception {
-        mockMvc.perform(get("/api/v1/executions")
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
                         .param("userId", String.valueOf(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(0))
                 .andExpect(jsonPath("$.hasNext").value(false));
     }
 
-    // ── userId 누락 → 400 ──
+    // ── 미인증 → 401 (userId는 세션에서 도출하므로 쿼리 userId는 신뢰하지 않는다) ──
+    // 인증 도입 후 "userId 파라미터 누락 → 400"은 성립하지 않는다(컨트롤러가 세션값 사용).
+    // 본인 히스토리만 조회하는 계약의 원천이 세션이므로, 미인증 접근 거부를 검증한다.
     @Test
-    void history_missingUserId_returns400() throws Exception {
+    void history_unauthenticated_returns401() throws Exception {
         mockMvc.perform(get("/api/v1/executions"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     // ── 대화방별 조회 ──
@@ -206,7 +218,7 @@ class ExecutionHistoryIntegrationTest {
         executionRepository.save(linked);
         newExecution("다른 실행", ExecutionStatus.SUCCESS, 2); // conversationId 없음
 
-        mockMvc.perform(get("/api/v1/conversations/{id}/executions", conversationId))
+        mockMvc.perform(get("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].title").value("이 방 실행"));
@@ -215,7 +227,7 @@ class ExecutionHistoryIntegrationTest {
     // ── 대화방별 조회: 없는 대화방 → 404 ──
     @Test
     void historyByConversation_unknownConversation_returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/conversations/{id}/executions", 999999L))
+        mockMvc.perform(get("/api/v1/conversations/{id}/executions", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound());
     }
 

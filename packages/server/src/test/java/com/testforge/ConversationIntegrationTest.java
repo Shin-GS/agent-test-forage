@@ -1,9 +1,11 @@
 package com.testforge;
 
 import com.testforge.entity.conversation.Conversation;
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.support.SyncChatExecutorTestConfig;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +20,7 @@ import org.springframework.web.context.WebApplicationContext;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -37,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(SyncChatExecutorTestConfig.class)
+@Import({SyncChatExecutorTestConfig.class, TestAuthSupport.class})
 class ConversationIntegrationTest {
 
     @Autowired
@@ -49,14 +52,19 @@ class ConversationIntegrationTest {
     @Autowired
     private MessageRepository messageRepository;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
     private static final long USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         messageRepository.deleteAll();
         conversationRepository.deleteAll();
+        // 인증 주체와 동일 id의 ACTIVE 계정 보장 (SessionUserRecheckFilter 통과 + 소유권 일치)
+        testAuth.ensureUser(USER_ID, UserRole.USER);
     }
 
     // ── start: 첫 메시지로 방 생성 (지정 title 사용, seq=1, IDLE) ──
@@ -65,7 +73,7 @@ class ConversationIntegrationTest {
         String body = "{\"userId\":" + USER_ID
                 + ",\"content\":\"안녕하세요\",\"apiSpecId\":10,\"title\":\"회원가입 테스트\"}";
 
-        mockMvc.perform(post("/api/v1/conversations/messages")
+        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accepted").value(true))
@@ -97,7 +105,7 @@ class ConversationIntegrationTest {
     void start_derivesTemporaryTitleFromContent() throws Exception {
         String body = "{\"userId\":" + USER_ID + ",\"content\":\"짧은 메시지\"}";
 
-        mockMvc.perform(post("/api/v1/conversations/messages")
+        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.conversation.title").value("짧은 메시지"));
@@ -110,7 +118,7 @@ class ConversationIntegrationTest {
         String longContent = "가나다라마바사아자차카타파하가나다라마바사아자차카";
         String body = "{\"userId\":" + USER_ID + ",\"content\":\"" + longContent + "\"}";
 
-        mockMvc.perform(post("/api/v1/conversations/messages")
+        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.conversation.title")
@@ -122,20 +130,22 @@ class ConversationIntegrationTest {
         assertThat(stored).endsWith("\u2026");
     }
 
-    // ── start: userId 누락 → 400 ──
+    // ── start: 미인증 → 401 (userId는 세션에서 도출하므로 바디 userId는 신뢰하지 않는다) ──
+    // 인증 도입 후 "바디 userId 누락 → 400"은 더 이상 성립하지 않는다(컨트롤러가 세션값으로 덮음).
+    // userId 신뢰의 원천이 세션이므로, 미인증 접근이 거부되는지를 검증한다.
     @Test
-    void start_missingUserId_returns400() throws Exception {
+    void start_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/api/v1/conversations/messages")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"x\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     // ── start: content 누락/공백 → 400 (빈 대화방 미생성) ──
     @Test
     void start_blankContent_returns400AndCreatesNoConversation() throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/messages")
+        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"   \"}"))
                 .andExpect(status().isBadRequest())
@@ -174,7 +184,8 @@ class ConversationIntegrationTest {
         other.setLastMessageAt(LocalDateTime.now());
         conversationRepository.save(other);
 
-        mockMvc.perform(get("/api/v1/conversations").param("userId", String.valueOf(USER_ID)))
+        mockMvc.perform(get("/api/v1/conversations").with(testAuth.as(USER_ID))
+                        .param("userId", String.valueOf(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].title").value("최신 방"))
@@ -186,7 +197,7 @@ class ConversationIntegrationTest {
     // ── detail: 없는 ID → 404 ──
     @Test
     void detail_unknownId_returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/conversations/{id}", 999999L))
+        mockMvc.perform(get("/api/v1/conversations/{id}", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }
@@ -198,7 +209,7 @@ class ConversationIntegrationTest {
         c.setDeletedAt(LocalDateTime.now());
         Long id = conversationRepository.save(c).getId();
 
-        mockMvc.perform(get("/api/v1/conversations/{id}", id))
+        mockMvc.perform(get("/api/v1/conversations/{id}", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }
@@ -208,7 +219,7 @@ class ConversationIntegrationTest {
     void updateTitle_changesTitle() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
 
-        mockMvc.perform(patch("/api/v1/conversations/{id}/title", id)
+        mockMvc.perform(patch("/api/v1/conversations/{id}/title", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"바뀐 제목\"}"))
                 .andExpect(status().isOk())
@@ -226,7 +237,7 @@ class ConversationIntegrationTest {
         Long id = conversationRepository.save(c).getId();
         assertThat(conversationRepository.findById(id).orElseThrow().getLastReadAt()).isNull();
 
-        mockMvc.perform(patch("/api/v1/conversations/{id}/read", id))
+        mockMvc.perform(patch("/api/v1/conversations/{id}/read", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.unread").value(false));
 
@@ -238,12 +249,12 @@ class ConversationIntegrationTest {
     void delete_softDeletesConversation() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
 
-        mockMvc.perform(delete("/api/v1/conversations/{id}", id))
+        mockMvc.perform(delete("/api/v1/conversations/{id}", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNoContent());
 
         assertThat(conversationRepository.findById(id).orElseThrow().getDeletedAt()).isNotNull();
 
-        mockMvc.perform(get("/api/v1/conversations/{id}", id))
+        mockMvc.perform(get("/api/v1/conversations/{id}", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound());
     }
 
@@ -254,7 +265,7 @@ class ConversationIntegrationTest {
         assertThat(conversationRepository.findById(id).orElseThrow().getLastMessageAt()).isNull();
 
         // 첫 사용자 메시지 → seq 1 (그 뒤 assistant 응답이 seq 2로 저장됨)
-        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"안녕하세요\"}"))
                 .andExpect(status().isCreated())
@@ -266,7 +277,7 @@ class ConversationIntegrationTest {
                 .andExpect(jsonPath("$.message.content").value("안녕하세요"));
 
         // 둘째 사용자 메시지 → seq 3 (앞의 assistant 응답이 seq 2를 차지했으므로)
-        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"두번째\"}"))
                 .andExpect(status().isCreated())
@@ -286,7 +297,7 @@ class ConversationIntegrationTest {
     void sendMessage_blankContent_returns400() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"   \"}"))
                 .andExpect(status().isBadRequest())
@@ -296,7 +307,7 @@ class ConversationIntegrationTest {
     // ── sendMessage: 없는 대화방 → 404 ──
     @Test
     void sendMessage_unknownConversation_returns404() throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/{id}/messages", 999999L)
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", 999999L).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"x\"}"))
                 .andExpect(status().isNotFound())
@@ -309,7 +320,7 @@ class ConversationIntegrationTest {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
 
         for (String content : new String[]{"첫째", "둘째", "셋째"}) {
-            mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+            mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"userId\":" + USER_ID + ",\"content\":\"" + content + "\"}"))
                     .andExpect(status().isCreated());
@@ -317,7 +328,7 @@ class ConversationIntegrationTest {
 
         // user 3건 + assistant 3건 = 6건(seq 1~6). 최신순 DESC로 반환 → items[0].seq=6, items[5].seq=1.
         // 전부 한 페이지(size 기본 20)라 hasNext=false.
-        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id))
+        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(6))
                 .andExpect(jsonPath("$.hasNext").value(false))
@@ -333,14 +344,14 @@ class ConversationIntegrationTest {
     void listMessages_cursorWalksToOlder() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
         for (String content : new String[]{"첫째", "둘째", "셋째"}) {
-            mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+            mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"userId\":" + USER_ID + ",\"content\":\"" + content + "\"}"))
                     .andExpect(status().isCreated());
         }
 
         // 1페이지 size=2 → 최신 seq 6,5. hasNext=true, nextCursor=5(가장 과거)
-        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .param("size", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(2))
@@ -350,7 +361,7 @@ class ConversationIntegrationTest {
                 .andExpect(jsonPath("$.nextCursor").value("5"));
 
         // 2페이지(cursor=5) → seq 4,3
-        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .param("size", "2")
                         .param("cursor", "5"))
                 .andExpect(status().isOk())
@@ -363,7 +374,7 @@ class ConversationIntegrationTest {
     // ── listMessages: 없는 대화방 → 404 ──
     @Test
     void listMessages_unknownConversation_returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/conversations/{id}/messages", 999999L))
+        mockMvc.perform(get("/api/v1/conversations/{id}/messages", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }

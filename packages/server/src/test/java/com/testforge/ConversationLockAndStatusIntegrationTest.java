@@ -2,6 +2,7 @@ package com.testforge;
 
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.conversation.enums.ConversationStatus;
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
@@ -9,6 +10,7 @@ import com.testforge.service.conversation.ConversationService;
 import com.testforge.sse.SseEvent;
 import com.testforge.sse.SseEventPublisher;
 import com.testforge.support.SyncChatExecutorTestConfig;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -46,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(SyncChatExecutorTestConfig.class)
+@Import({SyncChatExecutorTestConfig.class, TestAuthSupport.class})
 class ConversationLockAndStatusIntegrationTest {
 
     @Autowired
@@ -68,14 +71,18 @@ class ConversationLockAndStatusIntegrationTest {
     @MockitoSpyBean
     private SseEventPublisher ssePublisher;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
     private static final long USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         messageRepository.deleteAll();
         conversationRepository.deleteAll();
+        testAuth.ensureUser(USER_ID, UserRole.USER);
     }
 
     private Long newConversation(ConversationStatus status) {
@@ -93,7 +100,7 @@ class ConversationLockAndStatusIntegrationTest {
         // 다른 처리가 점유 중인 상황을 수동 락으로 시뮬레이션
         assertThat(conversationLock.tryLock(id)).isTrue();
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"처리중 전송\"}"))
                 .andExpect(status().isConflict())
@@ -101,7 +108,7 @@ class ConversationLockAndStatusIntegrationTest {
 
         // 점유 해제 후에는 정상 접수 (접수 메시지는 USER seq=1)
         conversationLock.unlock(id);
-        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"이제 됨\"}"))
                 .andExpect(status().isCreated())
@@ -121,7 +128,7 @@ class ConversationLockAndStatusIntegrationTest {
     void cancel_transitionsToIdle_andIsIdempotent() throws Exception {
         Long id = newConversation(ConversationStatus.WAITING_INPUT);
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", id))
+        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.code").value("IDLE"));
 
@@ -129,7 +136,7 @@ class ConversationLockAndStatusIntegrationTest {
                 .isEqualTo(ConversationStatus.IDLE);
 
         // 두 번째 호출도 200 (이미 IDLE → 멱등 no-op)
-        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", id))
+        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.code").value("IDLE"));
     }
@@ -139,7 +146,7 @@ class ConversationLockAndStatusIntegrationTest {
     void stop_transitionsToIdle_andStoresSystemNotice() throws Exception {
         Long id = newConversation(ConversationStatus.EXECUTING);
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/stop", id))
+        mockMvc.perform(post("/api/v1/conversations/{id}/stop", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.code").value("IDLE"));
 
@@ -152,14 +159,14 @@ class ConversationLockAndStatusIntegrationTest {
     // ── 취소/중지: 없는 대화방 → 404 ──
     @Test
     void cancel_unknownConversation_returns404() throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", 999999L))
+        mockMvc.perform(post("/api/v1/conversations/{id}/cancel", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }
 
     @Test
     void stop_unknownConversation_returns404() throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/{id}/stop", 999999L))
+        mockMvc.perform(post("/api/v1/conversations/{id}/stop", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }
@@ -197,7 +204,7 @@ class ConversationLockAndStatusIntegrationTest {
     void sendMessage_afterAiProcessing_publishesMessageNewAndIdle() throws Exception {
         Long id = newConversation(ConversationStatus.IDLE);
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id)
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"안녕하세요\"}"))
                 .andExpect(status().isCreated());

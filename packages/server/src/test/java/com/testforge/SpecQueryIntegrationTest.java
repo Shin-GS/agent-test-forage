@@ -5,13 +5,16 @@ import com.testforge.entity.spec.ApiSpec;
 import com.testforge.entity.spec.AuthProfile;
 import com.testforge.entity.spec.enums.EndpointStatus;
 import com.testforge.entity.spec.enums.SpecStatus;
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.repository.spec.ApiEndpointRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
 import com.testforge.repository.spec.AuthProfileRepository;
+import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -20,6 +23,7 @@ import org.springframework.web.context.WebApplicationContext;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -31,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestAuthSupport.class)
 class SpecQueryIntegrationTest {
 
     @Autowired
@@ -45,14 +50,19 @@ class SpecQueryIntegrationTest {
     @Autowired
     private AuthProfileRepository authProfileRepository;
 
+    @Autowired
+    private TestAuthSupport testAuth;
+
     private MockMvc mockMvc;
+    private static final long USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         endpointRepository.deleteAll();
         authProfileRepository.deleteAll();
         specRepository.deleteAll();
+        testAuth.ensureUser(USER_ID, UserRole.USER);
     }
 
     // ── list: 삭제 스펙 제외 + name 오름차순 + apiCount(ACTIVE만) ──
@@ -75,7 +85,7 @@ class SpecQueryIntegrationTest {
         deleted.setDeletedAt(LocalDateTime.now());
         specRepository.save(deleted);
 
-        mockMvc.perform(get("/api/v1/specs"))
+        mockMvc.perform(get("/api/v1/specs").with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 // 삭제 제외 → 2건, name 오름차순 → alpha 먼저
                 .andExpect(jsonPath("$.length()").value(2))
@@ -103,7 +113,7 @@ class SpecQueryIntegrationTest {
         endpointRepository.save(newEndpoint(spec.getId(), "GET", "/api/v1/users", EndpointStatus.ACTIVE));
         authProfileRepository.save(new AuthProfile(spec.getId(), "일반", "https://shop.example.com/login"));
 
-        mockMvc.perform(get("/api/v1/specs/{id}", spec.getId()))
+        mockMvc.perform(get("/api/v1/specs/{id}", spec.getId()).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("demo-shop"))
                 .andExpect(jsonPath("$.serviceInfo.description").value("온라인 쇼핑몰 API"))
@@ -121,7 +131,7 @@ class SpecQueryIntegrationTest {
     // ── detail: 없는 ID → 404 ──
     @Test
     void detail_unknownId_returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/specs/{id}", 999999L))
+        mockMvc.perform(get("/api/v1/specs/{id}", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("SPEC_NOT_FOUND"));
     }
@@ -133,7 +143,7 @@ class SpecQueryIntegrationTest {
         spec.setDeletedAt(LocalDateTime.now());
         spec = specRepository.save(spec);
 
-        mockMvc.perform(get("/api/v1/specs/{id}", spec.getId()))
+        mockMvc.perform(get("/api/v1/specs/{id}", spec.getId()).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("SPEC_NOT_FOUND"));
     }
@@ -144,7 +154,7 @@ class SpecQueryIntegrationTest {
         ApiSpec spec = specRepository.save(
                 newSpec("svc", "https://svc.example.com", SpecStatus.ACTIVE));
 
-        mockMvc.perform(patch("/api/v1/specs/{id}/deactivate", spec.getId()))
+        mockMvc.perform(patch("/api/v1/specs/{id}/deactivate", spec.getId()).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNoContent());
 
         ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
@@ -157,7 +167,7 @@ class SpecQueryIntegrationTest {
         ApiSpec spec = specRepository.save(
                 newSpec("svc", "https://svc.example.com", SpecStatus.INACTIVE));
 
-        mockMvc.perform(patch("/api/v1/specs/{id}/activate", spec.getId()))
+        mockMvc.perform(patch("/api/v1/specs/{id}/activate", spec.getId()).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNoContent());
 
         ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
@@ -170,21 +180,21 @@ class SpecQueryIntegrationTest {
         ApiSpec spec = specRepository.save(
                 newSpec("svc", "https://svc.example.com", SpecStatus.ACTIVE));
 
-        mockMvc.perform(delete("/api/v1/specs/{id}", spec.getId()))
+        mockMvc.perform(delete("/api/v1/specs/{id}", spec.getId()).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNoContent());
 
         ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
         assertThat(reloaded.getDeletedAt()).isNotNull();
 
         // 삭제 후 상세 조회는 404
-        mockMvc.perform(get("/api/v1/specs/{id}", spec.getId()))
+        mockMvc.perform(get("/api/v1/specs/{id}", spec.getId()).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound());
     }
 
     // ── delete: 없는 ID → 404 ──
     @Test
     void delete_unknownId_returns404() throws Exception {
-        mockMvc.perform(delete("/api/v1/specs/{id}", 999999L))
+        mockMvc.perform(delete("/api/v1/specs/{id}", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("SPEC_NOT_FOUND"));
     }
