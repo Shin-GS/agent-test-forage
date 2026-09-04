@@ -1,6 +1,7 @@
 // 실행 결과 메시지 (RESULT payload).
-// content 요약을 주로 보여주고, 구조화된 resultValues 가 있으면 접어서 상세를 표시한다.
-// [결과 보기] 는 프로토타입에서 비활성(패널 상세 보기는 추후).
+// content 요약을 주로 보여주고, 구조화된 resultValues 가 있으면 요약해 표시한다.
+// [결과 보기] → 사이드 패널 결과 상세 드릴다운으로 진입(panelStore.openDetail).
+//   executionId 가 유효할 때만 활성화. 홈/히스토리 항목 클릭과 동일한 진입점.
 
 import type { ResultPayload } from "../../api/types";
 import { usePanelStore } from "../../features/panel/panelStore";
