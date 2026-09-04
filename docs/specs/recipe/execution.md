@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-06
+last-updated: 2026-09-08
 ---
 
 # 레시피 실행 플로우
@@ -198,8 +198,9 @@ session_status: idle + 히스토리 refresh
 
 ### (b) 템플릿이 없는 경우 — fast AI 요약
 
-- `[fast]` 모델로 결과를 요약한다. AI 입력은 **스텝별 summary(steps)** 와 **resultValues**(④ 결과 정의로 추린 값)만 전달한다.
-- **원시 응답(raw response) 전체를 AI에 넘기지 않는다.** 스텝 summary와 결과 정의 값만 전달하여 토큰/민감정보 노출을 최소화한다.
+- `[fast]` 모델로 결과를 요약한다. AI 입력은 **스텝별 summary(steps)** · **resultValues**(④ 결과 정의로 추린 값) · **resultLabels**(결과 key → 표시명 맵)만 전달한다.
+- **원시 응답(raw response) 전체를 AI에 넘기지 않는다.** 스텝 summary와 결과 정의 값·표시명만 전달하여 토큰/민감정보 노출을 최소화한다.
+- **표시명 전달**: AI가 원본 key를 사람말로 임의 창작하지 않도록, [표시명 폴백 체인](structure.md#표시명label-폴백-체인)으로 결정된 표시명을 함께 넘긴다. `steps[].name`은 서버가 실행 시점에 폴백 체인으로 확정한 사람말 이름이고, `resultLabels`는 ④ 결과 정의에 `label`이 등록된 key만 포함한다(없으면 AI는 원본 key 사용). 규칙: [response-guide.md 표시명 폴백 체인](../common/response-guide.md#표시명label-폴백-체인)
 - 상세 입력/출력/프롬프트: [시나리오: 결과 요약](../chat/scenarios/result-summary.md)
 
 ### 결과 표시 (프로토타입 스코프)

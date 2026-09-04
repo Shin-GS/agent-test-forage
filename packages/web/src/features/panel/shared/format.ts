@@ -84,3 +84,31 @@ export function statusIcon(code: string | null | undefined): string {
       return "🔄";
   }
 }
+
+/**
+ * 결과키 표시명 폴백 (messaging.md RESULT 표시명 폴백 체인).
+ * labels[key]가 있으면 표시명, 없으면 원본 key 그대로(중첩/배열 key는 경로 그대로).
+ */
+export function resultKeyLabel(
+  key: string,
+  labels: Record<string, string> | null | undefined,
+): string {
+  const label = labels?.[key];
+  return label && label.trim() ? label : key;
+}
+
+/**
+ * 결과값 표시 폴백 (messaging.md). 값이 없거나 null이면 "값 없음",
+ * 문자열/숫자/불리언은 그대로, 객체/배열은 JSON 요약.
+ */
+export function resultValueDisplay(value: unknown): string {
+  if (value == null) return "값 없음";
+  // 빈 문자열(공백만 포함)도 "값 없음"으로 본다(화면 공백 방지). 0/false 는 유효한 값이라 그대로 표시.
+  if (typeof value === "string") return value.trim() === "" ? "값 없음" : value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}

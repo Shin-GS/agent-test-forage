@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-06
+last-updated: 2026-09-08
 ---
 
 # 메시징 및 SSE 이벤트 정의
@@ -148,6 +148,7 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
 
 - `status`: 실행 전체 상태. 완료 시 `success`/`failed`로 확정.
 - `steps[].status`: 스텝별 상태. `content`에는 이 구조에서 파생한 표시용 진행 요약(Markdown)을 담는다.
+- `steps[].name`: 스텝 표시명. 서버가 [표시명 폴백 체인](../recipe/structure.md#표시명label-폴백-체인)((1) 스텝 표시명 → (2) 엔드포인트 summary → (3) method+path)으로 미리 결정해 채운 사람말 이름을 담는다(FE 추가 폴백 불필요). **이 값은 실행 시점에 확정되어 PROGRESS 메시지에 저장되므로**, label 없이 summary로 폴백된 경우라도 히스토리 재현·새로고침 복원 시 조회 당시 summary가 아니라 **그때 그 실행 시점의 이름이 고정 표시**된다([structure.md 스냅샷 포함](../recipe/structure.md#스냅샷-포함)).
 
 ### RESULT (실행 결과 블록)
 
@@ -160,12 +161,16 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
   "executionId": 456,
   "recipeName": "입사지원",
   "resultValues": { "applicationId": "A-123", "status": "제출완료" },
+  "resultLabels": { "applicationId": "지원번호" },
   "template": "지원이 완료되었습니다 (번호: {{applicationId}})"
 }
 ```
 
-- `resultValues`: ④ 결과 정의로 추린 결과 값(진실). `template`(선택)은 결과 메시지 템플릿 원문.
-- `content`에는 최종 결과 요약 텍스트(템플릿 치환 결과 또는 fast AI 요약)를 담는다. 생성 방식은 [execution.md 실행 완료/결과 요약](../recipe/execution.md#실행-완료--결과-요약) 참조.
+- `resultValues`: ④ 결과 정의로 추린 결과 값(진실). key는 결과 정의 변수명(원본 key) 그대로.
+- `resultLabels`: 결과 key → 표시명(사람말) 맵. **결과 정의(④)에 `label`이 등록된 key만 포함**한다(선택). 값 자체(`resultValues`)와 표기(`resultLabels`)를 분리해, 스키마를 깨지 않고 표시명을 동반한다.
+- **표시명 폴백**: FE는 값을 표기할 때 `resultLabels[key]`가 있으면 표시명, 없으면 **원본 key 그대로** 쓴다. 중첩/배열 key(`items[0].price`)는 label 없으면 key 경로 그대로, 값이 없거나 null이면 "값 없음"으로 표시한다(폴백 체인: [structure.md](../recipe/structure.md#표시명label-폴백-체인)).
+- `template`(선택)은 결과 메시지 템플릿 원문. `content`에는 최종 결과 요약 텍스트(템플릿 치환 결과 또는 fast AI 요약)를 담는다. 생성 방식은 [execution.md 실행 완료/결과 요약](../recipe/execution.md#실행-완료--결과-요약) 참조.
+- 표시명은 사람말 요약(`content`/템플릿)을 보강할 뿐, 상세·히스토리에서 원본 key 노출을 막지 않는다([기존 이원화](#content-vs-payloadjson-필드-이원화) 유지).
 
 ### CARD
 

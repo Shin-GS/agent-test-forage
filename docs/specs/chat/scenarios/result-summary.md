@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-04
+last-updated: 2026-09-08
 ---
 
 # 시나리오: 결과 요약
@@ -30,8 +30,12 @@ FE → BE: 결과 요약 요청 (레시피명 + 스텝별 결과)
 
 ## AI 입력
 
-> **원시 응답 미전달 원칙**: AI에는 **스텝별 summary(steps)** 와 **resultValues**(④ 결과 정의로 추린 값)만 전달한다.
+> **원시 응답 미전달 원칙**: AI에는 **스텝별 summary(steps)** · **resultValues**(④ 결과 정의로 추린 값) · **resultLabels**(결과 key → 표시명 맵)만 전달한다.
 > 스텝의 원시 응답(raw response) 전체는 넘기지 않는다. (토큰 절감 + 민감정보 노출 최소화)
+
+> **표시명 전달 원칙**: AI가 원본 key(`applicationId` 등)를 사람말로 임의 창작하지 않도록, [표시명 폴백 체인](../../recipe/structure.md#표시명label-폴백-체인)으로 결정된 표시명을 함께 전달한다.
+> - `steps[].name`은 서버가 실행 시점에 폴백 체인((1) 스텝 표시명 → (2) 엔드포인트 summary → (3) method+path)으로 확정한 사람말 이름이다.
+> - `resultLabels`는 결과 정의(④)에 `label`이 등록된 key만 포함한다. label이 없는 key는 맵에 없고, AI는 그 경우 원본 key를 그대로 쓴다(임의 창작 금지). 원칙: [response-guide.md 표시명 폴백 체인](../../common/response-guide.md#표시명label-폴백-체인)
 
 ```json
 {
@@ -47,6 +51,9 @@ FE → BE: 결과 요약 요청 (레시피명 + 스텝별 결과)
     "resultValues": {
       "applicationId": "APP-2026-0831",
       "jobTitle": "네이버 백엔드 개발자"
+    },
+    "resultLabels": {
+      "applicationId": "지원번호"
     }
   }
 }
@@ -102,6 +109,7 @@ AI 호출 없이 BE가 템플릿의 `{{변수}}`를 실행 context 값으로 치
 - 이름: {recipeName}
 - 스텝별 결과: {steps}
 - 결과 값: {resultValues}
+- 결과 값 표시명: {resultLabels}  ← 결과 key의 사람말 이름. 요약 시 원본 key 대신 이 표시명을 사용. 표시명이 없는 key는 원본 key를 그대로 쓰고 임의로 지어내지 않는다.
 
 ## 응답 형식 (JSON만)
 {

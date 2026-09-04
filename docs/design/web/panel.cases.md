@@ -1,7 +1,7 @@
 ---
 status: done
-last-updated: 2026-08-28
-ref: docs/specs/panel/overview.md, docs/specs/panel/history.md
+last-updated: 2026-09-08
+ref: docs/specs/panel/overview.md, docs/specs/panel/history.md, docs/specs/common/response-guide.md
 ---
 
 # 사이드 패널 케이스
@@ -61,9 +61,14 @@ ref: docs/specs/panel/overview.md, docs/specs/panel/history.md
 - 상단: [← 뒤로] + "실행 결과"
 - 기본 정보: 레시피명, 실행 시각, 소요 시간
 - 스텝별 결과 목록:
-  - 스텝명 + 상태 (✓/✕)
+  - 스텝 표시명(폴백 체인) + 상태 (✓/✕)
+  - 스텝 표시명 폴백: (1) 스텝 label → (2) 엔드포인트 summary → (3) method + path
+  - 결과키 표시명: label 있으면 사람말(예: "회원 ID"), 없으면 원본 key(예: `statusCode`)로 폴백
+  - 중첩/배열 key는 경로 그대로 표기, 값이 null이면 "값 없음"
   - 펼치면 입출력 JSON (코드 블록)
-- 실패 스텝: 에러 메시지 표시
+- 상세는 이원화 유지: 사람말 표시명 + 기술 원문(method + path, 원본 key) 병기 허용
+- 실패 스텝: 기술 원문(에러 코드/원본 응답) 노출 허용
+- 참조 기획: [response-guide.md 표시명 폴백 체인](../../specs/common/response-guide.md#표시명label-폴백-체인)
 
 ### Case 5: 빈 상태
 

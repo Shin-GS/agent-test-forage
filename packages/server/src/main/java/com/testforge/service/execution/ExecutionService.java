@@ -26,6 +26,7 @@ import com.testforge.entity.execution.enums.ExecutionStepStatus;
 import com.testforge.entity.execution.enums.ExecutionType;
 import com.testforge.entity.execution.enums.StepType;
 import com.testforge.entity.recipe.Recipe;
+import com.testforge.entity.spec.ApiEndpoint;
 import com.testforge.entity.spec.ApiSpec;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
@@ -33,6 +34,7 @@ import com.testforge.repository.execution.ExecutionRecipeRepository;
 import com.testforge.repository.execution.ExecutionRepository;
 import com.testforge.repository.execution.ExecutionStepRepository;
 import com.testforge.repository.recipe.RecipeRepository;
+import com.testforge.repository.spec.ApiEndpointRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
 import com.testforge.service.conversation.ConversationService;
 import com.testforge.sse.SseEventPublisher;
@@ -84,6 +86,7 @@ public class ExecutionService {
     private final RecipeRepository recipeRepository;
     private final ConversationRepository conversationRepository;
     private final ApiSpecRepository apiSpecRepository;
+    private final ApiEndpointRepository apiEndpointRepository;
     private final ConversationLock conversationLock;
     private final SseEventPublisher ssePublisher;
     // 결과 메시지(message_new) 발행용. ConversationService ↔ ExecutionService 상호 의존이라 @Lazy로 끊는다.
@@ -98,6 +101,7 @@ public class ExecutionService {
                             RecipeRepository recipeRepository,
                             ConversationRepository conversationRepository,
                             ApiSpecRepository apiSpecRepository,
+                            ApiEndpointRepository apiEndpointRepository,
                             ConversationLock conversationLock,
                             SseEventPublisher ssePublisher,
                             @Lazy ConversationService conversationService) {
@@ -107,6 +111,7 @@ public class ExecutionService {
         this.recipeRepository = recipeRepository;
         this.conversationRepository = conversationRepository;
         this.apiSpecRepository = apiSpecRepository;
+        this.apiEndpointRepository = apiEndpointRepository;
         this.conversationLock = conversationLock;
         this.ssePublisher = ssePublisher;
         this.conversationService = conversationService;
@@ -164,12 +169,16 @@ public class ExecutionService {
             ExecutionRecipe savedRecipe = executionRecipeRepository.save(executionRecipe);
 
             // 3) EXECUTION_STEP(PENDING) 생성 — 레시피 스텝 스냅샷 기준
+            //    스텝 표시명(stepName)은 실행 시점에 표시명 폴백 체인((1) 스텝 label →
+            //    (2) 엔드포인트 summary → (3) method+path)으로 확정해 저장한다(structure.md 스냅샷 포함).
+            //    이렇게 실행 시점에 고정해야 스펙 summary가 나중에 바뀌어도 과거 히스토리 표기가 흔들리지 않는다.
             List<Map<String, Object>> steps = RecipeJsonUtil.parseSteps(recipe.getStepsJson());
+            Map<Long, ApiEndpoint> endpointsById = loadEndpointsForSteps(steps);
             for (int i = 0; i < steps.size(); i++) {
                 Map<String, Object> step = steps.get(i);
                 ExecutionStep executionStep = new ExecutionStep(
                         savedRecipe.getId(), i, resolveStepType(step.get("type")));
-                executionStep.setStepName(asString(step.get("name")));
+                executionStep.setStepName(resolveStepDisplayName(step, endpointsById));
                 executionStepRepository.save(executionStep);
             }
 
@@ -691,6 +700,14 @@ public class ExecutionService {
 
             String recipeName = execution.getTitle();
             Map<String, Object> resultValues = resolveResultValues(snapshot, context, userInput);
+            // 결과키 표시명(사람말) 맵: 결과 정의(④)에 label이 등록된 key만 담는다(messaging.md RESULT.resultLabels).
+            // label 미등록 key는 미포함 → FE가 원본 key로 폴백한다(값/표기 분리).
+            Map<String, String> resultLabels = resolveResultLabels(snapshot);
+
+            // 상세 드릴다운(ExecutionRecipeView.resultValues)에서 결과값을 보여줄 수 있도록
+            // 산출한 resultValues 를 첫(단일 실행 기준) EXECUTION_RECIPE 에 저장한다.
+            // (RESULT 메시지 payload 와 별개로, 히스토리 상세 조회는 이 컬럼을 읽는다.)
+            persistResultValues(execution.getId(), resultValues);
 
             String template = snapshot == null ? null : asString(snapshot.get("resultTemplate"));
             String content;
@@ -698,11 +715,12 @@ public class ExecutionService {
                 // (a) 템플릿 치환: {{key}} → resultValues 우선, 없으면 userInput. 둘 다 없으면 원문 유지.
                 content = renderTemplate(template, resultValues, userInput);
             } else {
-                // (b) 템플릿 없음: 최소 요약. TODO(fast AI): 후속에서 steps summary + resultValues로 AI 요약.
-                content = buildFallbackSummary(recipeName, resultValues);
+                // (b) 템플릿 없음: 최소 요약. 등록된 표시명(resultLabels)이 있으면 사람말 이름으로 나열한다.
+                //     TODO(fast AI): 후속에서 steps summary + resultValues로 AI 요약.
+                content = buildFallbackSummary(recipeName, resultValues, resultLabels);
             }
 
-            String payloadJson = buildResultPayload(execution.getId(), recipeName, resultValues, template);
+            String payloadJson = buildResultPayload(execution.getId(), recipeName, resultValues, resultLabels, template);
             conversationService.createResultMessage(conversationId, payloadJson, content);
         } catch (Exception e) {
             // 결과 발행 실패가 실행 종료(상태 확정/idle/락 해제)를 막지 않도록 방어적으로 삼킨다.
@@ -839,16 +857,22 @@ public class ExecutionService {
 
     /**
      * 결과 블록 payloadJson 구성: {@code { kind:"result", schemaVersion, executionId, recipeName,
-     * resultValues, template? }}. template은 null이면 생략한다. payloadJson이 진실이다.
+     * resultValues, resultLabels?, template? }}. resultLabels/template은 비면 생략한다. payloadJson이 진실이다.
+     * {@code resultLabels}는 결과키 → 사람말 표시명 맵으로, label이 등록된 key만 담는다(messaging.md).
      */
     private String buildResultPayload(Long executionId, String recipeName,
-                                      Map<String, Object> resultValues, String template) {
+                                      Map<String, Object> resultValues,
+                                      Map<String, String> resultLabels, String template) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("kind", "result");
         root.put("schemaVersion", RESULT_SCHEMA_VERSION);
         root.put("executionId", executionId);
         root.put("recipeName", recipeName);
         root.set("resultValues", objectMapper.valueToTree(resultValues == null ? Map.of() : resultValues));
+        // 표시명이 하나라도 있을 때만 필드를 넣는다(없으면 FE가 원본 key로 폴백).
+        if (resultLabels != null && !resultLabels.isEmpty()) {
+            root.set("resultLabels", objectMapper.valueToTree(resultLabels));
+        }
         if (template != null && !template.isBlank()) {
             root.put("template", template);
         }
@@ -912,6 +936,32 @@ public class ExecutionService {
             resultValues.putIfAbsent(e.getKey(), e.getValue());
         }
         return resultValues;
+    }
+
+    /**
+     * 결과키 표시명 맵({@code key → label}) 산출. 스냅샷의 {@code resultDefinitionJson}(④)에서 각 항목의
+     * {@code label}(선택)을 읽어, <b>label이 등록된 key만</b> 담는다(messaging.md RESULT.resultLabels).
+     * label이 없으면 미포함 → FE가 원본 key로 폴백한다(값/표기 분리, 스키마 무손상).
+     *
+     * <p>정의 구조는 자유 JSON이라 기존 파싱({@link #normalizeResultDefinition})을 재사용한다. label은 객체
+     * 형태에서만 선택적으로 읽히며, 문자열 source 형태({@code {"orderId":"스텝3 > orderId"}})에는 없다.
+     */
+    private Map<String, String> resolveResultLabels(Map<String, Object> snapshot) {
+        Object definition = snapshot == null ? null
+                : RecipeJsonUtil.toObject(asString(snapshot.get("resultDefinitionJson")));
+        List<Map<String, Object>> entries = normalizeResultDefinition(definition);
+        Map<String, String> labels = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> entry : entries) {
+            String key = firstNonNull(asString(entry.get("key")), asString(entry.get("name")));
+            if (key == null) {
+                continue;
+            }
+            String label = trimToNull(asString(entry.get("label")));
+            if (label != null) {
+                labels.put(key, label);
+            }
+        }
+        return labels;
     }
 
     /** 결과 정의(자유 JSON)를 {@code [{key/name, source/value}]} 리스트로 정규화. 맵/배열 모두 허용. */
@@ -983,19 +1033,41 @@ public class ExecutionService {
     }
 
     /**
-     * 템플릿 없는 경우의 최소 요약. "{레시피명} 실행이 완료되었습니다"에 결과값을 " - key: value"로 나열한다.
-     * (fast AI 요약은 후속 TODO.)
+     * 템플릿 없는 경우의 최소 요약. "{레시피명} 실행이 완료되었습니다"에 결과값을 " - 표시명: value"로 나열한다.
+     * 결과키 표시명({@code resultLabels})에 등록된 key는 사람말 이름을, 없으면 원본 key를 쓴다(표시명 폴백 체인).
+     * 등록된 표시명만 사용하므로 할루시네이션 없이 사람말 표기를 얻는다. (fast AI 요약은 후속 TODO.)
      */
-    private String buildFallbackSummary(String recipeName, Map<String, Object> resultValues) {
+    private String buildFallbackSummary(String recipeName, Map<String, Object> resultValues,
+                                        Map<String, String> resultLabels) {
         String name = (recipeName == null || recipeName.isBlank()) ? "레시피" : recipeName;
         StringBuilder sb = new StringBuilder();
         sb.append(name).append(" 실행이 완료되었습니다.");
         for (Map.Entry<String, Object> e : resultValues.entrySet()) {
             if (isScalar(e.getValue())) {
-                sb.append("\n- ").append(e.getKey()).append(": ").append(e.getValue());
+                String display = resultLabels == null ? null : resultLabels.get(e.getKey());
+                String labelText = (display == null || display.isBlank()) ? e.getKey() : display;
+                sb.append("\n- ").append(labelText).append(": ").append(e.getValue());
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * 산출한 결과값(resultValues)을 첫(단일 실행 기준) EXECUTION_RECIPE 의 RESULT_VALUES_JSON 에 저장한다.
+     * 상세 드릴다운(ExecutionRecipeView.resultValues) 표시용. 없거나 비면 저장을 건너뛴다.
+     */
+    private void persistResultValues(Long executionId, Map<String, Object> resultValues) {
+        if (resultValues == null || resultValues.isEmpty()) {
+            return;
+        }
+        List<ExecutionRecipe> recipes =
+                executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
+        if (recipes.isEmpty()) {
+            return;
+        }
+        ExecutionRecipe first = recipes.get(0);
+        first.setResultValuesJson(RecipeJsonUtil.toJsonString(resultValues));
+        executionRecipeRepository.save(first);
     }
 
     /** 실행의 첫(단일 실행 기준) EXECUTION_RECIPE 스냅샷을 Map으로. 없으면 null. */
@@ -1368,6 +1440,102 @@ public class ExecutionService {
         return null;
     }
 
+    /**
+     * 스텝 목록에서 type=api 스텝의 {@code endpointId}를 모아 엔드포인트를 일괄 조회한다(N+1 방지).
+     * 스텝 표시명 폴백 체인의 (2)엔드포인트 summary / (3)method+path 단계에서 쓴다. 대상이 없으면 빈 맵.
+     */
+    private Map<Long, ApiEndpoint> loadEndpointsForSteps(List<Map<String, Object>> steps) {
+        List<Long> endpointIds = steps.stream()
+                .map(step -> asLong(step.get("endpointId")))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (endpointIds.isEmpty()) {
+            return Map.of();
+        }
+        // 엔드포인트 조회는 스텝 표시명의 (2)summary/(3)method+path 폴백에만 쓰인다.
+        // 조회가 실패해도 표시명은 (1)스텝 label/name → type 으로 폴백되므로, 조회 실패가
+        // 실행 생성 자체를 막지 않도록 방어적으로 삼키고 빈 맵을 반환한다.
+        try {
+            Map<Long, ApiEndpoint> result = new HashMap<>();
+            for (ApiEndpoint endpoint : apiEndpointRepository.findByIdIn(endpointIds)) {
+                result.put(endpoint.getId(), endpoint);
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("Failed to load endpoints for step display names (falling back to label/type): {}",
+                    endpointIds, e);
+            return Map.of();
+        }
+    }
+
+    /**
+     * 스텝 표시명 폴백 체인으로 실행 시점의 사람말 스텝 이름을 결정한다(structure.md 표시명 폴백 체인):
+     * <ol>
+     *   <li>스텝에 등록한 표시명(우선 {@code label}, 하위호환으로 {@code name})</li>
+     *   <li>없으면(type=api) 참조 엔드포인트의 {@code summary}</li>
+     *   <li>그래도 없으면 엔드포인트의 {@code method + path}</li>
+     * </ol>
+     * api가 아니거나 엔드포인트를 못 찾으면 (1)단계 표시명을 그대로 쓴다. 어떤 경우에도 null이 아니도록
+     * 최종적으로 스텝 type을 표기해 폴백한다(진행 블록 steps[].name은 값이 항상 존재해야 함).
+     */
+    private String resolveStepDisplayName(Map<String, Object> step, Map<Long, ApiEndpoint> endpointsById) {
+        // (1) 스텝 표시명: label 우선, 없으면 name (기존 스냅샷과 하위호환)
+        String label = trimToNull(asString(step.get("label")));
+        if (label == null) {
+            label = trimToNull(asString(step.get("name")));
+        }
+        if (label != null) {
+            return label;
+        }
+        // (2)/(3) type=api면 엔드포인트 summary → method+path 폴백
+        Long endpointId = asLong(step.get("endpointId"));
+        if (endpointId != null) {
+            ApiEndpoint endpoint = endpointsById.get(endpointId);
+            if (endpoint != null) {
+                String summary = trimToNull(endpoint.getSummary());
+                if (summary != null) {
+                    return summary;
+                }
+                String method = trimToNull(endpoint.getHttpMethod());
+                String path = trimToNull(endpoint.getPath());
+                if (method != null && path != null) {
+                    return method + " " + path;
+                }
+                if (path != null) {
+                    return path;
+                }
+            }
+        }
+        // 최후 폴백: 표시명/엔드포인트가 전혀 없으면 스텝 type을 표기 (null 방지)
+        String type = trimToNull(asString(step.get("type")));
+        return type == null ? "step" : type;
+    }
+
+    /** 문자열을 트림하고, null/빈이면 null로. 폴백 체인에서 "빈 값=미설정"으로 취급하기 위한 헬퍼. */
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** Object를 Long으로 안전 변환 (Number 또는 숫자 문자열). 변환 불가면 null. */
+    private Long asLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(value.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /** 스텝 정의의 type 값을 StepType으로 매핑. 알 수 없으면 API로 간주(방어적 기본값) */
     private StepType resolveStepType(Object typeValue) {
         if (typeValue == null) {
@@ -1428,6 +1596,12 @@ public class ExecutionService {
                 executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(recipe.getId());
         List<ExecutionStepView> stepViews = steps.stream().map(this::toStepView).toList();
 
+        // 상세 드릴다운 표시명: 저장된 스냅샷(실행 당시 고정)의 결과 정의(④)에서 label 등록 key만 산출.
+        // RESULT payload 경로와 동일한 resolveResultLabels를 재사용한다(원본 레시피 재조회 없음 → 히스토리 재현 일관).
+        Object snapshotObj = RecipeJsonUtil.toObject(recipe.getRecipeSnapshotJson());
+        Map<String, Object> snapshot = snapshotObj instanceof Map<?, ?> ? asMap(snapshotObj) : null;
+        Map<String, String> resultLabels = resolveResultLabels(snapshot);
+
         return new ExecutionRecipeView(
                 recipe.getId(),
                 recipe.getRecipeId(),
@@ -1435,8 +1609,9 @@ public class ExecutionService {
                 recipe.getRecipeVersionNo(),
                 recipe.getSequence(),
                 StatusView.of(recipe.getStatus()),
-                RecipeJsonUtil.toObject(recipe.getRecipeSnapshotJson()),
+                snapshotObj,
                 RecipeJsonUtil.toObject(recipe.getResultValuesJson()),
+                resultLabels,
                 stepViews,
                 recipe.getStartedAt(),
                 recipe.getFinishedAt());

@@ -451,9 +451,11 @@
                   <div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div>
                   <span class="message__sender">AI Test Forge</span>
                   <div class="message__content"><p>사람인 회원가입 레시피를 3회 실행하겠습니다.</p></div>
+                  <!-- 채팅 요약은 사람말(표시명 우선). 결과키는 label 있으면 표시명, 없으면 원본 key로 폴백.
+                       원시 method+path/JSON 병기는 상세(히스토리/결과 상세)로 미룸 — 이원화 유지. -->
                   <div class="tool-card">
-                    <div class="tool-card__header"><span class="tool-card__status tool-card__status--success"></span><span class="tool-card__name">회원가입</span><span class="tool-card__method">POST /api/v1/users</span></div>
-                    <div class="tool-card__body">{"status": 201, "userId": "usr_x7k2m"}</div>
+                    <div class="tool-card__header"><span class="tool-card__status tool-card__status--success"></span><span class="tool-card__name">회원가입</span></div>
+                    <div class="tool-card__body">회원 ID: usr_x7k2m · 상태: 생성됨</div>
                   </div>
                 </div>
               </div>
@@ -675,7 +677,7 @@
             </div>
             <div class="chat-messages">
               <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 테스트 3건 만들어줘</p></div></div></div>
-              <div class="message"><div class="avatar avatar--ai message__avatar">⚡</div><div class="message__body"><div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div><span class="message__sender">AI Test Forge</span><div class="message__content"><p>사람인 회원가입 레시피를 3회 실행하겠습니다. 패널이 닫힌 상태에서 채팅 영역이 넓게 표시됩니다.</p></div><div class="tool-card"><div class="tool-card__header"><span class="tool-card__status tool-card__status--success"></span><span class="tool-card__name">회원가입</span><span class="tool-card__method">POST /api/v1/users</span></div><div class="tool-card__body">{"status": 201, "userId": "usr_abc123"}</div></div></div></div>
+              <div class="message"><div class="avatar avatar--ai message__avatar">⚡</div><div class="message__body"><div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div><span class="message__sender">AI Test Forge</span><div class="message__content"><p>사람인 회원가입 레시피를 3회 실행하겠습니다. 패널이 닫힌 상태에서 채팅 영역이 넓게 표시됩니다.</p></div><div class="tool-card"><div class="tool-card__header"><span class="tool-card__status tool-card__status--success"></span><span class="tool-card__name">회원가입</span></div><div class="tool-card__body">회원 ID: usr_abc123 · 상태: 생성됨</div></div></div></div>
             </div>
             <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
           </div>

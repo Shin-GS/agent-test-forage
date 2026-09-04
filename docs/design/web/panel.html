@@ -548,21 +548,27 @@
             <span>결과: 3/5 성공</span>
           </div>
         </div>
-        <!-- 스텝별 결과 -->
+        <!-- 스텝별 결과: 상세는 사람말 표시명(폴백 체인) + 기술 원문(method+path, 원본 key) 병기 (이원화 유지) -->
         <div class="section-header"><span>스텝별 결과</span></div>
+        <!-- 스텝 표시명 폴백: (1)스텝 label → (2)엔드포인트 summary → (3)method+path. 여기선 label 있음 -->
         <div class="result-step">
           <div class="result-step__header">
             <span class="result-step__status--success">✓</span>
             <span style="font-weight: var(--font-weight-medium); color: var(--color-text-primary);">이메일 생성</span>
+            <span class="step-item__type" style="margin-left: auto;">스크립트</span>
           </div>
-          <div class="result-step__body">["test01@company.co.kr", "test02@company.co.kr", "test03@company.co.kr"]</div>
+          <!-- 결과키 표시명: label 없어 원본 key(email) 폴백. 배열이므로 경로 그대로 표기 -->
+          <div class="result-step__body">email: ["test01@company.co.kr", "test02@company.co.kr", "test03@company.co.kr"]</div>
         </div>
         <div class="result-step">
           <div class="result-step__header">
             <span class="result-step__status--success">✓</span>
             <span style="font-weight: var(--font-weight-medium); color: var(--color-text-primary);">회원가입 API</span>
+            <span class="step-item__type" style="margin-left: auto; font-family: var(--font-mono);">POST /api/v1/users</span>
           </div>
-          <div class="result-step__body">{"status": 201, "count": 5}</div>
+          <!-- 결과키 표시명: 회원 ID(label) / 상태 코드(label 없어 statusCode 폴백) -->
+          <div class="result-step__body">회원 ID: 5건 생성됨
+statusCode: 201</div>
         </div>
         <div class="result-step" style="border-color: var(--color-error-border);">
           <div class="result-step__header">
@@ -570,7 +576,9 @@
             <span style="font-weight: var(--font-weight-medium); color: var(--color-text-primary);">프로필 설정</span>
             <span class="badge badge--error" style="margin-left: auto;">2건 실패</span>
           </div>
-          <div class="result-step__body">{"error": "DUPLICATE_NICKNAME", "message": "이미 사용 중인 닉네임입니다"}</div>
+          <!-- 실패 스텝: 기술 원문(에러 코드/원본 응답) 노출 허용 -->
+          <div class="result-step__body">POST /api/v1/profiles
+{"error": "DUPLICATE_NICKNAME", "message": "이미 사용 중인 닉네임입니다"}</div>
         </div>
       </div>
       <div class="panel-footer" style="display: flex; gap: var(--space-2);">

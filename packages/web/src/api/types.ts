@@ -157,6 +157,8 @@ export interface ExecutionRecipeView {
   status: StatusView;
   recipeSnapshot: any;
   resultValues: any;
+  /** 결과키 표시명 맵 (key→표시명). label 등록된 key만 포함, 없으면 원본 key 폴백 */
+  resultLabels?: Record<string, string> | null;
   steps: ExecutionStepView[];
   startedAt: string | null;
   finishedAt: string | null;
@@ -280,6 +282,11 @@ export interface ResultPayload {
   executionId: number;
   recipeName: string | null;
   resultValues: Record<string, unknown>;
+  /**
+   * 결과키 → 표시명(사람말) 맵. 결과 정의(④)에 label이 등록된 key만 포함(선택, messaging.md RESULT.resultLabels).
+   * 표시 폴백: resultLabels[key]가 있으면 표시명, 없으면 원본 key 그대로. 하위호환(없으면 무시).
+   */
+  resultLabels?: Record<string, string>;
   template?: string;
 }
 

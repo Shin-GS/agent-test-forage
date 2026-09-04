@@ -5,6 +5,7 @@
 
 import type { ResultPayload } from "../../api/types";
 import { usePanelStore } from "../../features/panel/panelStore";
+import { resultKeyLabel, resultValueDisplay } from "../../features/panel/shared/format";
 
 interface Props {
   payload: ResultPayload;
@@ -28,8 +29,10 @@ export function ResultMessage({ payload, content }: Props) {
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
           {entries.map(([key, value]) => (
             <li key={key} style={{ display: "flex", gap: "var(--space-2)", fontSize: "var(--font-size-sm)" }}>
-              <span style={{ color: "var(--color-text-secondary)", minWidth: 90 }}>{key}</span>
-              <span style={{ color: "var(--color-text-primary)" }}>{String(value)}</span>
+              <span style={{ color: "var(--color-text-secondary)", minWidth: 90 }}>
+                {resultKeyLabel(key, payload.resultLabels)}
+              </span>
+              <span style={{ color: "var(--color-text-primary)" }}>{resultValueDisplay(value)}</span>
             </li>
           ))}
         </ul>

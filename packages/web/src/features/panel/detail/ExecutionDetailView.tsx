@@ -6,7 +6,14 @@
 
 import { useMemo } from "react";
 import type { ExecutionRecipeView, ExecutionResponse } from "../../../api/types";
-import { formatDuration, formatTime, relativeTime, statusIcon } from "../shared/format";
+import {
+  formatDuration,
+  formatTime,
+  relativeTime,
+  resultKeyLabel,
+  resultValueDisplay,
+  statusIcon,
+} from "../shared/format";
 import { useExecutionDetail } from "./useExecutionDetail";
 
 interface Props {
@@ -14,19 +21,14 @@ interface Props {
   onBack: () => void;
 }
 
-/** 값 하나를 사람이 읽는 문자열로. 객체/배열은 JSON 요약 */
-function stringifyValue(value: unknown): string {
-  if (value == null) return "-";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function ResultValues({ values }: { values: Record<string, unknown> | null | undefined }) {
+function ResultValues({
+  values,
+  labels,
+}: {
+  values: Record<string, unknown> | null | undefined;
+  /** 결과키 표시명 맵(BE 상세 응답 resultLabels). 없는 key는 원본 key 폴백 */
+  labels?: Record<string, string> | null;
+}) {
   const entries = Object.entries(values ?? {});
   if (entries.length === 0) return null;
   return (
@@ -35,8 +37,8 @@ function ResultValues({ values }: { values: Record<string, unknown> | null | und
       <ul className="exec-detail__kv">
         {entries.map(([key, value]) => (
           <li key={key} className="exec-detail__kv-row">
-            <span className="exec-detail__kv-key">{key}</span>
-            <span className="exec-detail__kv-value">{stringifyValue(value)}</span>
+            <span className="exec-detail__kv-key">{resultKeyLabel(key, labels)}</span>
+            <span className="exec-detail__kv-value">{resultValueDisplay(value)}</span>
           </li>
         ))}
       </ul>
@@ -85,7 +87,7 @@ function DetailBody({ data }: { data: ExecutionResponse }) {
           {recipes.length > 1 && (
             <div className="exec-detail__recipe-title">{recipe.recipeName}</div>
           )}
-          <ResultValues values={recipe.resultValues} />
+          <ResultValues values={recipe.resultValues} labels={recipe.resultLabels} />
           {recipe.steps.length > 0 && <RecipeSteps recipe={recipe} />}
         </div>
       ))}

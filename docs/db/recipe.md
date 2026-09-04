@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-08-28
+last-updated: 2026-09-08
 ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/recipe/versioning.md
 ---
 
@@ -37,8 +37,8 @@ ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/
 | `VISIBILITY` | VARCHAR(20) | COMMON(공통) / PRIVATE(개인) |
 | `TAGS` | JSON | 분류/검색 태그 배열 |
 | `VARIABLES_JSON` | JSON | 사용자 입력 변수 정의 (②) |
-| `STEPS_JSON` | LONGTEXT | 스텝 목록 (③) — 타입/매핑/조건/extract 포함 |
-| `RESULT_DEFINITION_JSON` | JSON | 결과 정의 (④) |
+| `STEPS_JSON` | LONGTEXT | 스텝 목록 (③) — 타입/매핑/조건/extract + 스텝 표시명(`label`, 선택) 포함 |
+| `RESULT_DEFINITION_JSON` | JSON | 결과 정의 (④) — 각 항목 `{ key, label(선택), source }` |
 | `RESULT_TEMPLATE` | TEXT | 결과 메시지 템플릿 (⑤). 없으면 AI 요약 |
 | `CURRENT_VERSION` | INT | 현재 버전 번호 |
 | `VALIDATION_STATUS` | VARCHAR(20) | VALID / INVALID / UNVALIDATED |
@@ -52,6 +52,14 @@ ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/
 - `IDX_RECIPE_SPEC` : (`API_SPEC_ID`) — 서비스별 레시피 조회
 - `IDX_RECIPE_OWNER` : (`OWNER_USER_ID`)
 - `IDX_RECIPE_VISIBILITY` : (`VISIBILITY`)
+
+### 표시명(label) 저장
+
+비개발자용 사람말 표기를 위해 스텝/결과정의 JSON에 표시명을 보관한다. 폴백 규칙 정의: [structure.md 표시명 폴백 체인](../specs/recipe/structure.md#표시명label-폴백-체인).
+
+- **스텝 표시명**: `STEPS_JSON`의 각 스텝에 `label`(선택) 필드. 비면 실행/표시 시 폴백((1) label → (2) 엔드포인트 summary → (3) method+path). summary는 스펙 원천이라 저장하지 않고 참조 시점에 조회.
+- **결과키 표시명**: `RESULT_DEFINITION_JSON`의 각 항목이 `{ key, label(선택), source }`. label 비면 원본 key로 폴백.
+- **스냅샷 포함**: 스텝 `label`과 결과정의 `label`은 `RECIPE_VERSION.SNAPSHOT_JSON`에 그대로 포함되어, 히스토리 재현 시 그때 그 이름이 유지된다(스펙 summary가 이후 바뀌어도 과거 실행 표기는 스냅샷 기준으로 고정).
 
 ### 스텝 JSON 안의 API 참조
 

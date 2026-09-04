@@ -1,6 +1,6 @@
 ---
 status: done
-last-updated: 2026-08-28
+last-updated: 2026-09-08
 ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/specs/recipe/structure.md
 ---
 
@@ -55,7 +55,7 @@ ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/spe
 - ① 메타: 레시피명, 설명, 대상 서비스(드롭다운), 태그(칩 입력), 공개범위(라디오)
 - ② 변수: 빈 테이블 + [+ 변수 추가]
 - ③ 스텝: 빈 상태 + [+ 스텝 추가] 버튼 (타입 선택 드롭다운)
-- ④ 결과 정의: 빈 테이블
+- ④ 결과 정의: 빈 테이블 (변수명 | 표시명(선택) | 소스)
 - ⑤ 결과 메시지: textarea
 
 ### Case 3: 스텝 편집 (API 타입)
@@ -63,9 +63,22 @@ ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/spe
 - 2단 레이아웃:
   - 좌측: 스텝 설정 (API 선택 → 요청 필드 자동 나열 → 값 소스 매핑)
   - 우측: 데이터 탐색기 (이전 스텝 변수 + 사용자 입력 + 현재 API 스키마)
+- 스텝 표시명(선택) 입력: 비우면 폴백 (엔드포인트 summary → method + path). placeholder로 자동 안내
 - 요청 필드 매핑 테이블: 필드명 | 값 소스(드롭다운) | 매핑 값(드롭다운/입력)
 - Extract 섹션: 응답에서 변수 추출 정의
 - 조건(선택): 조건 빌더
+- ④ 결과 정의: 변수명 | 표시명(선택) | 소스. 표시명 있으면 사람말, 비우면 원본 key로 폴백 (예시로 label 있음/없음 행 모두 노출)
+
+### 표시명(label) 폴백 체인 (④ 결과 정의 + 스텝 표시명 공통)
+
+| 대상 | 폴백 우선순위 |
+|------|--------------|
+| 스텝 표시명 | (1) 스텝 label → (2) 엔드포인트 summary → (3) method + path |
+| 결과키 표시명 | (1) 결과 정의 label → (2) 원본 key 그대로 |
+
+- 표시명 입력은 모두 선택 필드 — 비우면 위 순서로 자동 폴백하여 표기가 깨지지 않음
+- 중첩/배열 key(`items[0].price`)는 label 없으면 경로 그대로, 값이 null이면 "값 없음"으로 표기
+- 참조 기획: [authoring.md ④ 결과 정의](../../specs/recipe/authoring.md#-결과-정의), [response-guide.md 표시명 폴백 체인](../../specs/common/response-guide.md#표시명label-폴백-체인)
 
 ### Case 4: 스텝 편집 (스크립트 타입)
 

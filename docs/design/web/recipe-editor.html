@@ -195,8 +195,14 @@
         <!-- ④ 결과 정의 -->
         <div class="section">
           <div class="section__title"><span class="section__number">4</span> 결과 정의</div>
-          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-3);">실행 완료 후 저장할 값 (히스토리 표시 + 템플릿에서 사용)</p>
-          <button class="btn btn--ghost btn--sm">+ 결과 변수 추가</button>
+          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-3);">실행 완료 후 저장할 값 (히스토리 표시 + 템플릿에서 사용). 표시명은 선택이며, 비우면 원본 key로 폴백합니다.</p>
+          <table class="data-table">
+            <thead><tr><th>변수명</th><th>표시명 (선택)</th><th>소스</th><th></th></tr></thead>
+            <tbody>
+              <tr><td colspan="4" style="text-align: center; color: var(--color-text-tertiary); padding: var(--space-4);">결과 변수가 없습니다</td></tr>
+            </tbody>
+          </table>
+          <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-2);">+ 결과 변수 추가</button>
         </div>
 
         <!-- ⑤ 결과 메시지 -->
@@ -247,6 +253,13 @@
                   <div class="field-grid" style="grid-template-columns: 1fr 1fr;">
                     <div class="form-group"><label class="form-label">서브도메인</label><select class="input"><option>member-api</option></select></div>
                     <div class="form-group"><label class="form-label">API</label><select class="input"><option>POST /api/v1/users</option></select></div>
+                  </div>
+
+                  <!-- 스텝 표시명 (선택): 비우면 엔드포인트 summary → method+path 로 폴백 -->
+                  <div class="form-group field-full">
+                    <label class="form-label" for="step-label-input">스텝 표시명 (선택)</label>
+                    <input id="step-label-input" class="input" type="text" placeholder="비우면 자동 (API summary → POST /api/v1/users)">
+                    <span class="form-hint">비개발자 화면 표기에 사용됩니다. 미입력 시 폴백: API summary → method + path</span>
                   </div>
 
                   <!-- 요청 필드 매핑 -->
@@ -329,6 +342,30 @@
             <button class="btn btn--secondary btn--sm">+ 스크립트 스텝</button>
             <button class="btn btn--secondary btn--sm">+ 서브레시피 스텝</button>
           </div>
+        </div>
+
+        <!-- ④ 결과 정의 (표시명 폴백 체인 예시) -->
+        <div class="section">
+          <div class="section__title"><span class="section__number">4</span> 결과 정의</div>
+          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-3);">표시명은 선택이며, 비우면 원본 key로 폴백합니다. 중첩/배열 key는 경로 그대로, 값이 없으면 "값 없음"으로 표기됩니다.</p>
+          <table class="data-table">
+            <thead><tr><th>변수명</th><th>표시명 (선택)</th><th>소스</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="mapping-table__field">memberId</span></td>
+                <td><input class="input" type="text" value="회원 ID" aria-label="memberId 표시명" style="max-width: 160px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"></td>
+                <td><span class="mapping-source">스텝2 &gt; memberId ▾</span></td>
+                <td class="data-table__actions"><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+              </tr>
+              <tr>
+                <td><span class="mapping-table__field">email</span></td>
+                <td><input class="input" type="text" placeholder="비우면 'email'로 표기" aria-label="email 표시명" style="max-width: 160px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs);"></td>
+                <td><span class="mapping-source">스텝1 &gt; email ▾</span></td>
+                <td class="data-table__actions"><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-2);">+ 결과 변수 추가</button>
         </div>
       </div>
     </div>
