@@ -34,9 +34,11 @@ export function ConfirmModal({
   const titleId = useId();
   const descId = useId();
 
-  // 열릴 때 확인 버튼 포커스 + ESC/Tab(focus trap) 키 처리
+  // 열릴 때 확인 버튼 포커스 + ESC/Tab(focus trap) 키 처리 + 닫힐 때 포커스 복원
   useEffect(() => {
     if (!open) return;
+    // 열기 직전 포커스를 갖고 있던 요소를 저장 → 언마운트/닫힘 시 복원
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     // 다음 프레임에 포커스(애니메이션/마운트 후)
     const raf = requestAnimationFrame(() => confirmRef.current?.focus());
 
@@ -70,6 +72,10 @@ export function ConfirmModal({
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("keydown", handleKeyDown);
+      // 포커스 복원: 저장해둔 요소가 여전히 문서에 있으면 포커스를 되돌린다
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      }
     };
   }, [open, onCancel]);
 

@@ -55,7 +55,7 @@ export function LoginPage() {
       <div className="login-card">
         <div className="login-logo">
           <div className="login-logo__icon">⚡</div>
-          <h1 className="login-logo__title">AI Test Forge</h1>
+          <h1 className="login-logo__title">테스트메이트</h1>
           <p className="login-logo__subtitle">API 워크플로우 실행 플랫폼</p>
         </div>
 

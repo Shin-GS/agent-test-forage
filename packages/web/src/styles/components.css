@@ -2195,6 +2195,91 @@ select.input {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   사이드바 회원정보 (하단 고정) + 드롭업 메뉴
+   ═══════════════════════════════════════════════════════════ */
+
+.sidebar-user {
+  position: relative;
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.sidebar-user__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: none;
+  background: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.sidebar-user__trigger:hover {
+  background: var(--color-bg-hover);
+}
+
+.sidebar-user__trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.sidebar-user__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  color: #fff;
+  flex-shrink: 0;
+  font-weight: var(--font-weight-medium);
+}
+
+.sidebar-user__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-user__name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user__id {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 드롭업: 트리거 위로 펼침 */
+.sidebar-user__menu {
+  position: absolute;
+  bottom: calc(100% - var(--space-1));
+  left: var(--space-3);
+  right: var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+  z-index: var(--z-dropdown);
+}
+
+/* ═══════════════════════════════════════════════════════════
    Modal / Dialog (ConfirmModal 재사용)
    ═══════════════════════════════════════════════════════════ */
 

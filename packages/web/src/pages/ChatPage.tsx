@@ -1,19 +1,17 @@
 // 채팅 메인 화면 (라우트 "/").
-// 개편: ChatGPT식 3열 레이아웃.
-//   .main-content > .app-sidebar (통합 사이드바) + .chat-area + .resize-handle + SidePanel
-// 좌측 사이드바(로고+접기 / +새 채팅 / 메뉴 nav / 대화 목록)와 우측 패널(접기/펼치기/리사이즈)의
-// UI 상태는 useLocalStorageState 로 저장/복원한다. 반응형 자동 접기는 useMediaQuery 로 감지한다.
+// 개편: 좌측 통합 사이드바는 AppLayout(전역)이 렌더한다. ChatPage 는
+//   중앙 채팅 영역 + 우측 사이드 패널(+리사이즈/오버레이)만 담당한다.
+//   구조: .chat-layout(가로) > .chat-area + [.resize-handle] + SidePanel
 //
-// 회귀 방지: 헤더/전역 SSE 구독/ToastContainer 는 상위 레이아웃(AppLayout)이 담당한다.
-// 3열 배치와 채팅/실행/SSE 흐름은 기존 로직을 그대로 유지한다.
+// 회귀 방지: 헤더/전역 SSE 구독/ToastContainer/좌측 사이드바는 상위 레이아웃이 담당한다.
+// 대화 목록/선택/이름변경/삭제/새채팅은 AppSidebar 로 이동했고, ChatPage 는 전송/중지/
+// 레시피 실행과 현재 대화방 메시지 표시에 집중한다. 상태는 전역 chatStore 로 공유한다.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { conversationsApi } from "../api";
 import type { MessageResponse } from "../api/types";
 import { ChatInput } from "../components/chat/ChatInput";
-import { ConversationSidebar } from "../components/chat/ConversationSidebar";
 import { MessageList } from "../components/chat/MessageList";
 import { Onboarding } from "../components/chat/Onboarding";
 import { SidePanel } from "../features/panel/SidePanel";
@@ -31,8 +29,7 @@ const PANEL_WIDTH_MIN = 240;
 const PANEL_WIDTH_MAX = 640;
 const PANEL_WIDTH_DEFAULT = 320;
 
-// localStorage 키
-const LS_LEFT_COLLAPSED = "testforge.ui.leftSidebar.collapsed";
+// localStorage 키 (우측 패널만 — 좌측 접기는 AppLayout 이 관리)
 const LS_RIGHT_COLLAPSED = "testforge.ui.rightPanel.collapsed";
 const LS_RIGHT_WIDTH = "testforge.ui.rightPanel.width";
 
@@ -54,7 +51,6 @@ function optimisticUserMessage(conversationId: number, content: string): Message
 }
 
 export function ChatPage() {
-  const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore((state) => state.currentConversationId);
   const messages = useChatStore((state) => state.messages);
   const conversationStatus = useChatStore((state) => state.conversationStatus);
@@ -63,31 +59,39 @@ export function ChatPage() {
   const setCurrentConversation = useChatStore((state) => state.setCurrentConversation);
   const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
-  const clearConversation = useChatStore((state) => state.clearConversation);
 
   const [error, setError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const showToast = useToastStore((state) => state.show);
 
-  // ─── UI 상태 (localStorage 저장/복원) ───
-  const [leftCollapsed, setLeftCollapsed] = useLocalStorageState<boolean>(LS_LEFT_COLLAPSED, false);
+  // ─── UI 상태 (우측 패널만, localStorage 저장/복원) ───
   const [rightCollapsed, setRightCollapsed] = useLocalStorageState<boolean>(LS_RIGHT_COLLAPSED, false);
   const [panelWidth, setPanelWidth] = useLocalStorageState<number>(LS_RIGHT_WIDTH, PANEL_WIDTH_DEFAULT, {
     sanitize: (v) => clampNumber(v, PANEL_WIDTH_MIN, PANEL_WIDTH_MAX, PANEL_WIDTH_DEFAULT),
   });
 
-  // ─── 반응형 자동 접기 (우측 먼저, 그다음 좌측) ───
+  // ─── 반응형: <1200px 는 우측 패널 오버레이 ───
   const isTablet = useMediaQuery("(max-width: 1199px)");
-  const isMobile = useMediaQuery("(max-width: 767px)");
 
   // 오버레이 모드에서 패널 열림 여부 (panelStore.open)
   const panelOpen = usePanelStore((s) => s.open);
   const setPanelOpen = usePanelStore((s) => s.setOpen);
 
+  // 데스크톱(고정 열)에서 열려있던 패널이 <1200 오버레이로 전환될 때, panelStore.open 이
+  // false 면 패널이 갑자기 사라진다. 오버레이 진입 시 접힘 상태가 아니면 open 을 승격해
+  // 폭 축소만으로 패널이 닫히지 않게 한다.
+  useEffect(() => {
+    if (isTablet && !rightCollapsed && !panelOpen) {
+      setPanelOpen(true);
+    }
+    // rightCollapsed/panelOpen 은 의도적으로 의존성에서 제외 — 오버레이 진입 시점에만 1회 승격.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTablet, setPanelOpen]);
+
   // 리사이즈 드래그 상태
   const [resizing, setResizing] = useState(false);
-  const mainRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
 
   // 채팅 ↔ 패널 연동: executing → idle 전이 시 실행 히스토리 무효화(패널은 구독만)
   const prevStatusRef = useRef(conversationStatus);
@@ -99,39 +103,15 @@ export function ChatPage() {
     }
   }, [conversationStatus, queryClient]);
 
-  // 대화 목록 로드
+  // 대화 목록 재조회 (첫 메시지로 새 대화가 생성됐을 때 목록 갱신용).
   const loadConversations = useCallback(async () => {
     try {
       const list = await conversationsApi.listConversations();
       setConversations(list);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "대화 목록을 불러오지 못했습니다");
+    } catch {
+      // 목록 갱신 실패는 SSE(session_list_update)로 복구된다
     }
   }, [setConversations]);
-
-  useEffect(() => {
-    void loadConversations();
-  }, [loadConversations]);
-
-  // 대화 선택 → 메시지 로드
-  const handleSelect = useCallback(
-    async (conversationId: number) => {
-      setCurrentConversation(conversationId);
-      try {
-        const page = await conversationsApi.listMessages(conversationId);
-        setMessages(page.items);
-        await conversationsApi.markRead(conversationId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "메시지를 불러오지 못했습니다");
-      }
-    },
-    [setCurrentConversation, setMessages]
-  );
-
-  const handleNew = useCallback(() => {
-    clearConversation();
-    setError(null);
-  }, [clearConversation]);
 
   // 전송. referenceId 는 사이드 패널 레시피 실행 시 recipeId(문자열)로 전달된다.
   const handleSend = useCallback(
@@ -178,49 +158,6 @@ export function ChatPage() {
     }
   }, [currentConversationId]);
 
-  // 이름 변경 저장 (검증은 사이드바에서 완료). 실패 시 롤백 안내 + 목록 재조회.
-  const handleRename = useCallback(
-    async (conversationId: number, title: string) => {
-      try {
-        await conversationsApi.updateTitle(conversationId, title);
-        // 낙관적 반영: 목록의 해당 항목 title 갱신
-        const updated = conversations.map((c) =>
-          c.id === conversationId ? { ...c, title } : c
-        );
-        setConversations(updated);
-      } catch (err) {
-        showToast(
-          err instanceof Error ? `이름 변경 실패: ${err.message}` : "이름 변경에 실패했습니다",
-          "error"
-        );
-        // 실패 시 서버 상태로 롤백
-        void loadConversations();
-      }
-    },
-    [conversations, setConversations, showToast, loadConversations]
-  );
-
-  // 삭제 확정
-  const handleDelete = useCallback(
-    async (conversationId: number) => {
-      try {
-        await conversationsApi.remove(conversationId);
-        // 낙관적 제거
-        setConversations(conversations.filter((c) => c.id !== conversationId));
-        if (currentConversationId === conversationId) {
-          clearConversation();
-        }
-      } catch (err) {
-        showToast(
-          err instanceof Error ? `삭제 실패: ${err.message}` : "삭제에 실패했습니다",
-          "error"
-        );
-        void loadConversations();
-      }
-    },
-    [conversations, setConversations, currentConversationId, clearConversation, showToast, loadConversations]
-  );
-
   const isOnboarding = currentConversationId == null && messages.length === 0;
 
   // 레시피 [▶] 실행: "{name} 실행하기" 발화 + referenceId(=recipeId)
@@ -235,97 +172,58 @@ export function ChatPage() {
     [handleSend, currentConversationId, conversationStatus, showToast]
   );
 
-  // ─── 리사이즈 드래그 (우측 패널 좌경계) ───
-  useEffect(() => {
-    if (!resizing) return;
-    const onMove = (e: MouseEvent) => {
-      const main = mainRef.current;
-      if (!main) return;
-      const rect = main.getBoundingClientRect();
-      // 우측 경계에서 커서까지 거리 = 패널 폭
-      const next = rect.right - e.clientX;
-      setPanelWidth(clampNumber(next, PANEL_WIDTH_MIN, PANEL_WIDTH_MAX, PANEL_WIDTH_DEFAULT));
-    };
-    const onUp = () => setResizing(false);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [resizing, setPanelWidth]);
+  // ─── 리사이즈 드래그 (우측 패널 좌경계) — Pointer 이벤트 + setPointerCapture ───
+  const handleResizeStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const handle = e.currentTarget;
+      handle.setPointerCapture(e.pointerId);
+      setResizing(true);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
 
-  // 반응형 자동 접기 판정:
+      const onMove = (ev: PointerEvent) => {
+        const layout = layoutRef.current;
+        if (!layout) return;
+        const rect = layout.getBoundingClientRect();
+        // 우측 경계에서 포인터까지 거리 = 패널 폭
+        const next = rect.right - ev.clientX;
+        setPanelWidth(clampNumber(next, PANEL_WIDTH_MIN, PANEL_WIDTH_MAX, PANEL_WIDTH_DEFAULT));
+      };
+      const onUp = (ev: PointerEvent) => {
+        setResizing(false);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        try {
+          handle.releasePointerCapture(ev.pointerId);
+        } catch {
+          // capture 가 이미 해제됐으면 무시
+        }
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+      };
+
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    },
+    [setPanelWidth]
+  );
+
+  // 반응형 판정:
   //   - Desktop(>=1200): 저장된 collapsed 상태를 그대로 사용, 고정 열
-  //   - Tablet(<1200): 우측 패널은 오버레이(자동 접힘 취급). 저장값 무관하게 고정 열 아님
-  //   - Mobile(<768): 좌측 사이드바도 레일
-  const rightIsOverlay = isTablet;              // 오버레이 모드 여부
-  const leftIsRail = isMobile ? true : leftCollapsed;
+  //   - Tablet/Mobile(<1200): 우측 패널은 오버레이(자동 접힘 취급)
+  const rightIsOverlay = isTablet;
   // Desktop 에서만 완전 접기(hidden) 적용. 오버레이 모드에선 hidden 대신 오버레이로 처리.
   const rightHidden = !rightIsOverlay && rightCollapsed;
 
   // 우측 패널 인라인 폭: Desktop 펼침 상태에서만 저장 폭 적용
   const panelStyle =
-    !rightIsOverlay && !rightHidden
-      ? { width: panelWidth, minWidth: panelWidth }
-      : undefined;
+    !rightIsOverlay && !rightHidden ? { width: panelWidth, minWidth: panelWidth } : undefined;
 
   return (
-    <div className="main-content" ref={mainRef}>
-      {/* ─── 좌측 통합 사이드바 ─── */}
-      <aside className={`app-sidebar${leftIsRail ? " collapsed" : ""}`} aria-label="네비게이션">
-        {/* 로고 + 접기 버튼 */}
-        <div className="sidebar-brand">
-          <span className="sidebar-brand__logo">💬 테스트 채팅</span>
-          <button
-            type="button"
-            className="sidebar-brand__collapse"
-            aria-label={leftCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
-            aria-expanded={!leftCollapsed}
-            onClick={() => setLeftCollapsed((v) => !v)}
-          >
-            {leftIsRail ? "»" : "«"}
-          </button>
-        </div>
-
-        {/* + 새 채팅 */}
-        <button type="button" className="sidebar-new-chat" onClick={handleNew}>
-          <span aria-hidden>➕</span>
-          <span className="sidebar-new-chat__label">새 채팅</span>
-        </button>
-
-        {/* 메뉴 nav (레시피 / 설정) — 레일에서는 CSS 로 숨김 */}
-        <nav className="sidebar-nav" aria-label="페이지 메뉴">
-          <NavLink
-            to="/recipes"
-            className={({ isActive }) => `sidebar-nav__item${isActive ? " active" : ""}`}
-          >
-            <span className="sidebar-nav__icon" aria-hidden>📋</span>
-            <span>레시피 관리</span>
-          </NavLink>
-          <NavLink
-            to="/settings"
-            className={({ isActive }) => `sidebar-nav__item${isActive ? " active" : ""}`}
-          >
-            <span className="sidebar-nav__icon" aria-hidden>⚙️</span>
-            <span>설정</span>
-          </NavLink>
-        </nav>
-
-        {/* 대화 목록 (이 영역만 스크롤) */}
-        <ConversationSidebar
-          conversations={conversations}
-          currentId={currentConversationId}
-          onSelect={handleSelect}
-          onRename={handleRename}
-          onDelete={handleDelete}
-        />
-      </aside>
-
+    <div className="chat-layout" ref={layoutRef}>
       {/* ─── 중앙 채팅 영역 ─── */}
       <div className="chat-area">
         {error && (
@@ -352,10 +250,7 @@ export function ChatPage() {
           role="separator"
           aria-orientation="vertical"
           aria-label="사이드 패널 크기 조절"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            setResizing(true);
-          }}
+          onPointerDown={handleResizeStart}
         />
       )}
 
@@ -389,7 +284,7 @@ export function ChatPage() {
         />
       )}
 
-      {/* ─── 우측 사이드 패널 (main-content 의 직접 자식이어야 오버레이 CSS 적용됨) ─── */}
+      {/* ─── 우측 사이드 패널 (.chat-layout 의 직접 자식이어야 오버레이 CSS 적용됨) ─── */}
       <SidePanel
         conversationStatus={conversationStatus}
         onRunRecipe={handleRunRecipe}

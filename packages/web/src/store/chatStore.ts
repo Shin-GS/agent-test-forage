@@ -248,13 +248,15 @@ export const useChatStore = create<ChatState>((set) => ({
 
       const others = state.conversations.filter((c) => c.id !== snap.id);
       const next = [merged, ...others];
-      // 정렬 기준: lastMessageAt 내림차순(기획 chat/overview.md). 없으면 뒤로.
-      // 읽음(markRead)만으로는 lastMessageAt 이 안 바뀌므로 순서가 유지된다.
-      next.sort((a, b) => {
-        const ta = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
-        const tb = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
-        return tb - ta;
-      });
+      // 정렬 기준: lastMessageAt 내림차순(기획 chat/overview.md).
+      // 신규 대화는 lastMessageAt 이 아직 null 일 수 있으므로 updatedAt 로 폴백해
+      // 최하단으로 밀리지 않고 상단에 오도록 한다(둘 다 없으면 0).
+      const sortKey = (c: ConversationSummary): number => {
+        if (c.lastMessageAt) return Date.parse(c.lastMessageAt);
+        if (c.updatedAt) return Date.parse(c.updatedAt);
+        return 0;
+      };
+      next.sort((a, b) => sortKey(b) - sortKey(a));
       return { conversations: next };
     }),
 

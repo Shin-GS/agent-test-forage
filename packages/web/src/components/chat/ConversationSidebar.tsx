@@ -36,13 +36,17 @@ function statusBadge(c: ConversationSummary): { icon: string; label: string } | 
   return null;
 }
 
-/** 이름 검증: 트림 → 제어문자 제거 → 길이 clamp. 빈값이면 null(롤백). */
+/**
+ * 이름 검증: 제어문자 제거 → 트림. 빈값이거나 50자 초과면 null(롤백).
+ * (기획 chat/overview.md: 트림 후 빈 값 롤백, 길이 1~50자 — 초과 시 거부/롤백)
+ * 입력 단계 maxLength=50 로 초과를 막지만, IME/붙여넣기 등 우회 시에도 롤백되도록 방어한다.
+ */
 function sanitizeTitle(raw: string): string | null {
   // eslint-disable-next-line no-control-regex
   const noControl = raw.replace(/[\u0000-\u001F\u007F]/g, "");
   const trimmed = noControl.trim();
-  if (trimmed.length === 0) return null;
-  return trimmed.slice(0, 50);
+  if (trimmed.length === 0 || trimmed.length > 50) return null;
+  return trimmed;
 }
 
 export function ConversationSidebar({

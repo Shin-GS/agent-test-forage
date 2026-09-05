@@ -1,6 +1,6 @@
 // 앱 라우트 정의.
-// - AppLayout(헤더 + tab-nav + 전역 SSE 구독 + ToastContainer)을 공통 레이아웃으로 두고,
-//   그 아래 자식 라우트를 <Outlet> 으로 렌더한다.
+// - AppLayout(전역 사이드바 + 최소 헤더 + 전역 SSE 구독 + ToastContainer)을 공통 레이아웃으로 두고,
+//   그 아래 자식 라우트를 <Outlet> 으로 렌더한다. 좌측 사이드바는 모든 라우트에서 상시 표시된다.
 // - "/"        → 채팅 화면 (ChatPage)
 // - "/settings" → 설정 페이지 (SettingsPage)
 // - 그 외 경로  → "/" 로 리다이렉트
