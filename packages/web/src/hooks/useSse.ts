@@ -53,6 +53,24 @@ export function useSse(options: UseSseOptions = {}): void {
       routeEnvelope(envelope);
     };
 
+    // SSE 연결/재연결 시 목록 재동기화.
+    // 재연결 도중 놓친 session_list_update(SIGNAL, 유실 시 재조회로 복구)를 보정한다.
+    // Last-Event-ID replay 로도 복구되지만, replay 버퍼(5분) 초과·최초 연결 실패 후 복구 등을
+    // 안전하게 커버하기 위해 연결이 열릴 때마다 목록을 한 번 재조회한다.
+    const handleOpen = () => {
+      void useChatStore.getState().loadConversations();
+    };
+    source.addEventListener("open", handleOpen);
+
+    // 탭 복귀(백그라운드 → visible) 시 목록 재동기화.
+    // 백그라운드에서 브라우저가 EventSource 를 스로틀/중단했을 수 있어, 복귀 시 최신 목록을 1회 당겨온다.
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void useChatStore.getState().loadConversations();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     // named event 별 리스너 등록.
     // envelope.type 필드로도 라우팅하지만, 리스너는 이벤트명 기준으로 걸어야 수신된다.
     for (const eventName of SSE_EVENT_TYPES) {
@@ -60,6 +78,8 @@ export function useSse(options: UseSseOptions = {}): void {
     }
 
     return () => {
+      source.removeEventListener("open", handleOpen);
+      document.removeEventListener("visibilitychange", handleVisibility);
       for (const eventName of SSE_EVENT_TYPES) {
         source.removeEventListener(eventName, handleEvent as EventListener);
       }

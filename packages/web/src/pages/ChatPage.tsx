@@ -59,6 +59,7 @@ export function ChatPage() {
   const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
   const setPendingApiSpecId = useChatStore((state) => state.setPendingApiSpecId);
+  const loadConversations = useChatStore((state) => state.loadConversations);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -103,15 +104,52 @@ export function ChatPage() {
     }
   }, [conversationStatus, queryClient]);
 
-  // 대화 목록 재조회 (첫 메시지로 새 대화가 생성됐을 때 목록 갱신용).
-  const loadConversations = useCallback(async () => {
-    try {
-      const list = await conversationsApi.listConversations();
-      setConversations(list);
-    } catch {
-      // 목록 갱신 실패는 SSE(session_list_update)로 복구된다
+  // 대화 목록 재조회(loadConversations)는 store 액션으로 통합됨.
+  // 첫 메시지로 새 대화 생성 시 목록 갱신 + SSE 재연결/탭 복귀 재동기화(useSse)가 같은 액션을 공유한다.
+
+  // ─── 현재 보는 방 자동 읽음 처리 ───
+  // 지금 열어 보고 있는 대화방(currentConversationId)에 SSE 로 새 메시지가 도착하면
+  // 서버가 session_list_update(unread=true)를 내려 목록에 🔵 뱃지가 붙는다. 그러나 사용자가
+  // 그 방을 실제로 보고 있으면(탭이 visible) 안 읽음일 이유가 없으므로 자동으로 읽음 처리한다.
+  //
+  // 조건(사용자 정책):
+  //   - conversationId === currentConversationId (지금 보는 방)
+  //   - document.visibilityState === "visible" (백그라운드 탭·다른 방 탭 제외)
+  //   - 해당 방 unread === true (이미 false 면 스킵 — 불필요한 API 호출/이벤트 폭주 방지)
+  // 멱등: 서버 markRead 는 이미 읽음이면 no-op 이라 멀티 탭 동시 호출도 안전.
+  // 부수효과(네트워크 + 뷰 가시성 의존)라 store 가 아니라 컴포넌트 effect 에서 처리한다.
+  //
+  // 목록의 unread 는 store 셀렉터로 직접 구독해, SSE 로 unread 가 true 로 바뀌면 이 effect 가
+  // 재실행되도록 한다(메시지 배열 대신 unread 플래그를 트리거로 삼아 과다 실행을 막는다).
+  const currentUnread = useChatStore((state) =>
+    state.currentConversationId == null
+      ? false
+      : state.conversations.find((c) => c.id === state.currentConversationId)?.unread ?? false
+  );
+  useEffect(() => {
+    if (currentConversationId == null || !currentUnread) {
+      return;
     }
-  }, [setConversations]);
+
+    // 읽음 처리 실행: visible 일 때만. 실패는 삼킨다(다음 진입/재동기화로 복구).
+    const markCurrentRead = () => {
+      if (document.visibilityState !== "visible") return;
+      // 실행 직전 최신 상태 재확인(effect 스케줄 이후 다른 탭이 먼저 읽었을 수 있음)
+      const state = useChatStore.getState();
+      if (state.currentConversationId !== currentConversationId) return;
+      const conv = state.conversations.find((c) => c.id === currentConversationId);
+      if (!conv || !conv.unread) return;
+      void conversationsApi.markRead(currentConversationId).catch(() => {
+        // 무시 — SSE(session_list_update)/다음 진입으로 복구
+      });
+    };
+
+    // 이미 visible 이면 즉시, 백그라운드였다가 복귀(hidden→visible)하면 그때 읽음 처리.
+    markCurrentRead();
+    const onVisibility = () => markCurrentRead();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [currentConversationId, currentUnread]);
 
   // 전송. referenceId 는 사이드 패널 레시피 실행 시 recipeId(문자열)로 전달된다.
   const handleSend = useCallback(

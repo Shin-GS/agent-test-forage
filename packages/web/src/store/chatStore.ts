@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import type { ActionPickerVariable, ConversationSummary, MessageResponse, StatusView } from "../api/types";
 import type { ConversationRuntimeStatus } from "./types";
+import { conversationsApi } from "../api";
 import { useAuthStore } from "./authStore";
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,12 @@ interface ChatState {
   // --- 일반 액션 ---
   setCurrentConversation: (conversationId: number | null) => void;
   setConversations: (conversations: ConversationSummary[]) => void;
+  /**
+   * 대화 목록 서버 재조회 → 스토어 갱신. 실패는 삼킨다(SSE session_list_update 로 복구).
+   * SSE 재연결(onopen)·탭 복귀(visibilitychange)·앱 진입 시 재동기화에 사용한다.
+   * 컴포넌트 로컬 loadConversations 와 달리, 훅(useSse)에서도 getState()로 호출 가능하다.
+   */
+  loadConversations: () => Promise<void>;
   setMessages: (messages: MessageResponse[]) => void;
   /** 낙관적 임시 메시지 추가 (음수 seq 등으로 구분) */
   addMessage: (message: MessageResponse) => void;
@@ -167,6 +174,15 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
 
   setConversations: (conversations) => set({ conversations }),
+
+  loadConversations: async () => {
+    try {
+      const list = await conversationsApi.listConversations();
+      set({ conversations: list });
+    } catch {
+      // 재조회 실패는 삼킨다 — SSE(session_list_update)로 복구된다
+    }
+  },
 
   setMessages: (messages) => set({ messages: normalizeMessages(messages) }),
 
