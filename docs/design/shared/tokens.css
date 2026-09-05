@@ -70,6 +70,7 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
   /* Size scale */
+  --font-size-2xs: 0.6875rem; /* 11px — 카운트 배지/미세 라벨 전용 */
   --font-size-xs: 0.75rem;    /* 12px */
   --font-size-sm: 0.875rem;   /* 14px */
   --font-size-base: 1rem;     /* 16px */
@@ -102,6 +103,10 @@
   --space-10: 2.5rem;   /* 40px */
   --space-12: 3rem;     /* 48px */
   --space-16: 4rem;     /* 64px */
+
+  /* ─── Count Badge (필터 카운트 등 작은 원형 배지) ─── */
+  --count-badge-size: 1.125rem;      /* 18px — min-width/height */
+  --count-badge-padding-x: 0.3125rem; /* 5px */
 
   /* ─── Border Radius ─── */
 

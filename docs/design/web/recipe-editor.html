@@ -68,6 +68,94 @@
 
     /* 리스트 페이지 필터 */
     .list-filters { display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4); }
+
+    /* ── 목록 개선: 필터 바 / 칩 / 정렬 / 행 ── */
+    .list-toolbar { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); }
+    .list-toolbar__row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+    .list-toolbar__spacer { flex: 1; }
+
+    /* 체크박스 드롭다운 필터 */
+    .filter-dropdown { position: relative; }
+    .filter-dropdown__trigger { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); font-size: var(--font-size-sm); color: var(--color-text-primary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer; transition: all var(--transition-fast); }
+    .filter-dropdown__trigger:hover { border-color: var(--color-border-light); background: var(--color-bg-hover); }
+    .filter-dropdown__trigger:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+    .filter-dropdown__count { min-width: var(--count-badge-size); height: var(--count-badge-size); padding: 0 var(--count-badge-padding-x); display: inline-flex; align-items: center; justify-content: center; font-size: var(--font-size-2xs); font-weight: var(--font-weight-semibold); background: var(--color-accent); color: var(--color-text-on-accent); border-radius: var(--radius-full); }
+    .filter-dropdown__menu { position: absolute; top: calc(100% + var(--space-1)); left: 0; min-width: 200px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-2); box-shadow: var(--shadow-lg); z-index: var(--z-dropdown); }
+    .filter-check { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-2); font-size: var(--font-size-sm); color: var(--color-text-primary); border-radius: var(--radius-sm); cursor: pointer; }
+    .filter-check:hover { background: var(--color-bg-hover); }
+
+    /* 필터 칩 요약 줄 */
+    .filter-summary { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+    .filter-summary__label { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+    .filter-chip { display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-2); background: var(--color-accent-subtle); color: var(--color-accent); border-radius: var(--radius-full); font-size: var(--font-size-xs); }
+    .filter-chip__remove { cursor: pointer; opacity: 0.7; background: none; border: none; color: inherit; padding: 0; line-height: 1; font-size: var(--font-size-sm); }
+    .filter-chip__remove:hover { opacity: 1; }
+    .filter-chip__remove:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; border-radius: var(--radius-sm); }
+
+    /* 정렬 방향 토글 */
+    .sort-dir { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-secondary); cursor: pointer; transition: all var(--transition-fast); }
+    .sort-dir:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+    .sort-dir:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+    /* 결과 카운트 */
+    .list-count { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+
+    /* 목록 행: 이름+설명 셀 */
+    .recipe-cell__name { font-weight: var(--font-weight-medium); color: var(--color-text-primary); display: flex; align-items: center; gap: var(--space-1); }
+    .recipe-cell__desc { font-size: var(--font-size-xs); color: var(--color-text-tertiary); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+    .recipe-cell__warn { color: var(--color-warning); cursor: help; }
+
+    /* 행 hover 액션 (권한 게이팅) */
+    .data-table .row-actions { opacity: 0; transition: opacity var(--transition-fast); }
+    .data-table tr:hover .row-actions,
+    .data-table tr:focus-within .row-actions { opacity: 1; }
+
+    /* 카드 폴백 (반응형) */
+    .recipe-cards { display: none; flex-direction: column; gap: var(--space-3); }
+    .recipe-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); }
+    .recipe-card__top { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); }
+    .recipe-card__meta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+    .recipe-card__actions { display: flex; gap: var(--space-1); margin-top: var(--space-3); }
+
+    /* 반응형: 카드 폴백 데모는 케이스 내부에서 강제 노출 */
+    .demo-responsive .data-table { display: none; }
+    .demo-responsive .recipe-cards { display: flex; }
+
+    /* ── 버전 기록 drawer ── */
+    /* header(56px) + page-header(약 sticky) 를 뺀 높이. 페이지 상단 헤더 높이를 var로 참조 */
+    .drawer-layout { position: relative; display: flex; flex-direction: row; overflow: hidden; height: calc(100vh - var(--header-height) - var(--space-8)); }
+    .drawer-layout__main { flex: 1; min-width: 0; }
+    .version-drawer { width: var(--panel-width); min-width: var(--panel-width); background: var(--color-bg-secondary); border-left: 1px solid var(--color-border); display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+    .version-drawer__header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); }
+    .version-drawer__title { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+    .version-drawer__close { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--color-text-secondary); }
+    .version-drawer__close:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+    .version-drawer__list { flex: 1; overflow-y: auto; padding: var(--space-2); }
+
+    .version-item { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); border: 1px solid transparent; }
+    .version-item:hover { background: var(--color-bg-hover); }
+    .version-item--current { background: var(--color-accent-subtle); border-color: var(--color-accent); }
+    .version-item__dot { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-full); background: var(--color-text-tertiary); margin-top: var(--space-1); flex-shrink: 0; }
+    .version-item--current .version-item__dot { background: var(--color-accent); }
+    .version-item__body { flex: 1; min-width: 0; }
+    .version-item__no { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); display: flex; align-items: center; gap: var(--space-2); }
+    .version-item__time { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: 2px; }
+    .version-item__actions { display: flex; gap: var(--space-1); margin-top: var(--space-2); }
+
+    /* 버전 배지 버튼 (헤더) */
+    .version-badge-btn { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+    /* 미리보기 모달: 넓게 */
+    .modal--wide { max-width: 720px; }
+    .preview-meta { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-4); }
+    .preview-block { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3); }
+    .preview-block__title { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); margin-bottom: var(--space-2); }
+    .preview-field { display: flex; gap: var(--space-2); font-size: var(--font-size-sm); padding: 2px 0; }
+    .preview-field__key { color: var(--color-text-tertiary); min-width: 100px; }
+    .preview-field__val { color: var(--color-text-primary); }
+
+    /* 읽기 전용 배너 */
+    .readonly-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
   </style>
 </head>
 <body>
@@ -79,6 +167,14 @@
     <button class="case-switcher__btn" onclick="showCase('step-script')">4. 스텝: 스크립트</button>
     <button class="case-switcher__btn" onclick="showCase('validation')">5. 유효성 에러</button>
     <button class="case-switcher__btn" onclick="showCase('step-sub')">6. 스텝: 서브레시피</button>
+    <button class="case-switcher__btn" onclick="showCase('list-advanced')">7. 목록: 필터/정렬/권한</button>
+    <button class="case-switcher__btn" onclick="showCase('list-empty')">8. 목록: 빈 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('list-delete')">9. 목록: 삭제 확인</button>
+    <button class="case-switcher__btn" onclick="showCase('list-responsive')">10. 목록: 카드 폴백</button>
+    <button class="case-switcher__btn" onclick="showCase('version-drawer')">11. 편집: 버전 drawer</button>
+    <button class="case-switcher__btn" onclick="showCase('version-preview')">12. 편집: 버전 미리보기</button>
+    <button class="case-switcher__btn" onclick="showCase('version-restore')">13. 편집: 복원 확인</button>
+    <button class="case-switcher__btn" onclick="showCase('readonly')">14. 편집: 읽기 전용</button>
   </div>
   <!-- 스텝 타입은 API / 스크립트 / 서브레시피 3종 (확정). "사용자 입력"은 별도 스텝 타입이 아니라
        레시피 메타의 ② 사용자 입력 변수로 대체. 실행 중 입력 스텝은 추후 확장 (기존 Case 7 제거). -->
@@ -622,10 +718,526 @@
     </div>
   </div>
 
-  <!-- Case 7 (스텝: 사용자 입력 타입) 제거됨 — 확정 결정에 따라 "사용자 입력"은 별도 스텝 타입이
-       아니라 레시피 메타 ② 사용자 입력 변수로 대체. 실행 중 입력 스텝은 추후 확장. -->
+  <!-- (구) Case 7 (스텝: 사용자 입력 타입) 제거됨 — 확정 결정에 따라 "사용자 입력"은 별도 스텝
+       타입이 아니라 레시피 메타 ② 사용자 입력 변수로 대체. 실행 중 입력 스텝은 추후 확장. -->
+
+  <!-- ═══ Case 7: 목록 — 다중 필터 / 정렬 / 권한 게이팅 (일반 사용자 시점) ═══ -->
+  <div id="case-list-advanced" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">레시피 관리</span>
+        <div class="page-header__actions">
+          <button class="btn btn--primary">+ 레시피 만들기</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="list-toolbar">
+          <!-- 검색 + 필터 드롭다운 + 정렬
+               [접근성/FE 구현 note] 각 필터 드롭다운은 다음 인터랙션을 FE에서 구현해야 함:
+               - ESC 키로 닫기
+               - 드롭다운 바깥 클릭 시 닫기
+               - 열릴 때 메뉴 내부 첫 체크박스로 포커스 이동
+               - 닫으면 포커스를 트리거 버튼으로 복귀
+               - aria-expanded 는 표시 상태와 항상 동기화(toggleFilter 참조) -->
+          <div class="list-toolbar__row">
+            <input class="input" type="text" placeholder="🔍 이름/설명 검색..." aria-label="레시피 검색" style="max-width: 260px;">
+
+            <!-- 서비스 필터 -->
+            <div class="filter-dropdown">
+              <button class="filter-dropdown__trigger" aria-haspopup="true" aria-expanded="true" onclick="toggleFilter(this)">
+                서비스 <span class="filter-dropdown__count">2</span> ▾
+              </button>
+              <div class="filter-dropdown__menu" role="menu">
+                <label class="filter-check"><input type="checkbox" checked> 사람인</label>
+                <label class="filter-check"><input type="checkbox" checked> 잡코리아</label>
+                <label class="filter-check"><input type="checkbox"> 쇼핑몰</label>
+              </div>
+            </div>
+
+            <!-- 범위 필터 -->
+            <div class="filter-dropdown">
+              <button class="filter-dropdown__trigger" aria-haspopup="true" aria-expanded="false" onclick="toggleFilter(this)">
+                범위 <span class="filter-dropdown__count">1</span> ▾
+              </button>
+              <div class="filter-dropdown__menu" role="menu" hidden>
+                <label class="filter-check"><input type="checkbox" checked> 🌐 공통</label>
+                <label class="filter-check"><input type="checkbox"> 🔒 개인</label>
+              </div>
+            </div>
+
+            <!-- 태그 필터 -->
+            <div class="filter-dropdown">
+              <button class="filter-dropdown__trigger" aria-haspopup="true" aria-expanded="false" onclick="toggleFilter(this)">
+                태그 ▾
+              </button>
+              <div class="filter-dropdown__menu" role="menu" hidden>
+                <label class="filter-check"><input type="checkbox"> 가입</label>
+                <label class="filter-check"><input type="checkbox"> 채용</label>
+                <label class="filter-check"><input type="checkbox"> 결제</label>
+              </div>
+            </div>
+
+            <div class="list-toolbar__spacer"></div>
+
+            <!-- 정렬 -->
+            <select class="input" aria-label="정렬 기준" style="max-width: 150px;">
+              <option>최근 사용순</option>
+              <option>사용 많은순</option>
+              <option>이름순</option>
+              <option>최근 수정순</option>
+            </select>
+            <!-- 정렬 방향 토글: 클릭 시 ▼(내림, desc) ↔ ▲(오름, asc) 두 상태를 오간다.
+                 - 내림: 텍스트 "▼", aria-label "정렬 방향: 내림차순", title "내림차순"
+                 - 오름: 텍스트 "▲", aria-label "정렬 방향: 오름차순", title "오름차순"
+                 FE: onclick 시 텍스트/aria-label/title 을 함께 토글할 것. 아래는 두 상태 예시. -->
+            <button class="sort-dir" aria-label="정렬 방향: 내림차순" title="내림차순">▼</button>
+            <button class="sort-dir" aria-label="정렬 방향: 오름차순" title="오름차순">▲</button>
+          </div>
+
+          <!-- 필터 칩 요약 -->
+          <div class="filter-summary">
+            <span class="filter-summary__label">활성 필터 3개 ·</span>
+            <span class="filter-chip">사람인 <button class="filter-chip__remove" aria-label="사람인 필터 제거">✕</button></span>
+            <span class="filter-chip">잡코리아 <button class="filter-chip__remove" aria-label="잡코리아 필터 제거">✕</button></span>
+            <span class="filter-chip">🌐 공통 <button class="filter-chip__remove" aria-label="공통 필터 제거">✕</button></span>
+            <button class="btn btn--ghost btn--sm">필터 초기화</button>
+            <span class="list-toolbar__spacer"></span>
+            <span class="list-count">총 3개</span>
+          </div>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr><th>레시피</th><th>서비스</th><th>범위</th><th>최근 사용</th><th style="width: 120px;">액션</th></tr>
+          </thead>
+          <tbody>
+            <!-- 공통 레시피 (일반 사용자): 복제만 -->
+            <tr>
+              <td>
+                <div class="recipe-cell__name">회원가입 <span class="recipe-cell__warn tooltip" tabindex="0" aria-label="유효성 경고">⚠️<span class="tooltip__content">스펙 변경으로 필수 필드가 무효화됨</span></span></div>
+                <div class="recipe-cell__desc">사람인 신규 회원가입 플로우 (이메일 생성 → 가입 → 프로필)</div>
+              </td>
+              <td><span class="badge badge--neutral">사람인</span></td>
+              <td><span class="badge badge--info">🌐 공통</span></td>
+              <td style="color: var(--color-text-tertiary); font-size: var(--font-size-xs);">2시간 전</td>
+              <td>
+                <div class="row-actions data-table__actions">
+                  <button class="btn btn--ghost btn--sm" title="복제" aria-label="복제">⧉</button>
+                </div>
+              </td>
+            </tr>
+            <!-- 본인 개인 레시피: 전체 액션 -->
+            <tr>
+              <td>
+                <div class="recipe-cell__name">입사지원</div>
+                <div class="recipe-cell__desc">잡코리아 입사지원 자동화</div>
+              </td>
+              <td><span class="badge badge--neutral">잡코리아</span></td>
+              <td><span class="badge badge--neutral">🔒 개인</span></td>
+              <td style="color: var(--color-text-tertiary); font-size: var(--font-size-xs);">어제</td>
+              <td>
+                <div class="row-actions data-table__actions">
+                  <button class="btn btn--ghost btn--sm" title="편집" aria-label="편집">✏️</button>
+                  <button class="btn btn--ghost btn--sm" title="복제" aria-label="복제">⧉</button>
+                  <button class="btn btn--ghost btn--sm" title="삭제" aria-label="삭제" style="color: var(--color-error);">🗑️</button>
+                </div>
+              </td>
+            </tr>
+            <!-- 공통 (설명 없음, 미사용) -->
+            <tr>
+              <td>
+                <div class="recipe-cell__name">공고 등록</div>
+                <div class="recipe-cell__desc" style="font-style: italic;">(설명 없음)</div>
+              </td>
+              <td><span class="badge badge--neutral">사람인</span></td>
+              <td><span class="badge badge--info">🌐 공통</span></td>
+              <td style="color: var(--color-text-tertiary); font-size: var(--font-size-xs);">미사용</td>
+              <td>
+                <div class="row-actions data-table__actions">
+                  <button class="btn btn--ghost btn--sm" title="복제" aria-label="복제">⧉</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 8: 목록 — 빈 상태 / 필터 결과 없음 ═══ -->
+  <div id="case-list-empty" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">레시피 관리</span>
+        <div class="page-header__actions"><button class="btn btn--primary">+ 레시피 만들기</button></div>
+      </div>
+      <div class="page-body">
+        <!-- 8a. 레시피 0개 -->
+        <div class="section">
+          <div class="section__title">상태 A — 레시피 0개</div>
+          <div class="empty-state">
+            <div class="empty-state__icon">📋</div>
+            <div class="empty-state__title">아직 레시피가 없습니다</div>
+            <div class="empty-state__desc">첫 레시피를 만들어 워크플로우를 등록해보세요. 채팅에서 자연어로 실행할 수 있습니다.</div>
+            <button class="btn btn--primary">+ 레시피 만들기</button>
+          </div>
+        </div>
+
+        <!-- 8b. 필터 결과 없음 -->
+        <div class="section">
+          <div class="section__title">상태 B — 필터 결과 없음</div>
+          <div class="filter-summary" style="margin-bottom: var(--space-4);">
+            <span class="filter-summary__label">활성 필터 2개 ·</span>
+            <span class="filter-chip">쇼핑몰 <button class="filter-chip__remove" aria-label="쇼핑몰 필터 제거">✕</button></span>
+            <span class="filter-chip">🔒 개인 <button class="filter-chip__remove" aria-label="개인 필터 제거">✕</button></span>
+            <button class="btn btn--ghost btn--sm">필터 초기화</button>
+          </div>
+          <div class="empty-state">
+            <div class="empty-state__icon">🔍</div>
+            <div class="empty-state__title">조건에 맞는 레시피가 없습니다</div>
+            <div class="empty-state__desc">필터를 완화하거나 초기화해보세요.</div>
+            <button class="btn btn--secondary">필터 초기화</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 9: 목록 — 삭제 확인 모달 ═══ -->
+  <div id="case-list-delete" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">레시피 관리</span>
+        <div class="page-header__actions"><button class="btn btn--primary">+ 레시피 만들기</button></div>
+      </div>
+      <div class="page-body">
+        <table class="data-table">
+          <thead><tr><th>레시피</th><th>범위</th><th>액션</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="recipe-cell__name">입사지원</div><div class="recipe-cell__desc">잡코리아 입사지원 자동화</div></td>
+              <td><span class="badge badge--neutral">🔒 개인</span></td>
+              <td class="data-table__actions"><button class="btn btn--ghost btn--sm">✏️</button><button class="btn btn--ghost btn--sm">⧉</button><button class="btn btn--ghost btn--sm" style="color: var(--color-error);">🗑️</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ConfirmModal -->
+    <div class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-title" style="max-width: 420px;">
+        <div class="modal__header">
+          <span class="modal__title" id="del-title">레시피 삭제</span>
+        </div>
+        <div class="modal__body">
+          <p><strong>입사지원</strong> 레시피를 삭제할까요?</p>
+          <div class="alert alert--warning" style="margin-top: var(--space-3);">
+            <span>실행 히스토리는 그대로 유지됩니다. 다만 <strong>레시피 정의는 되돌릴 수 없습니다.</strong></span>
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary">취소</button>
+          <button class="btn btn--danger">삭제</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 10: 목록 — 반응형(Tablet 이하) 카드 폴백 ═══ -->
+  <div id="case-list-responsive" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__title">레시피 관리 <span class="badge badge--neutral" style="margin-left: var(--space-2);">Tablet 미리보기</span></span>
+        <div class="page-header__actions"><button class="btn btn--primary">+</button></div>
+      </div>
+      <div class="page-body demo-responsive" style="max-width: 640px;">
+        <div class="list-count" style="margin-bottom: var(--space-3);">총 2개</div>
+        <!-- 카드형 목록 (< 1024px 폴백; 데모라 강제 노출) -->
+        <div class="recipe-cards">
+          <div class="recipe-card">
+            <div class="recipe-card__top">
+              <span class="badge badge--info">🌐 공통</span>
+              <span class="recipe-cell__name" style="flex: 1;">회원가입 <span class="recipe-cell__warn" aria-label="유효성 경고">⚠️</span></span>
+            </div>
+            <div class="recipe-cell__desc" style="max-width: none; white-space: normal;">사람인 신규 회원가입 플로우</div>
+            <div class="recipe-card__meta">
+              <span class="badge badge--neutral">사람인</span>
+              <span class="tag-chip">가입</span>
+              <span>· 2시간 전</span>
+            </div>
+            <div class="recipe-card__actions">
+              <button class="btn btn--ghost btn--sm" aria-label="복제">⧉ 복제</button>
+            </div>
+          </div>
+          <div class="recipe-card">
+            <div class="recipe-card__top">
+              <span class="badge badge--neutral">🔒 개인</span>
+              <span class="recipe-cell__name" style="flex: 1;">입사지원</span>
+            </div>
+            <div class="recipe-cell__desc" style="max-width: none; white-space: normal;">잡코리아 입사지원 자동화</div>
+            <div class="recipe-card__meta">
+              <span class="badge badge--neutral">잡코리아</span>
+              <span class="tag-chip">지원</span>
+              <span>· 어제</span>
+            </div>
+            <div class="recipe-card__actions">
+              <button class="btn btn--ghost btn--sm" aria-label="편집">✏️ 편집</button>
+              <button class="btn btn--ghost btn--sm" aria-label="복제">⧉ 복제</button>
+              <button class="btn btn--ghost btn--sm" style="color: var(--color-error);" aria-label="삭제">🗑️ 삭제</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 11: 편집 — 버전 기록 drawer ═══ -->
+  <div id="case-version-drawer" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">회원가입 레시피 편집</span>
+        <div class="page-header__actions">
+          <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
+          <button class="btn btn--primary">저장</button>
+        </div>
+      </div>
+      <div class="page-body drawer-layout" style="max-width: none; padding: 0;">
+        <div class="drawer-layout__main" style="padding: var(--space-6); overflow-y: auto;">
+          <div class="section">
+            <div class="section__title"><span class="section__number">1</span> 메타 정보</div>
+            <div class="field-grid">
+              <div class="form-group"><label class="form-label">레시피명 *</label><input class="input" type="text" value="회원가입"></div>
+              <div class="form-group"><label class="form-label">대상 서비스 *</label><select class="input"><option>사람인</option></select></div>
+            </div>
+          </div>
+          <div class="section"><div class="section__title"><span class="section__number">3</span> 스텝 (3개)</div><p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary);">스텝 편집 영역 (Case 3~6 참조)</p></div>
+        </div>
+
+        <!-- 우측 버전 drawer
+             [접근성/FE 구현 note] drawer 는 다음 인터랙션을 FE에서 구현해야 함:
+             - ESC 키로 닫기
+             - drawer 바깥(overlay/에디터 영역) 클릭 시 닫기
+             - 열릴 때 drawer 내부 첫 포커스 요소(닫기 버튼)로 포커스 이동
+             - 닫으면 포커스를 트리거([🕘 버전 기록] 배지 버튼)로 복귀
+             동일 규칙이 필터 드롭다운에도 적용됨(아래 필터 드롭다운 주석 참조). -->
+        <aside class="version-drawer" aria-label="버전 기록">
+          <div class="version-drawer__header">
+            <span class="version-drawer__title">버전 기록</span>
+            <button class="version-drawer__close" aria-label="닫기">✕</button>
+          </div>
+          <div class="version-drawer__list">
+            <!-- 현재 -->
+            <div class="version-item version-item--current">
+              <span class="version-item__dot"></span>
+              <div class="version-item__body">
+                <div class="version-item__no">v5 <span class="badge badge--info">현재</span></div>
+                <div class="version-item__time">방금 전</div>
+              </div>
+            </div>
+            <!-- 과거 -->
+            <div class="version-item">
+              <span class="version-item__dot"></span>
+              <div class="version-item__body">
+                <div class="version-item__no">v4</div>
+                <div class="version-item__time">1시간 전</div>
+                <div class="version-item__actions">
+                  <button class="btn btn--ghost btn--sm">미리보기</button>
+                  <button class="btn btn--secondary btn--sm">복원</button>
+                </div>
+              </div>
+            </div>
+            <div class="version-item">
+              <span class="version-item__dot"></span>
+              <div class="version-item__body">
+                <div class="version-item__no">v3</div>
+                <div class="version-item__time">어제</div>
+                <div class="version-item__actions">
+                  <button class="btn btn--ghost btn--sm">미리보기</button>
+                  <button class="btn btn--secondary btn--sm">복원</button>
+                </div>
+              </div>
+            </div>
+            <div class="version-item">
+              <span class="version-item__dot"></span>
+              <div class="version-item__body">
+                <div class="version-item__no">v2</div>
+                <div class="version-item__time">3일 전</div>
+                <div class="version-item__actions">
+                  <button class="btn btn--ghost btn--sm">미리보기</button>
+                  <button class="btn btn--secondary btn--sm">복원</button>
+                </div>
+              </div>
+            </div>
+            <div style="text-align: center; padding: var(--space-3);">
+              <button class="btn btn--ghost btn--sm">더 보기</button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- 빈 상태 drawer 데모 (v1만 존재 = 수정 이력 없음). 실제로는 한 시점에 하나만 렌더되며,
+             여기서는 두 상태를 나란히 보여주기 위한 디자인 명세용 병렬 표시. -->
+        <aside class="version-drawer" aria-label="버전 기록 (빈 상태)">
+          <div class="version-drawer__header">
+            <span class="version-drawer__title">버전 기록</span>
+            <button class="version-drawer__close" aria-label="닫기">✕</button>
+          </div>
+          <div class="version-drawer__list">
+            <div class="empty-state">
+              <div class="empty-state__icon">🕘</div>
+              <div class="empty-state__title">아직 수정 이력이 없습니다</div>
+              <div class="empty-state__desc">레시피를 수정하고 저장하면 이전 버전이 여기에 쌓입니다.</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 12: 편집 — 버전 미리보기 모달 ═══ -->
+  <div id="case-version-preview" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">회원가입 레시피 편집</span>
+        <div class="page-header__actions"><button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body"><p style="color: var(--color-text-tertiary); font-size: var(--font-size-sm);">편집 화면 위에 미리보기 모달 오픈 상태</p></div>
+    </div>
+    <div class="modal-backdrop">
+      <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="pv-title">
+        <div class="modal__header">
+          <span class="modal__title" id="pv-title">버전 미리보기 (읽기 전용)</span>
+          <button class="btn btn--ghost btn--sm" aria-label="닫기">✕</button>
+        </div>
+        <div class="modal__body">
+          <div class="preview-meta">
+            <span class="badge badge--neutral">v3</span>
+            <span>· 2026-08-24 14:30 생성</span>
+          </div>
+
+          <div class="preview-block">
+            <div class="preview-block__title">① 메타 정보</div>
+            <div class="preview-field"><span class="preview-field__key">레시피명</span><span class="preview-field__val">회원가입</span></div>
+            <div class="preview-field"><span class="preview-field__key">대상 서비스</span><span class="preview-field__val">사람인</span></div>
+            <div class="preview-field"><span class="preview-field__key">설명</span><span class="preview-field__val">사람인 신규 회원가입 플로우</span></div>
+          </div>
+
+          <div class="preview-block">
+            <div class="preview-block__title">③ 스텝 (2개)</div>
+            <div class="preview-field"><span class="preview-field__key">1. 이메일 생성</span><span class="preview-field__val badge badge--neutral">스크립트</span></div>
+            <div class="preview-field"><span class="preview-field__key">2. 회원가입 API</span><span class="preview-field__val badge badge--neutral">API</span></div>
+          </div>
+
+          <div class="preview-block">
+            <div class="preview-block__title">④ 결과 정의</div>
+            <div class="preview-field"><span class="preview-field__key">memberId</span><span class="preview-field__val">회원 ID</span></div>
+          </div>
+
+          <div class="preview-block" style="margin-bottom: 0;">
+            <div class="preview-block__title">⑤ 결과 메시지 템플릿</div>
+            <div class="preview-field"><span class="preview-field__val">회원가입 완료 (ID: [memberId])</span></div>
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary">닫기</button>
+          <button class="btn btn--primary">이 버전으로 복원</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 13: 편집 — 복원 확인 모달 + 토스트 ═══ -->
+  <div id="case-version-restore" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">회원가입 레시피 편집</span>
+        <div class="page-header__actions"><button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button><button class="btn btn--primary">저장</button></div>
+      </div>
+      <div class="page-body"><p style="color: var(--color-text-tertiary); font-size: var(--font-size-sm);">복원 확인 모달 + 복원 성공 토스트 상태</p></div>
+    </div>
+    <!-- 복원 확인 모달 -->
+    <div class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rs-title" style="max-width: 460px;">
+        <div class="modal__header">
+          <span class="modal__title" id="rs-title">v3으로 복원</span>
+        </div>
+        <div class="modal__body">
+          <p><strong>v3</strong> 내용으로 새 버전 <strong>(v6)</strong>을 만듭니다. 현재 내용(v5)은 버전으로 보관되어 안전하며, 되돌리기도 이력에 남습니다.</p>
+          <div class="alert alert--warning" style="margin-top: var(--space-3);">
+            <span>선택한 버전 이후 스펙이 변경돼 복원 결과가 <strong>유효하지 않을(INVALID)</strong> 수 있습니다. 이 경우에도 복원은 되며, 실행 전 유효성 경고로 안내됩니다.</span>
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary">취소</button>
+          <button class="btn btn--primary">이 버전으로 복원</button>
+        </div>
+      </div>
+    </div>
+    <!-- 복원 성공 토스트 -->
+    <div class="toast">
+      <div style="display: flex; align-items: center; gap: var(--space-2);">
+        <span style="color: var(--color-success);">✓</span>
+        <span>v3 내용으로 복원했습니다 (현재 v6). 헤더 배지가 갱신되었습니다.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 14: 편집 — 읽기 전용 모드 (공통 × non-admin) ═══ -->
+  <div id="case-readonly" class="screen">
+    <div class="page">
+      <div class="page-header">
+        <span class="page-header__back">← 목록으로</span>
+        <span class="page-header__title">회원가입 레시피 (읽기 전용)</span>
+        <div class="page-header__actions">
+          <!-- 저장/삭제 숨김. 버전 기록은 노출 -->
+          <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
+        </div>
+      </div>
+      <div class="page-body">
+        <!-- 읽기 전용 배너 -->
+        <div class="alert alert--info readonly-banner">
+          <span>🔒 <strong>공통 레시피 · 읽기 전용</strong> — 수정하려면 개인 사본으로 복제하세요.</span>
+          <button class="btn btn--primary btn--sm">개인 사본으로 복제</button>
+        </div>
+
+        <div class="section">
+          <div class="section__title"><span class="section__number">1</span> 메타 정보</div>
+          <div class="field-grid">
+            <div class="form-group"><label class="form-label">레시피명 *</label><input class="input" type="text" value="회원가입" disabled></div>
+            <div class="form-group"><label class="form-label">대상 서비스 *</label><select class="input" disabled><option>사람인</option></select></div>
+            <div class="form-group field-full"><label class="form-label">설명 *</label><textarea class="textarea" disabled>사람인 신규 회원가입 플로우</textarea></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section__title"><span class="section__number">3</span> 스텝 (3개)</div>
+          <div class="step-card">
+            <div class="step-card__header">
+              <span class="step-card__number">1</span>
+              <span class="step-card__name">이메일 생성</span>
+              <span class="step-card__type">스크립트</span>
+            </div>
+          </div>
+          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: var(--space-2);">읽기 전용: 스텝 추가/편집 버튼 숨김</p>
+        </div>
+
+        <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">
+          버전 기록 drawer 열람·미리보기는 가능하되, 미리보기의 <strong>[복원] 버튼만 숨김</strong>(canEdit=false).
+        </p>
+      </div>
+    </div>
+  </div>
 
   <script>
+    // 필터 드롭다운 토글: 메뉴 표시 상태와 aria-expanded 를 함께 갱신
+    function toggleFilter(trigger) {
+      var menu = trigger.nextElementSibling;
+      menu.hidden = !menu.hidden;
+      trigger.setAttribute('aria-expanded', String(!menu.hidden));
+    }
+
     function showCase(caseId) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));

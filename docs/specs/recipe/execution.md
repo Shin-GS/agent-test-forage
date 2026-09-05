@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-08
+last-updated: 2026-09-12
 ---
 
 # 레시피 실행 플로우
@@ -19,6 +19,13 @@ AI 의도 분석 → 레시피 매칭 (참조 태그 있으면 우선 참조)
     │
     └─ 매칭 안 됨 → 안내 메시지
 ```
+
+### 사용 통계 갱신 (usageCount / lastUsedAt)
+
+레시피 실행은 FE 브라우저가 주도하지만, 실행 시작이 BE의 실행 시작 엔드포인트를 거치므로 **BE가 실행 시작 시점에 해당 레시피의 사용 통계를 갱신**한다.
+
+- `USAGE_COUNT += 1`, `LAST_USED_AT = now` ([db/recipe.md `RECIPE`](../../db/recipe.md) 컬럼).
+- 갱신 시점은 **실행 시작**(스텝 성공/완료 여부와 무관). 목록 정렬(최근 사용순/사용 많은순, [recipe-editor.md 정렬](../pages/recipe-editor.md#검색--필터--정렬))의 기준이 된다.
 
 ## 실행 모드
 

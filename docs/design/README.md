@@ -36,7 +36,7 @@ docs/design/
 | 로그인 | `web/login.html` | `web/login.cases.md` (4개) | DONE |
 | 채팅 (메인) | `web/chat.html` | `web/chat.cases.md` (17개) | DONE |
 | 사이드 패널 | `web/panel.html` | `web/panel.cases.md` (5개) | DONE |
-| 레시피 편집 | `web/recipe-editor.html` | `web/recipe-editor.cases.md` (7개) | DONE |
+| 레시피 편집 | `web/recipe-editor.html` | `web/recipe-editor.cases.md` (14개) | DONE |
 | 설정 | `web/settings.html` | `web/settings.cases.md` (3개) | DONE |
 | 전체 히스토리 | `web/history.html` | `web/history.cases.md` (4개) | DONE |
 | 관리자 | `web/admin.html` | `web/admin.cases.md` (3개) | DONE |
