@@ -12,7 +12,8 @@ import type {
 
 export interface StartMessagePayload {
   content: string;
-  apiSpecId?: number;
+  /** 대상 서비스. 미지정(미전달/null)이면 서버가 서비스 없이 대화방을 생성한다 */
+  apiSpecId?: number | null;
   /** 참조 태그 (사이드 패널 레시피 실행 시 recipeId 를 문자열로 전달) */
   referenceId?: string;
 }
@@ -99,6 +100,22 @@ export function deleteConversation(conversationId: number): Promise<void> {
 /** 대화방 삭제 (deleteConversation alias — 개편 API 명칭) */
 export function remove(conversationId: number): Promise<void> {
   return deleteConversation(conversationId);
+}
+
+/**
+ * 대화방 대상 서비스 변경.
+ * BE: PATCH /conversations/{id}/service, body {apiSpecId: number|null}.
+ * apiSpecId=null 은 미지정으로 변경. 응답: ConversationDetail(serviceName 포함).
+ * 404(대화 없음/타인), 400(유효하지 않은 서비스).
+ */
+export function updateService(
+  conversationId: number,
+  apiSpecId: number | null
+): Promise<ConversationDetail> {
+  return request<ConversationDetail>(`/conversations/${conversationId}/service`, {
+    method: "PATCH",
+    body: { apiSpecId },
+  });
 }
 
 export interface UpdateTitlePayload {

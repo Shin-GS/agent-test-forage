@@ -85,6 +85,12 @@ interface ChatState {
   conversations: ConversationSummary[];
   messages: MessageResponse[];
   conversationStatus: ConversationRuntimeStatus;
+  /**
+   * 새 대화(currentConversationId==null)에서 서비스 블록으로 고른 대상 서비스(apiSpecId).
+   * 서버 미생성 상태의 로컬 보관값(pending). null = 미지정.
+   * 첫 메시지 전송 시 startMessage.apiSpecId 로 전달되고, 대화 생성/전환 시 초기화된다.
+   */
+  pendingApiSpecId: number | null;
   /** 인증 대기 상태 (있으면 인증 안내 카드 표시) */
   authPause: AuthPauseState | null;
   /** 액션 피커 대기 상태 (있으면 입력 폼 표시) */
@@ -96,6 +102,8 @@ interface ChatState {
   setMessages: (messages: MessageResponse[]) => void;
   /** 낙관적 임시 메시지 추가 (음수 seq 등으로 구분) */
   addMessage: (message: MessageResponse) => void;
+  /** 새 대화의 pending 대상 서비스 설정 (null=미지정) */
+  setPendingApiSpecId: (apiSpecId: number | null) => void;
   clearConversation: () => void;
   /** 인증 대기 상태 설정/해제 */
   setAuthPause: (pause: AuthPauseState | null) => void;
@@ -143,6 +151,7 @@ export const useChatStore = create<ChatState>((set) => ({
   conversations: [],
   messages: [],
   conversationStatus: "idle",
+  pendingApiSpecId: null,
   authPause: null,
   actionPicker: null,
 
@@ -151,6 +160,8 @@ export const useChatStore = create<ChatState>((set) => ({
       currentConversationId: conversationId,
       messages: [],
       conversationStatus: "idle",
+      // 대화 진입 시 pending 은 의미 없으므로 초기화(표시는 대화방 apiSpecId 로 전환)
+      pendingApiSpecId: null,
       authPause: null,
       actionPicker: null,
     }),
@@ -158,6 +169,8 @@ export const useChatStore = create<ChatState>((set) => ({
   setConversations: (conversations) => set({ conversations }),
 
   setMessages: (messages) => set({ messages: normalizeMessages(messages) }),
+
+  setPendingApiSpecId: (apiSpecId) => set({ pendingApiSpecId: apiSpecId }),
 
   setAuthPause: (pause) => set({ authPause: pause }),
 
@@ -171,6 +184,8 @@ export const useChatStore = create<ChatState>((set) => ({
       currentConversationId: null,
       messages: [],
       conversationStatus: "idle",
+      // 새 대화 시작 시 pending 초기화(미지정으로 시작)
+      pendingApiSpecId: null,
       authPause: null,
       actionPicker: null,
     }),
@@ -223,7 +238,9 @@ export const useChatStore = create<ChatState>((set) => ({
         ? {
             ...existing,
             title: snap.title ?? existing.title,
-            apiSpecId: snap.apiSpecId ?? existing.apiSpecId,
+            // apiSpecId 는 null 이 "미지정" 의미. 스냅샷엔 항상 채워지므로 그대로 반영
+            // (?? 를 쓰면 미지정 되돌리기 시 옛 값이 되살아나 serviceName 과 desync).
+            apiSpecId: snap.apiSpecId,
             // serviceName 은 null 이 "미지정" 의미이므로 undefined 일 때만 기존값 유지
             serviceName: snap.serviceName !== undefined ? snap.serviceName : existing.serviceName,
             status: snap.status ?? existing.status,
@@ -246,17 +263,19 @@ export const useChatStore = create<ChatState>((set) => ({
             updatedAt: snap.updatedAt ?? new Date().toISOString(),
           };
 
-      const others = state.conversations.filter((c) => c.id !== snap.id);
-      const next = [merged, ...others];
-      // 정렬 기준: lastMessageAt 내림차순(기획 chat/overview.md).
-      // 신규 대화는 lastMessageAt 이 아직 null 일 수 있으므로 updatedAt 로 폴백해
-      // 최하단으로 밀리지 않고 상단에 오도록 한다(둘 다 없으면 0).
-      const sortKey = (c: ConversationSummary): number => {
-        if (c.lastMessageAt) return Date.parse(c.lastMessageAt);
-        if (c.updatedAt) return Date.parse(c.updatedAt);
-        return 0;
-      };
-      next.sort((a, b) => sortKey(b) - sortKey(a));
+      // 기존 항목은 제자리 갱신, 신규 항목만 배열에 추가한 뒤 정렬로 위치를 결정한다.
+      // (갱신 대상을 무조건 맨 앞에 끼워 넣으면, 정렬 키가 동률일 때 stable sort 특성상
+      //  read/updatedAt 같은 순서와 무관한 갱신에도 그 항목이 위로 튀어 목록이 흔들린다.)
+      const next = existing
+        ? state.conversations.map((c) => (c.id === snap.id ? merged : c))
+        : [...state.conversations, merged];
+      // 정렬 기준: lastMessageAt 내림차순(기획 chat/overview.md). 동률이면 id 내림차순으로
+      // 완전히 결정적인 순서를 보장한다(서버 정렬과 일치). orphan 차단으로 목록의 모든
+      // 대화는 lastMessageAt 이 있으나, 방어적으로 null 은 최하단(0)으로 둔다.
+      // read/updatedAt 은 정렬 키에서 제외 → 읽음 처리로는 순서가 바뀌지 않는다.
+      const timeKey = (c: ConversationSummary): number =>
+        c.lastMessageAt ? Date.parse(c.lastMessageAt) : 0;
+      next.sort((a, b) => timeKey(b) - timeKey(a) || b.id - a.id);
       return { conversations: next };
     }),
 

@@ -1,7 +1,8 @@
 // 앱 공통 레이아웃 (개편: ChatGPT식, 전역 사이드바 승격).
 // - 좌측 통합 사이드바(AppSidebar)를 모든 라우트에서 상시 표시한다.
 // - 구조: .app-container > .main-content(가로) > AppSidebar + .app-main(<Outlet/>)
-// - 헤더는 최소화 — 워크스페이스 표시만 상단에 둔다(로고/회원정보/로그아웃은 사이드바로 이동).
+// - 전역 상단 헤더 바는 폐지했다(대상 서비스는 우측 사이드 패널 최상단 블록으로 이동).
+//   로고/회원정보/로그아웃은 좌측 사이드바에 있다.
 // - 좌측 접기 상태(testforge.ui.leftSidebar.collapsed)는 전역이므로 여기서 관리한다.
 //
 // SSE 구독 위치(회귀 방지 핵심):
@@ -53,11 +54,8 @@ export function AppLayout() {
           onLogout={() => void handleLogout()}
         />
 
-        {/* 우측 콘텐츠 영역: 최소 헤더 + 라우트 아웃렛 */}
+        {/* 우측 콘텐츠 영역: 전역 상단 헤더 바는 폐지(대상 서비스는 우측 패널 블록으로 이동). */}
         <div className="app-main">
-          <header className="app-main__header">
-            <div className="app-header__workspace">🌐 demo-shop ▾</div>
-          </header>
           <Outlet />
         </div>
       </div>

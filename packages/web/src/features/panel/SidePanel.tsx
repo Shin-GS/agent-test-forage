@@ -8,6 +8,7 @@ import type { CSSProperties } from "react";
 import { ExecutionDetailView } from "./detail/ExecutionDetailView";
 import { HomeView } from "./home/HomeView";
 import { HistoryView } from "./history/HistoryView";
+import { PanelServiceBlock } from "./PanelServiceBlock";
 import { usePanelStore, type PanelTab } from "./panelStore";
 import { RecipesView } from "./recipes/RecipesView";
 import type { PanelContext } from "./types";
@@ -23,6 +24,20 @@ interface Props extends PanelContext {
   style?: CSSProperties;
   /** 오버레이 모드(<1200px). true 면 접기 버튼이 완전 접기 대신 오버레이만 닫는다. */
   overlayMode?: boolean;
+
+  // ── 대상 서비스 블록(최상단 고정) ──
+  /** 현재 대화방 ID. null 이면 새 대화 */
+  conversationId: number | null;
+  /** 현재 대화방 대상 서비스 apiSpecId */
+  conversationApiSpecId: number | null;
+  /** 현재 대화방 서비스 표시명 */
+  conversationServiceName?: string | null;
+  /** 새 대화 pending 대상 서비스 */
+  pendingApiSpecId: number | null;
+  /** 새 대화 pending 갱신 */
+  onChangePendingService: (apiSpecId: number | null) => void;
+  /** 기존 대화 서비스 변경 성공 반영 */
+  onServiceChanged: (apiSpecId: number | null, serviceName: string | null) => void;
 }
 
 const TABS: { key: PanelTab; label: string }[] = [
@@ -31,7 +46,20 @@ const TABS: { key: PanelTab; label: string }[] = [
   { key: "history", label: "🕘 히스토리" },
 ];
 
-export function SidePanel({ collapsed, onExpand, onCollapse, style, overlayMode, ...props }: Props) {
+export function SidePanel({
+  collapsed,
+  onExpand,
+  onCollapse,
+  style,
+  overlayMode,
+  conversationId,
+  conversationApiSpecId,
+  conversationServiceName,
+  pendingApiSpecId,
+  onChangePendingService,
+  onServiceChanged,
+  ...props
+}: Props) {
   const tab = usePanelStore((s) => s.tab);
   const open = usePanelStore((s) => s.open);
   const detailExecutionId = usePanelStore((s) => s.detailExecutionId);
@@ -56,6 +84,16 @@ export function SidePanel({ collapsed, onExpand, onCollapse, style, overlayMode,
       </button>
 
       <div className="side-panel__inner">
+        {/* 대상 서비스 블록 (최상단 고정 — 탭 위, 상세 드릴다운과 무관하게 항상 표시) */}
+        <PanelServiceBlock
+          conversationId={conversationId}
+          conversationApiSpecId={conversationApiSpecId}
+          conversationServiceName={conversationServiceName}
+          pendingApiSpecId={pendingApiSpecId}
+          onChangePending={onChangePendingService}
+          onServiceChanged={onServiceChanged}
+        />
+
         {/* 상단 가로 탭 (상세 드릴다운 중에는 숨겨 목록 컨텍스트 혼동 방지) */}
         {detailExecutionId == null && (
           <div className="side-panel__tabs" role="tablist" aria-label="사이드 패널">

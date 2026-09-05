@@ -671,6 +671,109 @@ select.input {
   overflow: hidden;
 }
 
+/* 대상 서비스 블록 (최상단 고정 — 탭 위) */
+.panel-service {
+  position: relative;
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.panel-service__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.panel-service__trigger:hover {
+  background: var(--color-bg-hover);
+}
+
+.panel-service__trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* 미지정 상태: 정상 기본 상태 → 중립 톤(경고색 아님) */
+.panel-service__trigger--unset {
+  color: var(--color-text-tertiary);
+}
+
+.panel-service__icon {
+  flex-shrink: 0;
+}
+
+.panel-service__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-service__label-prefix {
+  color: var(--color-text-tertiary);
+}
+
+.panel-service__caret {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+/* 드롭다운 목록 */
+.panel-service__menu {
+  position: absolute;
+  top: calc(100% - var(--space-1));
+  left: var(--space-3);
+  right: var(--space-3);
+  z-index: var(--z-dropdown, 100);
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.panel-service__option {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-service__option:hover {
+  background: var(--color-bg-hover);
+}
+
+.panel-service__option.is-active {
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
 /* 상단 가로 탭 3개 */
 .side-panel__tabs {
   display: flex;
@@ -706,9 +809,8 @@ select.input {
   font-weight: var(--font-weight-semibold);
 }
 
-/* 오버레이 닫기 버튼 (Desktop 숨김, Tablet/Mobile 노출) */
+/* 패널 접기/닫기 버튼. display 는 base.css 가 단일 소스로 관장(Desktop 포함 항상 flex). */
 .side-panel__close {
-  display: none;
   flex-shrink: 0;
   width: var(--header-height);
   align-items: center;
@@ -989,10 +1091,6 @@ select.input {
 
   .side-panel.is-open {
     transform: translateX(0);
-  }
-
-  .side-panel__close {
-    display: flex;
   }
 }
 
@@ -2085,6 +2183,14 @@ select.input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* active(현재 열린) 대화의 서비스 배지 시인성 강화 — 우측 패널이 접힘/오버레이일 때
+   대상 서비스를 좌측 목록에서 확인하는 폴백 역할(표시 전용). */
+.sidebar-item.active .sidebar-item__service {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 더보기(⋮) 버튼 — hover/focus 시 노출 */

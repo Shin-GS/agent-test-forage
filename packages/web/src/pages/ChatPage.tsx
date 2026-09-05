@@ -21,9 +21,6 @@ import { usePanelStore } from "../features/panel/panelStore";
 import { clampNumber, useLocalStorageState } from "../hooks/useLocalStorageState";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 
-// 새 대화 시작 시 사용할 기본 서비스(apiSpecId). 프로토타입: 하드코딩.
-const DEFAULT_API_SPEC_ID = 1;
-
 // 우측 패널 폭 clamp 범위 (tokens: --panel-width-min/max)
 const PANEL_WIDTH_MIN = 240;
 const PANEL_WIDTH_MAX = 640;
@@ -54,11 +51,14 @@ export function ChatPage() {
   const currentConversationId = useChatStore((state) => state.currentConversationId);
   const messages = useChatStore((state) => state.messages);
   const conversationStatus = useChatStore((state) => state.conversationStatus);
+  const conversations = useChatStore((state) => state.conversations);
+  const pendingApiSpecId = useChatStore((state) => state.pendingApiSpecId);
 
   const setConversations = useChatStore((state) => state.setConversations);
   const setCurrentConversation = useChatStore((state) => state.setCurrentConversation);
   const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
+  const setPendingApiSpecId = useChatStore((state) => state.setPendingApiSpecId);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -121,7 +121,8 @@ export function ChatPage() {
         if (currentConversationId == null) {
           const started = await conversationsApi.startMessage({
             content,
-            apiSpecId: DEFAULT_API_SPEC_ID,
+            // 새 대화 pending 대상 서비스(없으면 null=미지정)
+            apiSpecId: pendingApiSpecId,
             referenceId,
           });
           const newId = started.conversation.id;
@@ -144,7 +145,14 @@ export function ChatPage() {
         setError(err instanceof Error ? err.message : "메시지 전송에 실패했습니다");
       }
     },
-    [currentConversationId, setCurrentConversation, setMessages, addMessage, loadConversations]
+    [
+      currentConversationId,
+      pendingApiSpecId,
+      setCurrentConversation,
+      setMessages,
+      addMessage,
+      loadConversations,
+    ]
   );
 
   // 실행 중지
@@ -157,6 +165,25 @@ export function ChatPage() {
       setError(err instanceof Error ? err.message : "실행 중지에 실패했습니다");
     }
   }, [currentConversationId]);
+
+  // 현재 대화방 요약(대상 서비스 블록 표시 소스). 목록에서 찾는다.
+  const currentConversation =
+    currentConversationId != null
+      ? conversations.find((c) => c.id === currentConversationId) ?? null
+      : null;
+
+  // 기존 대화 서비스 변경 성공 시: SSE(session_list_update) 로도 갱신되지만,
+  // 즉시 반영을 위해 목록의 해당 항목을 낙관적으로 upsert 한다(정렬 유지).
+  const onServiceChanged = useCallback(
+    (apiSpecId: number | null, serviceName: string | null) => {
+      if (currentConversationId == null) return;
+      const next = conversations.map((c) =>
+        c.id === currentConversationId ? { ...c, apiSpecId, serviceName } : c
+      );
+      setConversations(next);
+    },
+    [currentConversationId, conversations, setConversations]
+  );
 
   const isOnboarding = currentConversationId == null && messages.length === 0;
 
@@ -293,6 +320,12 @@ export function ChatPage() {
         onExpand={() => setRightCollapsed(false)}
         onCollapse={() => setRightCollapsed(true)}
         style={panelStyle}
+        conversationId={currentConversationId}
+        conversationApiSpecId={currentConversation?.apiSpecId ?? null}
+        conversationServiceName={currentConversation?.serviceName ?? null}
+        pendingApiSpecId={pendingApiSpecId}
+        onChangePendingService={setPendingApiSpecId}
+        onServiceChanged={onServiceChanged}
       />
     </div>
   );

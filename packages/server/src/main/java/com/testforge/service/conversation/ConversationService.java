@@ -222,6 +222,34 @@ public class ConversationService {
         return toDetail(saved);
     }
 
+    /**
+     * 대화방 대상 서비스(스펙) 변경. 없거나 삭제/타인 소유면 404(getOwnedOrThrow, IDOR 방지).
+     *
+     * <p>{@code apiSpecId}가 null이면 "미지정으로 되돌리기"(검증 없이 해제). null이 아니면 미삭제 스펙
+     * 존재 여부를 검증하고, 없으면 400(INVALID_REQUEST "유효하지 않은 서비스입니다").
+     * updateTitle과 동일하게 목록 한 줄(session_list_update)을 갱신해 모든 탭에 동기화한다.
+     */
+    @Transactional
+    public ConversationDetailResponse updateService(Long id, Long requesterId, Long apiSpecId) {
+        Conversation conversation = getOwnedOrThrow(id, requesterId);
+
+        // 지정 시에만 존재/유효성 검증. null이면 미지정으로 되돌리기(검증 없음).
+        if (apiSpecId != null
+                && apiSpecRepository.findByIdAndDeletedAtIsNull(apiSpecId).isEmpty()) {
+            throw ApiException.invalidRequest("유효하지 않은 서비스입니다");
+        }
+
+        conversation.setApiSpecId(apiSpecId);
+        Conversation saved = conversationRepository.save(conversation);
+
+        // SSE: 목록 한 줄 갱신 (서비스 배지/표시명 변경을 모든 탭에 동기화)
+        publishAfterCommit(saved.getUserId(), SseEventType.SESSION_LIST_UPDATE, saved.getId(),
+                SessionListUpdatePayload.upsert(toListSnapshot(saved)));
+
+        log.info("Conversation service updated: conversationId={}, apiSpecId={}", id, apiSpecId);
+        return toDetail(saved);
+    }
+
     /** 읽음 처리 (lastReadAt = now). 없거나 삭제/타인 소유면 404. */
     @Transactional
     public ConversationDetailResponse markRead(Long id, Long requesterId) {
@@ -808,6 +836,7 @@ public class ConversationService {
                 conversation.getUserId(),
                 conversation.getTitle(),
                 conversation.getApiSpecId(),
+                serviceNameOf(conversation.getApiSpecId()),
                 StatusView.of(conversation.getStatus()),
                 conversation.getLastMessageAt(),
                 conversation.getLastReadAt(),

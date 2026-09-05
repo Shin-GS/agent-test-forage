@@ -4,6 +4,7 @@ import com.testforge.dto.common.CursorPage;
 import com.testforge.dto.conversation.ConversationDetailResponse;
 import com.testforge.dto.conversation.ConversationStartRequest;
 import com.testforge.dto.conversation.ConversationStartResponse;
+import com.testforge.dto.conversation.ConversationServiceUpdateRequest;
 import com.testforge.dto.conversation.ConversationSummaryResponse;
 import com.testforge.dto.conversation.ConversationTitleUpdateRequest;
 import com.testforge.dto.conversation.MessageResponse;
@@ -77,6 +78,16 @@ public class ConversationController {
     public ConversationDetailResponse updateTitle(@PathVariable Long id,
                                                   @RequestBody ConversationTitleUpdateRequest request) {
         return conversationService.updateTitle(id, CurrentUser.id(), request.title());
+    }
+
+    /**
+     * 대화방 대상 서비스(스펙) 변경 (본인 대화방만; 타인 소유면 404).
+     * apiSpecId가 null이면 미지정으로 되돌린다. 유효하지 않은 서비스면 400.
+     */
+    @PatchMapping("/{id}/service")
+    public ConversationDetailResponse updateService(@PathVariable Long id,
+                                                    @RequestBody ConversationServiceUpdateRequest request) {
+        return conversationService.updateService(id, CurrentUser.id(), request.apiSpecId());
     }
 
     /** 읽음 처리 (lastReadAt = now; 본인 대화방만) */
