@@ -615,6 +615,91 @@ public class ConversationService {
     }
 
     /**
+     * 정보 조회(investigate) 진행 블록(INVESTIGATE_PROGRESS) 메시지를 생성하고 {@code message_new} +
+     * {@code session_list_update}를 발행한다(investigation.md 진행 상태 표시). 레시피 실행 PROGRESS와
+     * 구분되는 타입이며, investigate는 실행이 아니므로 executionId가 없다.
+     *
+     * <p>여기서는 <b>메시지 저장/발행만</b> 담당한다. 대화방 상태 전이(ai_responding 유지)와 락은
+     * 호출측(InvestigateLoop/접수 흐름)이 관리한다. 호출측 트랜잭션에 참여한다(REQUIRED).
+     * 대화방이 없으면(삭제) no-op으로 {@code null}을 반환한다.
+     *
+     * @param conversationId 진행 블록을 남길 대화방
+     * @param payloadJson    진행 payload (JSON 문자열, kind:"investigate_progress")
+     * @param content        진행 요약 본문 (Markdown, 표시용)
+     * @return 생성된 INVESTIGATE_PROGRESS 메시지 ID, 대화방 없으면 null
+     */
+    @Transactional
+    public Long createInvestigateProgressMessage(Long conversationId, String payloadJson, String content) {
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElse(null);
+        if (conversation == null) {
+            log.info("Investigate progress message skipped (conversation missing): conversationId={}",
+                    conversationId);
+            return null;
+        }
+
+        Long ownerId = conversation.getUserId();
+        long nextSeq = nextSeq(conversationId);
+        Message message = new Message(conversationId, nextSeq,
+                MessageRole.ASSISTANT, MessageType.INVESTIGATE_PROGRESS, MessageStatus.COMPLETED);
+        message.setContent(content);
+        message.setMetadataJson(payloadJson);
+        Message saved = messageRepository.save(message);
+
+        conversation.setLastMessageAt(saved.getCreatedAt());
+        Conversation savedConversation = conversationRepository.save(conversation);
+
+        MessageResponse messageView = toMessage(saved);
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+        publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
+                SessionListUpdatePayload.upsert(toListSnapshot(savedConversation)));
+
+        log.info("Investigate progress message created: conversationId={}, messageId={}",
+                conversationId, saved.getId());
+        return saved.getId();
+    }
+
+    /**
+     * 기존 INVESTIGATE_PROGRESS 진행 블록의 payload/content를 갱신하고 {@code message_update}를 발행한다
+     * (investigation.md 진행 상태 표시 — 조회 단계 갱신, 종결 확정). 같은 메시지를 갱신하므로 새 메시지를
+     * 쌓지 않는다. 메시지가 없거나 INVESTIGATE_PROGRESS 타입이 아니면 no-op. 호출측 트랜잭션에 참여한다.
+     *
+     * @param conversationId 대화방 ID (발행 대상/소유자 도출)
+     * @param messageId      갱신 대상 INVESTIGATE_PROGRESS 메시지 ID
+     * @param payloadJson    갱신된 진행 payload (JSON 문자열)
+     * @param content        갱신된 진행 요약 본문 (Markdown)
+     */
+    @Transactional
+    public void updateInvestigateProgressMessage(Long conversationId, Long messageId,
+                                                 String payloadJson, String content) {
+        if (messageId == null) {
+            return;
+        }
+        Message message = messageRepository.findById(messageId).orElse(null);
+        if (message == null || message.getType() != MessageType.INVESTIGATE_PROGRESS) {
+            log.info("Investigate progress update skipped (missing or wrong type): messageId={}", messageId);
+            return;
+        }
+        Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .orElse(null);
+        if (conversation == null) {
+            return;
+        }
+
+        message.setContent(content);
+        message.setMetadataJson(payloadJson);
+        Message saved = messageRepository.save(message);
+
+        Long ownerId = conversation.getUserId();
+        MessageResponse messageView = toMessage(saved);
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_UPDATE, conversationId,
+                MessageUpdatePayload.of(conversationId, messageView));
+
+        log.info("Investigate progress message updated: conversationId={}, messageId={}",
+                conversationId, messageId);
+    }
+
+    /**
      * 대화방 처리 상태를 전이하고 {@code session_status} SSE를 발행한다(모든 탭 동기화).
      * 상태 변경이 실제로 있을 때만(같은 값이면 no-op) 저장/발행한다. 커밋 후 발행하여 확정 데이터로 내보낸다.
      *

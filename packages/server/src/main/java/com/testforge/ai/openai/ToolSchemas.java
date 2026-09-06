@@ -26,7 +26,22 @@ public final class ToolSchemas {
                 showCandidates(),
                 clarify(),
                 noMatch(),
-                chat());
+                chat(),
+                investigate());
+    }
+
+    /**
+     * investigate 루프의 <b>마지막 턴</b>용 tool 목록: {@code investigate}를 제외하고 {@code chat}만 담는다
+     * (investigation.md 마지막 턴 chat 강제 — 5회째 조회 결과를 받은 뒤 AI 호출에서 tool을 좁혀 반드시
+     * 답하게 만든다). {@code tool_choice}로 이 chat을 강제해 무응답 루프를 봉인한다.
+     */
+    public static List<OpenAiDtos.Tool> chatOnly() {
+        return List.of(chat());
+    }
+
+    /** chat function의 wire 이름 (마지막 턴 tool_choice 강제용) */
+    public static String chatWireName() {
+        return ToolName.CHAT.wireName();
     }
 
     private static OpenAiDtos.Tool fn(ToolName tool, String description, Map<String, Object> parameters) {
@@ -56,6 +71,11 @@ public final class ToolSchemas {
 
     private static Map<String, Object> stringProp(String description) {
         return Map.of("type", "string", "description", description);
+    }
+
+    /** enum 값이 고정된 string 파라미터 스키마 (예: source: ["api_spec","jira"]) */
+    private static Map<String, Object> enumStringProp(String description, List<String> values) {
+        return Map.of("type", "string", "description", description, "enum", values);
     }
 
     private static Map<String, Object> objectProp(String description) {
@@ -114,5 +134,22 @@ public final class ToolSchemas {
         return fn(ToolName.CHAT,
                 "레시피 실행과 무관한 일반 대화/인사/질문에 응답할 때 사용한다.",
                 object(Map.of("message", stringProp("사용자에게 보낼 한국어 응답")), List.of("message")));
+    }
+
+    /**
+     * investigate: 정책/기능 질문에 답하기 위해 정보 소스를 조회한다(읽기 전용, agentic loop).
+     * 조회 결과가 부족하면 다른 source/query로 반복 호출한다(intent-classification.md investigate).
+     * 1단계 유효 source는 {@code api_spec}뿐이며, {@code jira}는 반환 시 BE가 미지원으로 스킵한다.
+     */
+    private static OpenAiDtos.Tool investigate() {
+        return fn(ToolName.INVESTIGATE,
+                "정책/기능 질문에 답하기 위해 정보 소스를 조회한다. 더 필요하면 반복 호출.",
+                object(Map.of(
+                        "source", enumStringProp(
+                                "조회할 정보 소스. api_spec=등록된 스펙(요청/응답 스키마·설명). "
+                                        + "jira는 아직 지원하지 않는다.",
+                                List.of("api_spec", "jira")),
+                        "query", stringProp("조회 키워드 또는 질문(예: '회원가입', '약관 동의 필드')")),
+                        List.of("source", "query")));
     }
 }

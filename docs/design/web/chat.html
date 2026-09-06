@@ -131,13 +131,22 @@
     .reference-btn { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-secondary); cursor: pointer; transition: all var(--transition-fast); }
     .reference-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
 
-    /* 정보 조회 진행 */
+    /* 정보 조회 진행 (INVESTIGATE_PROGRESS 메시지 = investigation.md / messaging.md 정본) */
     .investigate-progress { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); margin: var(--space-2) 0; }
     .investigate-progress__header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); margin-bottom: var(--space-2); }
-    .investigate-step { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--font-size-sm); }
+    /* 비정상 종료(실패/타임아웃) 헤더 톤 — running 잔존 금지, finally 확정 상태 */
+    .investigate-progress__header--failed { color: var(--color-error); }
+    .investigate-progress__header--timeout { color: var(--color-warning); }
+    .investigate-step { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+    .investigate-step__icon { flex-shrink: 0; width: 16px; display: inline-flex; align-items: center; justify-content: center; }
     .investigate-step--done { color: var(--color-success); }
     .investigate-step--active { color: var(--color-accent); }
+    .investigate-step--skipped { color: var(--color-text-tertiary); }
+    .investigate-step--failed { color: var(--color-error); }
+    .investigate-step--pending { color: var(--color-text-tertiary); }
     .investigate-step__source { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-left: var(--space-1); }
+    /* 조회 실패/타임아웃 폴백 안내 (AI 비의존 고정 안내) */
+    .investigate-progress__notice { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px dashed var(--color-border); font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 
     /* ─── Plan (멀티 레시피) 1단계 카드 ─── */
     /* 플랜 제안 카드: 읽기 전용 미리보기 (편집 UI 없음 = 2단계). action-picker 컨테이너 재사용. */
@@ -189,6 +198,7 @@
     <button class="case-switcher__btn" onclick="showCase('auth-required')">14. 인증 요구</button>
     <button class="case-switcher__btn" onclick="showCase('service-select')">15. 서비스 선택</button>
     <button class="case-switcher__btn" onclick="showCase('investigating')">16. 정보 조회 중</button>
+    <button class="case-switcher__btn" onclick="showCase('investigate-failed')">16b. 조회 실패/타임아웃</button>
     <button class="case-switcher__btn" onclick="showCase('references')">17. 참고 자료</button>
     <button class="case-switcher__btn" onclick="showCase('plan-step-picker')">18. 레시피 사이 입력</button>
     <button class="case-switcher__btn" onclick="showCase('plan-failed')">19. 플랜 실패</button>
@@ -1183,16 +1193,103 @@
                 <div class="message__body">
                   <span class="message__sender">AI Test Forge</span>
                   <div class="message__content"><p>정책을 확인하기 위해 관련 자료를 조회하고 있습니다.</p></div>
-                  <div class="investigate-progress">
+                  <!-- INVESTIGATE_PROGRESS 메시지: 소스별 조회 단계. 1단계는 api_spec 커넥터만 노출 (jira는 2단계).
+                       상태 아이콘 텍스트 병기(✅완료/🔄진행/⬜대기/⏭️스킵). message_update로 같은 메시지 갱신. -->
+                  <div class="investigate-progress" role="group" aria-label="정보 조회 진행">
                     <div class="investigate-progress__header">🔍 정보 조회 중</div>
-                    <div class="investigate-step investigate-step--done"><span>✓</span> API 스펙 확인 <span class="investigate-step__source">api_spec: 회원가입</span></div>
-                    <div class="investigate-step investigate-step--active"><span class="spinner"></span> Jira 조회 중 <span class="investigate-step__source">jira: 회원가입 약관</span></div>
+                    <!-- 단계 전이 announce (스크린리더 전용). FE 구현 필수: 초기 빈 상태로 렌더하고
+                         조회 단계 전이 시점에 텍스트를 주입한다 (정적 렌더 상태로는 announce 미발생).
+                         ※ 디자인 HTML은 예시 텍스트 없이 빈 노드로 둔다 — 정적 announce 잔존 방지. -->
+                    <div class="sr-only" role="status" aria-live="polite"></div>
+                    <div class="investigate-step investigate-step--done"><span class="investigate-step__icon" aria-hidden="true">✅</span> <span class="sr-only">완료: </span>API 스펙 확인 <span class="investigate-step__source">api_spec · 회원가입 스키마</span></div>
+                    <div class="investigate-step investigate-step--active"><span class="investigate-step__icon"><span class="spinner"></span></span> <span class="sr-only">진행 중: </span>API 스펙 조회 중 <span class="investigate-step__source">api_spec · "약관 동의 필드"</span></div>
+                    <!-- 대기 단계 예시: <div class="investigate-step investigate-step--pending"><span class="investigate-step__icon" aria-hidden="true">⬜</span> <span class="sr-only">대기: </span>추가 조회 대기</div> -->
+                    <!-- 스킵 예시(미지원 source/중복 캐시 재사용 — 카운터 소비): <div class="investigate-step investigate-step--skipped"><span class="investigate-step__icon" aria-hidden="true">⏭️</span> <span class="sr-only">스킵: </span>이미 조회한 질의</div> -->
                   </div>
+
+                  <!-- ── 종료 상태 명세 (running 잔존 금지, finally 확정) ──
+                       실패/타임아웃은 별도 케이스를 만들지 않고 이 진행 블록을 종료 상태로 확정 + 아래 폴백 안내를 붙인다
+                       (chat.cases.md: Case 6 패턴 재사용 원칙). FE는 message_update로 status를 failed/timeout으로 확정.
+
+                    [타임아웃 확정 예시]
+                    <div class="investigate-progress" role="group" aria-label="정보 조회 결과">
+                      <div class="investigate-progress__header investigate-progress__header--timeout">⚠️ 정보 조회 시간 초과</div>
+                      <div class="investigate-step investigate-step--done"><span class="investigate-step__icon" aria-hidden="true">✅</span> API 스펙 확인 <span class="investigate-step__source">api_spec · 회원가입 스키마</span></div>
+                      <div class="investigate-progress__notice"><span aria-hidden="true">⏱️</span> 조회 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.</div>
+                    </div>
+
+                    [못 찾음/실패 확정 예시]
+                    <div class="investigate-progress" role="group" aria-label="정보 조회 결과">
+                      <div class="investigate-progress__header investigate-progress__header--failed">⚠️ 정보 조회 실패</div>
+                      <div class="investigate-step investigate-step--failed"><span class="investigate-step__icon" aria-hidden="true">❌</span> API 스펙 조회 실패 <span class="investigate-step__source">api_spec · "약관 동의 필드"</span></div>
+                      <div class="investigate-progress__notice"><span aria-hidden="true">ℹ️</span> 정보를 찾지 못했습니다. 질문을 조금 더 구체적으로 알려주세요.</div>
+                    </div>
+                  -->
+                  
                 </div>
               </div>
               <div class="typing-indicator"><div class="avatar avatar--ai">⚡</div><div class="typing-dots"><span></span><span></span><span></span></div></div>
             </div>
             <div class="chat-input chat-input--disabled"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="조회 중에는 입력할 수 없습니다" rows="1" disabled></textarea><button class="chat-input__send" disabled>↑</button></div></div>
+          </div>
+          <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"></div></div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ Case 16b: 정보 조회 실패/타임아웃 (종료 상태 실렌더) ═══
+       Case 16 진행 블록을 종료 상태로 확정한 실제 마크업. running 잔존 금지(finally 확정).
+       별도 케이스 파일이 아니라 Case 16의 종료 확정 상태를 눈으로 검수 가능하게 렌더한다.
+       읽기 전용 + 자동 종료이므로 중단 버튼 없음(1단계 범위). -->
+  <div id="case-investigate-failed" class="screen">
+    <div class="app">
+      <aside class="app-sidebar">
+        <div class="sidebar-header"><span class="sidebar-header__title">대화</span><button class="btn btn--ghost btn--sm">+</button></div>
+        <div class="sidebar-list">
+          <button class="sidebar-item active">
+            <div class="sidebar-item__row"><span class="sidebar-item__icon">💬</span><span class="sidebar-item__text">회원가입 정책 문의</span><span class="sidebar-item__time">방금</span></div>
+            <div class="sidebar-item__meta"><span class="sidebar-item__service">사람인</span></div>
+          </button>
+        </div>
+        <div class="sidebar-footer"><button class="sidebar-footer__icon active">💬</button><button class="sidebar-footer__icon">📋</button><button class="sidebar-footer__icon">📊</button><button class="sidebar-footer__icon">⚙️</button></div>
+      </aside>
+      <main class="app-main">
+        <div class="app-content">
+          <div class="chat-area">
+            <div class="chat-header"><span class="chat-header__title">회원가입 정책 문의</span><span class="chat-header__service">🏷️ 사람인</span></div>
+            <div class="chat-messages">
+              <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>회원가입 시 약관 동의 정책이 어떻게 돼?</p></div></div></div>
+
+              <!-- 타임아웃 확정 (120초 초과): 헤더 --timeout, running 스텝 없음 -->
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>정책 자료 조회에 시간이 오래 걸렸습니다.</p></div>
+                  <div class="investigate-progress" role="group" aria-label="정보 조회 결과">
+                    <div class="investigate-progress__header investigate-progress__header--timeout">⚠️ 정보 조회 시간 초과</div>
+                    <div class="investigate-step investigate-step--done"><span class="investigate-step__icon" aria-hidden="true">✅</span> <span class="sr-only">완료: </span>API 스펙 확인 <span class="investigate-step__source">api_spec · 회원가입 스키마</span></div>
+                    <div class="investigate-progress__notice"><span aria-hidden="true">⏱️</span> 조회 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 못 찾음/실패 확정: 헤더 --failed, running 스텝 없음 -->
+              <div class="message">
+                <div class="avatar avatar--ai message__avatar">⚡</div>
+                <div class="message__body">
+                  <span class="message__sender">AI Test Forge</span>
+                  <div class="message__content"><p>관련 정보를 확인하지 못했습니다.</p></div>
+                  <div class="investigate-progress" role="group" aria-label="정보 조회 결과">
+                    <div class="investigate-progress__header investigate-progress__header--failed">⚠️ 정보 조회 실패</div>
+                    <div class="investigate-step investigate-step--failed"><span class="investigate-step__icon" aria-hidden="true">❌</span> <span class="sr-only">실패: </span>API 스펙 조회 실패 <span class="investigate-step__source">api_spec · "약관 동의 필드"</span></div>
+                    <div class="investigate-progress__notice"><span aria-hidden="true">ℹ️</span> 정보를 찾지 못했습니다. 질문을 조금 더 구체적으로 알려주세요.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input"><div class="chat-input__wrapper"><textarea class="chat-input__field" placeholder="메시지를 입력하세요..." rows="1"></textarea><button class="chat-input__send">↑</button></div></div>
           </div>
           <aside class="side-panel"><div class="panel-placeholder"><div class="panel-tabs"><button class="panel-tab active">레시피</button><button class="panel-tab">히스토리</button></div><div class="panel-content"></div></div></aside>
         </div>
@@ -1225,14 +1322,15 @@
                   <div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div>
                   <span class="message__sender">AI Test Forge</span>
                   <div class="message__content">
-                    <p>회원가입 시 약관 동의는 <strong>필수</strong>이며, 만 14세 미만은 보호자 동의가 추가로 필요합니다. 필수 약관(이용약관, 개인정보 처리방침)과 선택 약관(마케팅 수신)으로 구분됩니다.</p>
+                    <p>회원가입 시 약관 동의는 <strong>필수</strong>입니다. <code>POST /api/v1/users</code> 요청 스키마의 <code>agreementYn</code> 필드가 required로 정의되어 있습니다. 필수 약관(이용약관, 개인정보 처리방침)과 선택 약관(마케팅 수신)으로 구분됩니다.</p>
                   </div>
-                  <!-- 참고 자료 카드 -->
+                  <!-- 참고 자료 카드 (references payload). 1단계는 api_spec 소스만 노출.
+                       클릭 시 사이드 패널 스펙 상세로 이동(외부 URL/내부 라우트 아님) → aria-label에 명시.
+                       🎫 Jira 버튼은 2단계(investigation.md 2단계 백로그) — 1단계 미노출. -->
                   <div class="references">
                     <div class="references__label">참고한 자료</div>
                     <div class="references__list">
-                      <button class="reference-btn">🎫 PROJ-1234 회원가입 약관 정책</button>
-                      <button class="reference-btn">📋 POST /api/v1/users</button>
+                      <button class="reference-btn" aria-label="스펙 상세 열기: POST /api/v1/users (사이드 패널)"><span aria-hidden="true">📋</span> POST /api/v1/users</button>
                     </div>
                   </div>
                 </div>

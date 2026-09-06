@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-14
+last-updated: 2026-09-18
 ---
 
 # 스펙 등록 방식
@@ -167,7 +167,9 @@ FE가 쿠키 인증으로 API를 호출하려면 아래 조건이 필요하다. 
 - 위 조건 미충족 시 401 로그인 플로우가 동작하지 않음
 - 로컬 개발 환경은 https 또는 예외 처리 별도 안내
 
-## Jira 연결 (정보 조회용)
+## Jira 연결 (정보 조회용) — 2단계
+
+> **Jira 커넥터는 investigate 2단계 항목이다.** 1단계는 `api_spec` 커넥터만 구현한다([investigation.md 커넥터 스코프](../chat/scenarios/investigation.md#커넥터-스코프-단계별)). 아래 연결 설정은 2단계 도입 시 유효하며, 1단계에서는 수집만 하고 조회에는 쓰이지 않는다.
 
 `investigate` 툴의 Jira 커넥터가 조회할 프로젝트를 서비스에 연결한다. 상세: [정보 조회 루프](../chat/scenarios/investigation.md)
 

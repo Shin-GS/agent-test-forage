@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-17
+last-updated: 2026-09-19
 ---
 
 # 카드 UI
@@ -95,17 +95,22 @@ AI: 요청하신 내용과 비슷한 레시피가 여러 개 있어요.
 정보 조회(investigate) 후 AI가 답변할 때, 참조한 소스의 원본 링크를 답변 하단에 **버튼 리스트**로 표시. (출처 인용 UX)
 
 ```
-AI: 회원가입 시 약관 동의는 필수이며, 만 14세 미만은 보호자 동의가 필요합니다.
+AI: 회원가입 시 약관 동의는 필수입니다.
+    (POST /api/v1/users 요청 스키마의 agreementYn 필드가 required)
 
 참고한 자료:
-[🎫 PROJ-1234 회원가입 정책]  [📋 POST /api/v1/users]
+[📋 POST /api/v1/users]
 ```
 
-| 소스 | 버튼 표시 | 클릭 동작 |
-|------|----------|----------|
-| Jira | 🎫 티켓키 + 제목 | Jira 티켓 URL 새 탭 |
-| API 스펙 | 📋 method + path | 스펙 상세 (사이드 패널 or 내부 뷰) |
-| Figma (추후) | 🎨 프레임명 | Figma URL 새 탭 |
+(1단계는 `api_spec` 참고만 노출된다. 🎫 Jira 버튼은 2단계에 추가된다 — 위 예시에는 나타나지 않는다.)
+
+| 소스 | 버튼 표시 | 클릭 동작 | 단계 |
+|------|----------|----------|------|
+| API 스펙 | 📋 method + path | **사이드 패널 스펙 상세로 이동** (외부 URL/내부 라우트 아님) | ✅ 1단계 |
+| Jira | 🎫 티켓키 + 제목 | Jira 티켓 URL 새 탭 | ⏳ 2단계 |
+| Figma | 🎨 프레임명 | Figma URL 새 탭 | ⏳ 추후 |
+
+> 1단계 참고 자료는 `api_spec` 소스만 노출된다(Jira/Figma는 [investigation.md 2단계 백로그](scenarios/investigation.md#2단계-백로그)). 저장·복원은 답변 `TEXT` 메시지의 references payload로 처리 — [messaging.md references 스키마](../common/messaging.md#references-정보-조회-참고-자료).
 
 - 버튼은 답변 메시지 하단에 가로 배치 (개수 많으면 줄바꿈)
 - 조회한 소스가 없으면 참고 자료 섹션 미표시

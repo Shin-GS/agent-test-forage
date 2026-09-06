@@ -57,19 +57,22 @@ public class ChatProcessor {
     private final MessageRepository messageRepository;
     private final RecipeRepository recipeRepository;
     private final ApiSpecRepository apiSpecRepository;
+    private final InvestigateLoop investigateLoop;
 
     public ChatProcessor(IntentResolver intentResolver,
                          ConversationService conversationService,
                          ConversationRepository conversationRepository,
                          MessageRepository messageRepository,
                          RecipeRepository recipeRepository,
-                         ApiSpecRepository apiSpecRepository) {
+                         ApiSpecRepository apiSpecRepository,
+                         InvestigateLoop investigateLoop) {
         this.intentResolver = intentResolver;
         this.conversationService = conversationService;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.recipeRepository = recipeRepository;
         this.apiSpecRepository = apiSpecRepository;
+        this.investigateLoop = investigateLoop;
     }
 
     /**
@@ -84,6 +87,23 @@ public class ChatProcessor {
         try {
             IntentContext context = buildContext(conversationId, userId);
             IntentResult result = intentResolver.resolve(context);
+
+            // investigate는 단발 tool과 달리 반복 조회 루프를 돈다(investigation.md). 전용 서비스로 위임한다.
+            if (result.tool() == com.testforge.ai.enums.ToolName.INVESTIGATE) {
+                // hard guard: 서비스 미지정이면 조회할 스펙 컨텍스트가 없으므로 조회 없이 select_service로
+                // 전환한다(프롬프트 유도에만 의존하지 않음 — investigation.md 조회 범위 제한).
+                if (!context.hasService()) {
+                    log.info("investigate without service -> select_service (hard guard): conversationId={}",
+                            conversationId);
+                    conversationService.completeAssistantTurn(conversationId,
+                            AssistantMessageDraft.card(serviceSelectCard(List.of())));
+                    return;
+                }
+                // 루프가 진행 블록/최종 답변/종결(idle+락 해제)을 자체 try/finally로 보장한다.
+                investigateLoop.run(context);
+                return;
+            }
+
             AssistantMessageDraft draft = toDraft(result);
             conversationService.completeAssistantTurn(conversationId, draft);
         } catch (Exception e) {
@@ -281,6 +301,9 @@ public class ChatProcessor {
             case PROPOSE_PLAN -> AssistantMessageDraft.card(planCard(result.recipeIds(), result.rationale()));
             case SELECT_SERVICE -> AssistantMessageDraft.card(serviceSelectCard(result.suggestedServices()));
             case SHOW_CANDIDATES -> AssistantMessageDraft.card(candidatesCard(result.candidates()));
+            // investigate는 process()에서 InvestigateLoop로 위임되어 여기 도달하지 않는다(방어적 처리).
+            case INVESTIGATE -> throw new IllegalStateException(
+                    "INVESTIGATE must be handled by InvestigateLoop, not toDraft");
         };
     }
 

@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-17
+last-updated: 2026-09-19
 ---
 
 # 메시징 및 SSE 이벤트 정의
@@ -104,18 +104,20 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
 
 ### 서버 → 클라이언트
 
-`TEXT` / `CARD` / `PROGRESS` / `RESULT` / `ACTION_PICKER` / `SYSTEM`
+`TEXT` / `CARD` / `PROGRESS` / `RESULT` / `INVESTIGATE_PROGRESS` / `ACTION_PICKER` / `SYSTEM`
 
 | type | 설명 | payloadJson |
 |------|------|-------------|
-| `TEXT` | 일반 텍스트 응답 | 없음 (content가 곧 데이터) |
+| `TEXT` | 일반 텍스트 응답 (investigate 답변의 references 포함 가능) | 없음 또는 `{ kind:"references", ... }` (아래 references 스키마) |
 | `CARD` | 카드 UI | `{ kind:"card", schemaVersion, cardType, ... }` (아래 카드 상세) |
 | `PROGRESS` | 레시피 실행 진행 상태 | `{ kind:"progress", schemaVersion, ... }` (아래 PROGRESS 스키마) |
 | `RESULT` | 레시피 실행 결과 | `{ kind:"result", schemaVersion, ... }` (아래 RESULT 스키마) |
+| `INVESTIGATE_PROGRESS` | 정보 조회(investigate) 진행 상태 | `{ kind:"investigate_progress", schemaVersion, ... }` (아래 INVESTIGATE_PROGRESS 스키마) |
 | `ACTION_PICKER` | 액션 피커 호출 | `{ kind:"action_picker", schemaVersion, executionId, stepIndex, variables: [...] }` |
 | `SYSTEM` | 시스템 메시지 (에러, 안내 등) | `{ kind:"system", schemaVersion, level:"info|warn|error" }` |
 
 - `PROGRESS`/`RESULT`는 실행을 메시지로 저장·복원하기 위해 추가된 유형이다. 진행 블록·결과 블록은 각각 하나의 MESSAGE다.
+- `INVESTIGATE_PROGRESS`는 정보 조회 루프의 진행을 메시지로 저장·복원하기 위한 유형이다. investigate는 실행(EXECUTION)이 아니므로 `PROGRESS`(레시피 실행)와 구분한다. 최종 답변은 별도 `TEXT` 메시지(references payload 포함)로 전달된다.
 
 ### 클라이언트 → 서버
 
@@ -202,6 +204,46 @@ payload는 **레시피별 구조**다(플랜 결과 카드 = chat.html Case 21 �
 - **`content` 텍스트 분기**: 플랜(N≥2)이면 "{title} 플랜 N개 레시피를 완료했습니다" + 레시피별 한 줄("✓ 1. 이름 — 결과") 나열, 단일(N=1)이면 그 레시피의 `summary`를 그대로 담는다.
 - 표시명은 사람말 요약(`content`/`summary`)을 보강할 뿐, 상세·히스토리에서 원본 key 노출을 막지 않는다([기존 이원화](#content-vs-payloadjson-필드-이원화) 유지).
 
+### INVESTIGATE_PROGRESS (정보 조회 진행 블록)
+
+정보 조회(investigate) 루프 시작 시 1개 생성되고, 소스별 조회 단계마다 `message_update`로 **같은 메시지를 갱신**한다(레시피 실행의 PROGRESS 패턴 재사용). investigate는 실행이 아니므로 `executionId`가 없다.
+
+```json
+{
+  "kind": "investigate_progress",
+  "schemaVersion": 1,
+  "status": "running | done | failed | timeout",
+  "steps": [
+    { "source": "api_spec", "query": "회원가입", "status": "running | success | failed | skipped" }
+  ]
+}
+```
+
+- `status`: 루프 전체 상태. `done`(정상 종료, 최종 답변 별도 발행) / `failed`(전 커넥터 실패 등) / `timeout`(120초 초과). **비정상 종료(예외/타임아웃) 시 반드시 `failed`/`timeout`으로 확정하며 `running` 잔존을 두지 않는다**(finally에서 확정 `message_update` 발행 — 새로고침 시 유령 진행 블록 방지).
+- `steps[]`: 조회 단계. 각 항목은 `source`(1단계는 `api_spec`만 유효) / `query`(조회 질의) / `status`.
+  - `skipped`: 미지원 source(`jira` 등 2단계) 또는 중복 `(source, query)` 캐시 재사용 시. **`skipped`(미지원/캐시 재사용)도 조회 카운터를 소비한다**(카운터 우회 차단 — [investigation.md 루프 카운터 정의](../chat/scenarios/investigation.md#루프-카운터-정의-종료-보장-봉인)).
+- `content`에는 이 구조에서 파생한 표시용 진행 요약(Markdown, 예: "🔍 API 스펙 조회 중 — 회원가입")을 담는다.
+- **최종 답변은 이 메시지를 갱신하지 않는다.** 완료 시 `status`를 `done`으로 확정하고, 답변은 별도 `TEXT`(references payload) `message_new`로 발행한다.
+- 상세 흐름: [investigation.md 진행 상태 표시](../chat/scenarios/investigation.md#진행-상태-표시-sse).
+
+### references (정보 조회 참고 자료)
+
+investigate 답변(`TEXT`)의 `payloadJson`에 담기는 출처 인용 payload. 메시지에 저장되어 **새로고침 시 복원**된다(investigate는 EXECUTION에 저장하지 않으므로 references는 메시지 payload에만 남는다).
+
+```json
+{
+  "kind": "references",
+  "schemaVersion": 1,
+  "references": [
+    { "source": "api_spec", "label": "POST /api/v1/users", "url": "/specs/1/endpoints/42" }
+  ]
+}
+```
+
+- `references[]`: 조회한 소스의 원본 링크. `source`(1단계는 `api_spec`) / `label`(버튼 표시명, 예: method+path) / `url`(클릭 대상). **1단계(`api_spec`)의 `url`은 클릭 시 사이드 패널 스펙 상세를 여는 식별자다**(외부 URL/내부 라우트 이동 아님). Jira/Figma(2단계+)는 외부 URL 새 탭.
+- 조회한 소스가 없으면 references payload 없이 순수 `TEXT`로 발행한다(참고 자료 섹션 미표시).
+- FE 렌더: 카드 UI [참고 자료형](../chat/card-ui.md#참고-자료형-상세)으로 답변 하단에 버튼 리스트 표시.
+
 ### CARD
 
 카드는 기존 `cardType` 구조를 그대로 유지하되 **`payloadJson` 안에 담긴다**(공통 필드 `kind:"card"` + `schemaVersion` + `cardType` + 유형별 필드). 유형별 필드는 아래 카드 UI 상세 참조.
@@ -221,7 +263,7 @@ payload는 **레시피별 구조**다(플랜 결과 카드 = chat.html Case 21 �
 | `auth_required` | 인증 필요 | `loginPageUrl`, `executionId` |
 | `candidates` | 유사 레시피 후보 | `recipes: [{ id, name, description }]` |
 | `service_select` | 서비스 선택 | `services: [{ name, label }]` |
-| `references` | 정보 조회 참고 자료 (investigate 출처 인용) | `references: [{ source, label, url }]` |
+| `references` | 정보 조회 참고 자료 (investigate 출처 인용) | `references: [{ source, label, url }]` (1단계는 `TEXT` 메시지의 `kind:"references"` payload로 동반 — 위 [references 스키마](#references-정보-조회-참고-자료)) |
 
 ### execution_mode 카드 상세
 
@@ -316,7 +358,7 @@ payload는 **레시피별 구조**다(플랜 결과 카드 = chat.html Case 21 �
 
 | event | category | nature | 설명 | data 구조 |
 |-------|----------|--------|------|-----------|
-| `message_new` | CHAT | DATA | 새 메시지 도착 (TEXT/CARD/**PROGRESS**/**RESULT**/ACTION_PICKER/SYSTEM) | 메시지 JSON 전체 |
+| `message_new` | CHAT | DATA | 새 메시지 도착 (TEXT/CARD/**PROGRESS**/**RESULT**/**INVESTIGATE_PROGRESS**/ACTION_PICKER/SYSTEM) | 메시지 JSON 전체 |
 | `message_update` | CHAT | DATA | 기존 메시지 업데이트 (진행 블록 갱신, 추후 토큰 스트리밍) | `{ sessionId, messageId, message: {...} }` |
 | `session_status` | SESSION | SIGNAL | 대화방 **처리 상태** 변경 (입력 영역 구동, 고빈도) | `{ sessionId, status }` (아래 상태값) |
 | `session_list_update` | SESSION | SIGNAL | 대화방 **목록 한 줄** 갱신 (추가/삭제/이름·서비스·읽음·상태 전부 흡수) | `{ op, conversation }` (아래) |

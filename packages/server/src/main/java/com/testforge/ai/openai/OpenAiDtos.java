@@ -23,23 +23,47 @@ public final class OpenAiDtos {
             String model,
             List<ChatMessage> messages,
             List<Tool> tools,
-            // "required"면 반드시 tool 하나 선택, "auto"면 선택적
+            // "required"면 반드시 tool 하나 선택, "auto"면 선택적,
+            // {type:"function",function:{name}}이면 특정 함수 강제 (investigate 마지막 턴의 chat 강제)
             Object tool_choice,
             Double temperature) {
     }
 
-    /** 대화 메시지 (role: system/user/assistant) */
-    public record ChatMessage(String role, String content) {
+    /**
+     * 대화 메시지. 기본은 (role, content)이며, investigate 루프의 tool 결과 재주입을 위해
+     * assistant의 {@code tool_calls}와 role:tool 결과({@code tool_call_id} 매칭)를 지원한다
+     * (OpenAI 호환 규약: tool 메시지는 직전 assistant tool_calls와 id로 짝지어야 한다).
+     * {@code NON_NULL}로 사용하지 않는 필드는 직렬화에서 빠진다.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ChatMessage(
+            String role,
+            String content,
+            // assistant가 tool을 호출한 경우의 tool_calls (그 외 null)
+            List<ToolCall> tool_calls,
+            // role:tool 메시지가 대응하는 assistant tool_call의 id (그 외 null)
+            String tool_call_id) {
+
         public static ChatMessage system(String content) {
-            return new ChatMessage("system", content);
+            return new ChatMessage("system", content, null, null);
         }
 
         public static ChatMessage user(String content) {
-            return new ChatMessage("user", content);
+            return new ChatMessage("user", content, null, null);
         }
 
         public static ChatMessage assistant(String content) {
-            return new ChatMessage("assistant", content);
+            return new ChatMessage("assistant", content, null, null);
+        }
+
+        /** assistant가 tool_calls를 낸 메시지 (tool 결과 재주입 시 직전 assistant로 짝지음) */
+        public static ChatMessage assistantToolCalls(List<ToolCall> toolCalls) {
+            return new ChatMessage("assistant", null, toolCalls, null);
+        }
+
+        /** role:tool 결과 메시지 (assistant tool_call의 id에 매칭). content=조회 결과(데이터) */
+        public static ChatMessage tool(String toolCallId, String content) {
+            return new ChatMessage("tool", content, null, toolCallId);
         }
     }
 

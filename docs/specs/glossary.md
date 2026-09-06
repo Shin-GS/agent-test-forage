@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-16
+last-updated: 2026-09-18
 ---
 
 # 용어 사전
@@ -29,10 +29,11 @@ last-updated: 2026-09-16
 | **에디터 타입** | 사이드 패널에서 수정 가능한 동적 form으로 결과를 표시하는 형태 |
 | **서비스 설명** | 스펙(서버)의 메타 정보. description/domain/capabilities/notes. AI 서비스 매칭 컨텍스트로 활용 |
 | **정보 조회 (investigate)** | 정책/기능 질문에 답하기 위해 AI가 정보 소스를 반복 조회하는 agentic loop. 읽기 전용, 승인 불필요 |
-| **커넥터** | investigate가 조회하는 정보 소스 추상화. api_spec / jira (프로토타입), figma (추후) |
+| **커넥터** | investigate가 조회하는 정보 소스 추상화. api_spec (1단계 구현) / jira (2단계, 인터페이스만) / figma (추후) |
 | **참고 자료 카드** | 조회한 소스의 원본 링크를 버튼 리스트로 보여주는 카드 UI (출처 인용) |
 | **PROGRESS 메시지** | 레시피 실행 진행 블록을 담는 메시지 유형. 실행 시작 시 생성되고 스텝 진행마다 같은 메시지를 갱신(message_update). FE 메모리가 아닌 MESSAGE로 저장되어 새로고침 시 복원 |
 | **RESULT 메시지** | 레시피 실행 결과 블록을 담는 메시지 유형. 실행 완료 시 생성. resultValues(진실) + 표시용 요약(content) 보유 |
+| **INVESTIGATE_PROGRESS 메시지** | 정보 조회(investigate) 루프의 진행 블록을 담는 메시지 유형. 소스별 조회 단계마다 같은 메시지를 갱신(message_update). 실행(EXECUTION)이 아니므로 PROGRESS와 구분. 최종 답변은 별도 TEXT 메시지(references payload)로 발행 |
 | **payloadJson** | 메시지의 유형별 구조화 데이터 필드(진실). kind/schemaVersion 공통 필드 보유. content(사람이 읽는 표시용 요약, 파생물)와 이원화 |
 | **표시명 (label)** | 비개발자가 이해하도록 스텝·결과 값에 붙이는 사람말 이름(예: orderId → "주문번호"). 선택 입력이며, 없으면 폴백 체인으로 자동 결정 |
 | **표시명 폴백 체인** | 표시명이 비었을 때 자동 결정하는 우선순위. 스텝=(1)등록 표시명→(2)엔드포인트 summary→(3)method+path, 결과키=(1)결과 정의 label→(2)원본 key. 어떤 경우에도 표기가 깨지지 않음. label은 레시피 스냅샷에 포함되어 히스토리 재현 시 유지 |

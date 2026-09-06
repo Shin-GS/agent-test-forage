@@ -391,6 +391,59 @@ export interface ResultPayload {
 export const SUPPORTED_PAYLOAD_SCHEMA_VERSION = 2;
 
 // ---------------------------------------------------------------------------
+// investigate (정보 조회) payload — messaging.md INVESTIGATE_PROGRESS / references
+// investigate 는 실행(EXECUTION)이 아니므로 executionId 가 없다. PROGRESS 패턴을 재사용해
+// 진행 블록 1개(INVESTIGATE_PROGRESS)를 message_update 로 갱신하고, 최종 답변은 별도
+// TEXT 메시지(references payload 동반 가능)로 온다.
+// ---------------------------------------------------------------------------
+
+/** 정보 조회 단계 한 줄 (INVESTIGATE_PROGRESS payload steps[]) */
+export interface InvestigateStepPayload {
+  /** 조회 소스. 1단계는 "api_spec"만 유효(jira 등은 skipped 처리) */
+  source: string;
+  /** 조회 질의 (표시용) */
+  query: string | null;
+  /** success | failed | skipped | running */
+  status: string;
+}
+
+/**
+ * INVESTIGATE_PROGRESS 메시지 payload (schemaVersion 1).
+ * status 가 running 이 아니면 종료 상태(done/failed/timeout) — running 스텝 잔존 금지.
+ */
+export interface InvestigateProgressPayload {
+  kind: "investigate_progress";
+  schemaVersion: number;
+  /** running | done | failed | timeout */
+  status: string;
+  steps: InvestigateStepPayload[];
+}
+
+/** 참고 자료 한 줄 (references payload references[]) */
+export interface ReferenceItemPayload {
+  /** 소스 (1단계는 "api_spec") */
+  source: string;
+  /** 버튼 표시명 (예: "POST /api/v1/users") */
+  label: string;
+  /**
+   * 클릭 대상 식별자.
+   * - 1단계(api_spec): 사이드 패널 스펙 상세를 여는 식별자 (예: "/specs/1/endpoints/42"). 외부/라우트 이동 아님.
+   * - 2단계+(jira/figma): 외부 URL (새 탭). 1단계에서는 미사용.
+   */
+  url: string | null;
+}
+
+/**
+ * references 메시지 payload (schemaVersion 1). investigate 답변(TEXT)에 동반된다.
+ * references 가 비었거나 payload 자체가 없으면 순수 텍스트로 렌더.
+ */
+export interface ReferencesPayload {
+  kind: "references";
+  schemaVersion: number;
+  references: ReferenceItemPayload[];
+}
+
+// ---------------------------------------------------------------------------
 // SSE
 // ---------------------------------------------------------------------------
 

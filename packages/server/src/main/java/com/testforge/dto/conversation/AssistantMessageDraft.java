@@ -28,6 +28,14 @@ public record AssistantMessageDraft(
         return new AssistantMessageDraft(MessageType.TEXT, content, null);
     }
 
+    /**
+     * investigate 최종 답변: TEXT 메시지 + references payload (messaging.md references 스키마).
+     * 조회한 출처가 없으면 {@code payloadJson}을 null로 두어 순수 TEXT로 발행한다(참고 자료 섹션 미표시).
+     */
+    public static AssistantMessageDraft textWithReferences(String content, String payloadJson) {
+        return new AssistantMessageDraft(MessageType.TEXT, content, payloadJson);
+    }
+
     /** no_match 등: 시스템 안내 메시지 */
     public static AssistantMessageDraft system(String content, String metadataJson) {
         return new AssistantMessageDraft(MessageType.SYSTEM, content, metadataJson);

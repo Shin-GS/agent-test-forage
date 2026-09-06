@@ -3518,3 +3518,106 @@ select.input {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* --- Investigate Progress (정보 조회 진행 블록, chat.html Case 16/16b) --- */
+.investigate-progress {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-2) 0;
+}
+
+.investigate-progress__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+/* 비정상 종료(실패/타임아웃) 헤더 톤 — running 잔존 금지, 종료 확정 상태 */
+.investigate-progress__header--failed { color: var(--color-error); }
+.investigate-progress__header--timeout { color: var(--color-warning); }
+
+.investigate-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.investigate-step__icon {
+  flex-shrink: 0;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.investigate-step--done { color: var(--color-success); }
+.investigate-step--active { color: var(--color-accent); }
+.investigate-step--skipped { color: var(--color-text-tertiary); }
+.investigate-step--failed { color: var(--color-error); }
+.investigate-step--pending { color: var(--color-text-tertiary); }
+
+.investigate-step__source {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-left: var(--space-1);
+}
+
+/* 조회 실패/타임아웃 폴백 안내 (AI 비의존 고정 안내) */
+.investigate-progress__notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* --- References (정보 조회 참고 자료, chat.html Case 17) --- */
+.references {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+}
+
+.references__label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.references__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 출처 칩(비인터랙션): 답변 근거 표시용. 클릭 유도 요소 아님(cursor default). */
+.reference-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: default;
+  font-family: var(--font-family);
+  list-style: none;
+}

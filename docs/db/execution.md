@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-16
+last-updated: 2026-09-19
 ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel/history.md, docs/specs/pages/history-full.md, docs/specs/common/messaging.md
 ---
 
@@ -159,7 +159,7 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 
 - **연결점**: `MESSAGE_ID` = 실행을 촉발한 execution_mode 카드 메시지. "어느 메시지에서 나온 실행인지"를 정규화(메시지-실행 1:1 기준).
 - **복원 흐름**: 대화 진입/새로고침 시 `CONVERSATION_ID`로 그 대화의 실행 목록 + 각 실행의 스텝(`EXECUTION_RECIPE`/`EXECUTION_STEP`)을 조회 → 각 실행을 **촉발 메시지(`MESSAGE_ID`) 위치**에 배치 → 진행 블록을 손실 없이 복원.
-- **이후 갱신은 SSE**: 복원 이후의 진행/완료는 `execution_progress`/`execution_complete`로 갱신한다. (messaging.md)
+- **이후 갱신은 SSE**: 복원 이후의 진행은 `message_update`(PROGRESS 메시지 갱신), 완료는 `message_update`(PROGRESS 확정) + `message_new`(RESULT 메시지)로 갱신한다. (기존 `execution_progress`/`execution_complete` 커스텀 이벤트는 폐지 — [messaging.md 실행 SSE 흐름](../specs/common/messaging.md#실행-sse-흐름-message_new--message_update))
 - RUNNING 상태로 남은 실행의 처리(브라우저 종료로 중단된 실행)는 [recipe/execution.md 브라우저 새로고침](../specs/recipe/execution.md#브라우저-새로고침--탭-닫기) 정책을 따른다.
 
 ---

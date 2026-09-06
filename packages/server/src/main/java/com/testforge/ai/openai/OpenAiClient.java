@@ -60,8 +60,27 @@ public class OpenAiClient {
     public OpenAiDtos.ChatResponse chatWithTools(String model,
                                                  List<OpenAiDtos.ChatMessage> messages,
                                                  List<OpenAiDtos.Tool> tools) {
+        return chatWithTools(model, messages, tools, "required");
+    }
+
+    /**
+     * chat/completions 호출 (tool_choice 지정 변형). investigate 루프의 마지막 턴에서 특정 함수(chat)를
+     * 강제하기 위해 tool_choice를 파라미터로 받는다. 그 외 흐름은 {@code "required"}를 그대로 쓴다.
+     *
+     * @param model      사용할 모델
+     * @param messages   대화 메시지 (system/user/assistant/tool)
+     * @param tools      tool 정의 목록
+     * @param toolChoice tool 선택 정책. {@code "required"}(아무 tool 하나)/{@code "auto"} 또는
+     *                   {@code {type:"function",function:{name}}}(특정 함수 강제). {@link #forceFunction}
+     *                   로 강제 객체를 만든다.
+     * @return 응답 (choices[0].message.tool_calls에 선택 결과)
+     */
+    public OpenAiDtos.ChatResponse chatWithTools(String model,
+                                                 List<OpenAiDtos.ChatMessage> messages,
+                                                 List<OpenAiDtos.Tool> tools,
+                                                 Object toolChoice) {
         OpenAiDtos.ChatRequest request = new OpenAiDtos.ChatRequest(
-                model, messages, tools, "required", 0.0);
+                model, messages, tools, toolChoice, 0.0);
 
         String requestBody;
         try {
@@ -95,6 +114,16 @@ public class OpenAiClient {
             log.error("Failed to parse AI response: {}", truncate(responseBody), e);
             throw ApiException.aiCallFailed("AI response parse error");
         }
+    }
+
+    /**
+     * 특정 function을 강제하는 tool_choice 객체를 만든다 (OpenAI 호환 규약:
+     * {@code {"type":"function","function":{"name":"chat"}}}). investigate 마지막 턴 chat 강제용.
+     */
+    public static Object forceFunction(String functionName) {
+        return java.util.Map.of(
+                "type", "function",
+                "function", java.util.Map.of("name", functionName));
     }
 
     /** 로그용 응답 본문 절단 (과도한 로그 방지) */

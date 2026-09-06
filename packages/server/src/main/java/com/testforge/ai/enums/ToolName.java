@@ -7,7 +7,8 @@ import com.testforge.common.EnumColumn;
  * 1회 AI 호출로 의도 분석 + 분기가 동시에 처리되며, AI(또는 목 구현)가 이 중 하나를 선택한다.
  *
  * <p>{@code INVESTIGATE}(정보 조회 agentic loop)는 다른 tool과 달리 종료되지 않고 반복 호출되는
- * 별도 흐름이라, 이번 조각(단순 분기)에서는 포함하지 않고 다음 조각에서 추가한다.
+ * 별도 흐름이다. {@code ChatProcessor}가 첫 {@code resolve()} 결과가 이 tool이면 전용 루프 서비스
+ * ({@code InvestigateLoop})로 위임한다(investigation.md). 단발 tool 경로는 이 값을 만나지 않는다.
  *
  * <p>enum name()은 Java 관례(UPPER_SNAKE_CASE)를 따르고, AI/문서에서 쓰는 wire 이름은
  * 소문자 snake_case({@code execute_recipe})다. wire 이름은 {@link #wireName()}으로 제공한다.
@@ -27,7 +28,9 @@ public enum ToolName implements EnumColumn {
     /** 매칭 레시피 없음 안내 */
     NO_MATCH("매칭 없음"),
     /** 일반 대화/질문 응답 */
-    CHAT("일반 대화");
+    CHAT("일반 대화"),
+    /** 정보 조회 agentic loop (정책/기능 질문에 답하기 위한 반복 조회) */
+    INVESTIGATE("정보 조회");
 
     /** 사람이 읽는 한글 설명 */
     private final String description;

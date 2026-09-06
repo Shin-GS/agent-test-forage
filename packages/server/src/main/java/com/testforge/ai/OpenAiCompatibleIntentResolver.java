@@ -95,7 +95,7 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
         if (context.history() != null) {
             for (IntentContext.HistoryTurn turn : context.history()) {
                 String role = "user".equals(turn.role()) ? "user" : "assistant";
-                messages.add(new OpenAiDtos.ChatMessage(role, turn.content()));
+                messages.add(new OpenAiDtos.ChatMessage(role, turn.content(), null, null));
             }
         }
 
@@ -227,6 +227,13 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
             case CLARIFY -> IntentResult.clarify(asString(args.get("message"), "무엇을 도와드릴까요?"));
             case NO_MATCH -> IntentResult.noMatch();
             case CHAT -> IntentResult.chat(asString(args.get("message"), "네, 말씀하세요."));
+            case INVESTIGATE -> {
+                // 정보 조회 루프 진입 지정(첫 조회 source/query). 실제 반복/조회는 InvestigateLoop가 수행한다.
+                // source가 비면 1단계 기본 소스(api_spec)로 둔다(스키마 required이나 방어).
+                String source = asString(args.get("source"), "api_spec");
+                String query = asString(args.get("query"), context.utterance());
+                yield IntentResult.investigate(source, query);
+            }
         };
     }
 

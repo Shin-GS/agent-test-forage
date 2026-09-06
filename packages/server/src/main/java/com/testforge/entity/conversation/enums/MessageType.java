@@ -17,6 +17,8 @@ public enum MessageType implements EnumColumn {
     PROGRESS("진행 상태"),
     /** 실행 결과 표시 (레시피 실행 결과 블록) */
     RESULT("실행 결과"),
+    /** 정보 조회(investigate) 진행 블록. 실행(PROGRESS)이 아니라 조회 루프 진행이다 (messaging.md) */
+    INVESTIGATE_PROGRESS("정보 조회 진행"),
     /** 액션 피커 (구조화 입력) */
     ACTION_PICKER("액션 피커"),
     /** 시스템 안내 */

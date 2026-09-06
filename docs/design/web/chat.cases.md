@@ -42,6 +42,7 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 | 14 | 인증 요구 카드 | 로그인 필요 시 인증 카드 + progress 대기 |
 | 15 | 서비스 선택 | 서비스 미지정 시 서비스 선택 버튼 |
 | 16 | 정보 조회 중 | investigate 진행 상태 (API 스펙 → Jira 조회) |
+| 16b | 조회 실패/타임아웃 | 종료 상태 확정 실렌더 (running 잔존 없음, 폴백 안내) |
 | 17 | 참고 자료 | 조회 완료 답변 + 출처 버튼 리스트 |
 | 18 | 레시피 사이 입력 | 플랜 실행 중 다음 레시피 pre-run 액션 피커 (값 출처 뱃지) |
 | 19 | 플랜 실패 | 실패 레시피 + 사유, 완료/미실행 상태, [플랜 중단]만 |
@@ -148,6 +149,32 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 - "📋 플랜 완료 (N/N)" + 상태 + 소요 시간 (**추정 시간 표시 금지**)
 - 레시피별 결과 한 줄 (✓ 이름 — 결과)
 - [▸ 상세 보기](비활성 — 사이드 패널 결과 상세는 후속) / [다시 실행]
+
+### Case 16: 정보 조회 중 (INVESTIGATE_PROGRESS)
+
+- 헤더 "🔍 정보 조회 중"
+- 소스별 조회 단계 리스트: 상태 아이콘 텍스트 병기 (✅ 완료 / 🔄 진행 중 / ⬜ 대기 / ⏭️ 스킵)
+  - 예: "✅ API 스펙 확인 — 회원가입 스키마", "🔄 API 스펙 조회 중 — '약관 동의 필드'"
+  - **1단계는 `api_spec` 커넥터만 노출** (jira는 [2단계 백로그](../../specs/chat/scenarios/investigation.md#2단계-백로그))
+  - ⏭️ 스킵: 미지원 source(jira 등) 또는 중복 `(source, query)` 캐시 재사용 — 카운터 소비
+- 단계 전이 announce: `role="status" aria-live="polite"`(sr-only)
+  - **FE 구현 필수**: aria-live announce 노드는 초기 빈 상태로 렌더하고 조회 단계 전이 시점에 텍스트를 주입한다 (정적 렌더로는 announce 미발생, Case 12 패턴 동일). **디자인 HTML의 예시 텍스트는 데모용이며 정적 렌더 금지** — 실제 구현/디자인 노드 모두 빈 상태로 시작
+- `message_update`로 같은 INVESTIGATE_PROGRESS 메시지 갱신 (새 메시지 안 쌓음)
+- 입력 영역: 조회 중 잠금 (session_status 반영)
+- **종료 상태 확정** (running 잔존 금지 — finally 확정):
+  - 실패/타임아웃은 **별도 케이스 없이** 진행 블록을 종료 상태로 확정 + 폴백 안내 (Case 6 패턴 재사용)
+  - 타임아웃 → 헤더 `--timeout` + "조회 시간이 초과되었습니다"
+  - 못 찾음/실패 → 헤더 `--failed` + "정보를 찾지 못했습니다" (AI 비의존 고정 안내, 억지 답변 없음)
+  - **실렌더 확인**: chat.html **Case 16b(조회 실패/타임아웃)**에서 타임아웃/실패 확정 상태를 실제 마크업으로 렌더 (running 잔존 없음 눈으로 검수). 읽기 전용+자동 종료이므로 중단 버튼 없음
+
+### Case 17: 참고 자료 (조회 완료 답변 + references)
+
+- AI 답변 본문(Markdown): **출처 근거 인용 포함** (예: "POST /api/v1/users 요청 스키마의 `agreementYn` 필드가 required")
+- 하단 "참고한 자료:" + references 버튼 리스트
+  - **1단계는 `api_spec` 소스만** → 버튼 [📋 method + path], 클릭 시 **사이드 패널 스펙 상세로 이동** (외부 URL/내부 라우트 아님 → aria-label 명시)
+  - 🎫 Jira 버튼은 [2단계](../../specs/chat/scenarios/investigation.md#2단계-백로그) — 1단계 미노출
+- 조회한 소스가 없으면 참고 자료 섹션 미표시 (순수 TEXT)
+- references payload는 답변 TEXT 메시지에 저장 → 새로고침 복원 ([messaging.md references](../../specs/common/messaging.md#references-정보-조회-참고-자료))
 
 ## 반응형 동작
 

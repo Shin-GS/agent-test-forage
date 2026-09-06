@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-17
+last-updated: 2026-09-19
 ---
 
 # Tool Use 호출 구조
@@ -162,11 +162,13 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 
 **커넥터 (source):**
 
-| source | 설명 | 프로토타입 |
-|--------|------|-----------|
-| `api_spec` | 등록된 스펙 상세 (요청/응답 스키마, 어노테이션 힌트) | ✅ 구현 |
-| `jira` | Jira 티켓/이슈 내용 조회 | ✅ 구현 |
+| source | 설명 | 단계 |
+|--------|------|------|
+| `api_spec` | 등록된 스펙 상세 (요청/응답 스키마, 어노테이션 힌트) | ✅ **1단계 구현** |
+| `jira` | Jira 티켓/이슈 내용 조회 | ⏳ **2단계** (인터페이스만) |
 | `figma` | Figma 디자인/플로우 조회 | ⏳ 추후 (key 확보 후) |
+
+> **1단계 유효 source = `api_spec`만.** tool 스키마의 `source` enum에는 `jira`가 남아 있으나, 1단계에서는 `api_spec`만 실제 조회된다. AI가 `jira`를 반환하면 BE가 "미지원"으로 스킵하고 AI에게 전달한다(다른 소스 시도 또는 답변 유도). 단계별 커넥터 스코프: [investigation.md 커넥터 스코프](investigation.md#커넥터-스코프-단계별).
 
 ---
 
@@ -236,7 +238,7 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 | 서비스 지정됨 | 해당 서비스의 레시피 목록 (이름+설명+태그+ID) |
 | 서비스 미지정 | 서비스 목록 (이름+한 줄 설명) — 레시피는 미전달 |
 
-서비스 미지정 시 AI는 `select_service` 또는 `chat`만 호출 가능 (레시피 정보가 없으므로 execute_recipe/propose_plan 호출 불가).
+서비스 미지정 시 AI는 `select_service` 또는 `chat`만 호출 가능 (레시피 정보가 없으므로 execute_recipe/propose_plan 호출 불가). **`investigate`도 불가** — 조회할 스펙 컨텍스트가 없으므로 `select_service`로 유도한다. AI가 서비스 미지정 상태에서 `investigate`를 반환하면 BE가 조회 없이 `select_service`로 전환한다(hard guard — [investigation.md 조회 범위 제한](investigation.md#조회-범위-제한-오조회ssrf-방지)).
 
 ---
 

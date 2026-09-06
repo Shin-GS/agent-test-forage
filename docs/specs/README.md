@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-15
+last-updated: 2026-09-18
 ---
 
 # ai-test-forge 기획 문서
@@ -16,7 +16,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 | 작업 | 호출 주체 | 인증 |
 |------|----------|------|
 | 레시피 API 실행 | FE 브라우저 (직접) | 외부 서버 쿠키 세션 (CORS 자동 허용) |
-| 정보 조회 (investigate: api_spec, jira) | BE (ai-test-forge 서버) | 내부 DB / 서버 시크릿 토큰 |
+| 정보 조회 (investigate: api_spec = 1단계 · jira = 2단계) | BE (ai-test-forge 서버) | 내부 DB / (2단계) 서버 시크릿 토큰 |
 | AI 루프 (OpenAI 호환 API 직접 호출, OpenRouter) | BE | 서버 시크릿 API 키 |
 
 ## 검증용 데모 서버
