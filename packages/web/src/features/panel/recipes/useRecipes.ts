@@ -40,11 +40,13 @@ export function useRecipes({ apiSpecId, keyword, filter }: RecipesParams) {
   const trimmed = keyword.trim();
   return useQuery<RecipeSummary[]>({
     queryKey: ["recipes", apiSpecId, trimmed, filter],
-    queryFn: () =>
-      recipesApi.list({
-        apiSpecId: apiSpecId ?? undefined,
+    queryFn: () => {
+      const visibility = toVisibility(filter);
+      return recipesApi.list({
+        apiSpecId: apiSpecId != null ? [apiSpecId] : undefined,
         keyword: trimmed || undefined,
-        visibility: toVisibility(filter),
-      }),
+        visibility: visibility ? [visibility] : undefined,
+      });
+    },
   });
 }

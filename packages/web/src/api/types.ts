@@ -329,6 +329,11 @@ export interface RecipeSummary {
   currentVersion: number;
   usageCount: number;
   lastUsedAt: string | null;
+  /**
+   * 편집 권한 힌트(BE 산출). false 면 편집/삭제 UI 를 숨긴다(복제만).
+   * UX 힌트일 뿐 실제 권한은 서버가 강제(auth.md 권한 매트릭스).
+   */
+  canEdit: boolean;
 }
 
 /** 실행 히스토리 항목 (BE ExecutionSummaryView). 스텝 상세 제외 */
@@ -527,7 +532,27 @@ export interface RecipeDetail {
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * 편집 권한 힌트(BE 산출). false 면 읽기 전용 모드로 진입(입력 disabled, 저장/삭제/복원 숨김).
+   * 공통 레시피를 non-admin 이 열면 false. UX 힌트일 뿐 실제 권한은 서버가 강제.
+   */
+  canEdit: boolean;
 }
+
+/** 버전 기록 목록 항목 (BE GET /recipes/{id}/versions items). versionNo 최신순 */
+export interface RecipeVersionSummary {
+  versionNo: number;
+  createdAt: string;
+}
+
+/**
+ * 버전 상세 (BE GET /recipes/{id}/versions/{versionNo}).
+ * RecipeDetail 과 호환되며 versionNo/createdAt 이 해당 버전 시점 값으로 채워진다.
+ */
+export type RecipeVersionDetail = RecipeDetail & {
+  versionNo: number;
+  createdAt: string;
+};
 
 /** 레시피 생성 요청 (BE RecipeCreateRequest) */
 export interface RecipeCreateRequest {

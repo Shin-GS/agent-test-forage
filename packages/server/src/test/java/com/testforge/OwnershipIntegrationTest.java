@@ -1,14 +1,18 @@
 package com.testforge;
 
 import com.testforge.entity.conversation.Conversation;
+import com.testforge.entity.conversation.enums.ConversationStatus;
 import com.testforge.entity.execution.Execution;
 import com.testforge.entity.execution.enums.ExecutionMode;
 import com.testforge.entity.execution.enums.ExecutionStatus;
 import com.testforge.entity.execution.enums.ExecutionType;
+import com.testforge.entity.recipe.Recipe;
+import com.testforge.entity.recipe.enums.Visibility;
 import com.testforge.entity.user.enums.UserRole;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.repository.execution.ExecutionRepository;
+import com.testforge.repository.recipe.RecipeRepository;
 import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +62,9 @@ class OwnershipIntegrationTest {
     private ExecutionRepository executionRepository;
 
     @Autowired
+    private RecipeRepository recipeRepository;
+
+    @Autowired
     private TestAuthSupport testAuth;
 
     private MockMvc mockMvc;
@@ -69,6 +76,7 @@ class OwnershipIntegrationTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         messageRepository.deleteAll();
         executionRepository.deleteAll();
+        recipeRepository.deleteAll();
         conversationRepository.deleteAll();
         testAuth.ensureUser(USER_A, UserRole.USER);
         testAuth.ensureUser(USER_B, UserRole.USER);
@@ -181,5 +189,60 @@ class OwnershipIntegrationTest {
         mockMvc.perform(get("/api/v1/executions/{id}", id).with(testAuth.as(USER_A)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id));
+    }
+
+    // ── R2 실행 시작 소유 격리: B가 A의 PRIVATE 레시피를 자기 대화방에서 실행 시도 → 404 (부작용 없음) ──
+    @Test
+    void startExecutionWithOthersPrivateRecipe_returns404_andNoSideEffect() throws Exception {
+        // A 소유 PRIVATE 레시피
+        Recipe recipe = new Recipe(USER_A, 10L, "A의 개인 레시피");
+        recipe.setVisibility(Visibility.PRIVATE);
+        recipe.setStepsJson("[{\"name\":\"조회\",\"type\":\"api\"}]");
+        recipe.setCurrentVersion(1);
+        Long recipeId = recipeRepository.save(recipe).getId();
+        int usageBefore = recipeRepository.findById(recipeId).orElseThrow().getUsageCount();
+
+        // B 소유 대화방
+        Conversation c = new Conversation(USER_B);
+        c.setTitle("B의 방");
+        c.setApiSpecId(10L);
+        c.setStatus(ConversationStatus.IDLE);
+        Long conversationId = conversationRepository.save(c).getId();
+
+        // B가 A의 PRIVATE 레시피 실행 시도 → 존재 은폐 404
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_B))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recipeId\":" + recipeId + "}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("RECIPE_NOT_FOUND"));
+
+        // 권한 검사가 usageCount 증가/실행 레코드 생성보다 앞이므로 부작용이 없어야 한다
+        org.assertj.core.api.Assertions
+                .assertThat(recipeRepository.findById(recipeId).orElseThrow().getUsageCount())
+                .isEqualTo(usageBefore);
+        org.assertj.core.api.Assertions.assertThat(executionRepository.findAll()).isEmpty();
+    }
+
+    // ── R2 실행 시작: B가 COMMON 레시피는 자기 대화방에서 실행 가능 (201) ──
+    @Test
+    void startExecutionWithCommonRecipe_succeeds() throws Exception {
+        // A가 만든 COMMON 레시피 (전원 조회/실행 가능)
+        Recipe recipe = new Recipe(USER_A, 10L, "공용 레시피");
+        recipe.setVisibility(Visibility.COMMON);
+        recipe.setStepsJson("[{\"name\":\"조회\",\"type\":\"api\"}]");
+        recipe.setCurrentVersion(1);
+        Long recipeId = recipeRepository.save(recipe).getId();
+
+        Conversation c = new Conversation(USER_B);
+        c.setTitle("B의 방");
+        c.setApiSpecId(10L);
+        c.setStatus(ConversationStatus.IDLE);
+        Long conversationId = conversationRepository.save(c).getId();
+
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_B))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recipeId\":" + recipeId + "}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status.code").value("RUNNING"));
     }
 }

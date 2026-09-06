@@ -65,6 +65,11 @@ public class ApiException extends RuntimeException {
         return new ApiException(ErrorCode.RECIPE_CYCLE, HttpStatus.BAD_REQUEST, detail);
     }
 
+    /** 리소스는 보이나 변경 권한 부족 (403). 예: non-admin이 공통 레시피 수정/삭제/복원 시도 */
+    public static ApiException forbidden(String detail) {
+        return new ApiException(ErrorCode.FORBIDDEN, HttpStatus.FORBIDDEN, detail);
+    }
+
     /** 존재하지 않거나 삭제된 대화방 (404) */
     public static ApiException conversationNotFound(Long conversationId) {
         return new ApiException(ErrorCode.CONVERSATION_NOT_FOUND, HttpStatus.NOT_FOUND,

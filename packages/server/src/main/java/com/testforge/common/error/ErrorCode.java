@@ -26,6 +26,8 @@ public enum ErrorCode implements EnumColumn {
     INVALID_RECIPE("유효하지 않은 레시피"),
     /** 서브레시피 순환 참조 (A→B→A) — 저장 거부 */
     RECIPE_CYCLE("레시피 순환 참조"),
+    /** 리소스는 보이나 변경 권한이 없음 (예: non-admin의 공통 레시피 수정/삭제/복원) */
+    FORBIDDEN("권한 부족"),
     /** 존재하지 않거나 삭제된 대화방 조회 */
     CONVERSATION_NOT_FOUND("대화방을 찾을 수 없음"),
     /** 대화방이 이미 처리 중이라 새 요청을 받을 수 없음 (대화방 단위 락 경합) */

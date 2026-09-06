@@ -29,5 +29,7 @@ public record RecipeSummaryResponse(
         // 사용 횟수
         int usageCount,
         // 마지막 사용 시각
-        LocalDateTime lastUsedAt) {
+        LocalDateTime lastUsedAt,
+        // 요청자 기준 편집 가능 여부 (권한 힌트, auth.md). FE 액션 게이팅용
+        boolean canEdit) {
 }

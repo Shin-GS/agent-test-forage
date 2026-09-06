@@ -139,7 +139,9 @@ public class ChatProcessor {
         List<RecipeCandidate> recipes = List.of();
         List<ServiceOption> services = List.of();
         if (apiSpecId != null) {
-            recipes = loadRecipes(apiSpecId);
+            // 소유 격리(auth.md): 대화방 소유자(userId) 기준 "COMMON + 본인 PRIVATE"만 후보로 로드.
+            // 남의 PRIVATE가 AI 후보로 노출되지 않게 한다.
+            recipes = loadRecipes(apiSpecId, userId);
         } else {
             services = loadServices();
         }
@@ -202,9 +204,15 @@ public class ChatProcessor {
         return turns;
     }
 
-    /** 서비스(스펙)의 미삭제 레시피를 후보 표현으로 로드 (변수 스키마 요약 포함 — 발화값 추출용) */
-    private List<RecipeCandidate> loadRecipes(Long apiSpecId) {
-        List<Recipe> recipes = recipeRepository.search(apiSpecId, null, null, null);
+    /**
+     * 서비스(스펙)의 미삭제 레시피를 후보 표현으로 로드 (변수 스키마 요약 포함 — 발화값 추출용).
+     * 소유 격리(auth.md): "COMMON + 요청자 본인 PRIVATE"만 로드해 남의 PRIVATE 노출을 막는다.
+     *
+     * @param apiSpecId 대상 서비스(스펙)
+     * @param actorId   요청자(대화방 소유자) ID — PRIVATE 소유 격리용
+     */
+    private List<RecipeCandidate> loadRecipes(Long apiSpecId, Long actorId) {
+        List<Recipe> recipes = recipeRepository.findVisibleByApiSpecId(apiSpecId, actorId);
         List<RecipeCandidate> candidates = new ArrayList<>();
         for (Recipe r : recipes) {
             candidates.add(new RecipeCandidate(

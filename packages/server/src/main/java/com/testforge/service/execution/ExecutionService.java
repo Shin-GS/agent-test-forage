@@ -28,6 +28,7 @@ import com.testforge.entity.execution.enums.StepType;
 import com.testforge.entity.recipe.Recipe;
 import com.testforge.entity.spec.ApiEndpoint;
 import com.testforge.entity.spec.ApiSpec;
+import com.testforge.entity.user.enums.UserRole;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.execution.ExecutionRecipeRepository;
@@ -36,7 +37,9 @@ import com.testforge.repository.execution.ExecutionStepRepository;
 import com.testforge.repository.recipe.RecipeRepository;
 import com.testforge.repository.spec.ApiEndpointRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
+import com.testforge.security.CurrentUser;
 import com.testforge.service.conversation.ConversationService;
+import com.testforge.service.recipe.RecipeAccessPolicy;
 import com.testforge.sse.SseEventPublisher;
 import com.testforge.sse.enums.SseEventType;
 import com.testforge.utils.RecipeJsonUtil;
@@ -89,6 +92,8 @@ public class ExecutionService {
     private final ApiEndpointRepository apiEndpointRepository;
     private final ConversationLock conversationLock;
     private final SseEventPublisher ssePublisher;
+    // 레시피 접근 권한 규칙 단일 지점 (auth.md). 실행 시작 시 canView로 타인 PRIVATE 실행을 404로 차단.
+    private final RecipeAccessPolicy recipeAccessPolicy;
     // 결과 메시지(message_new) 발행용. ConversationService ↔ ExecutionService 상호 의존이라 @Lazy로 끊는다.
     private final ConversationService conversationService;
 
@@ -104,6 +109,7 @@ public class ExecutionService {
                             ApiEndpointRepository apiEndpointRepository,
                             ConversationLock conversationLock,
                             SseEventPublisher ssePublisher,
+                            RecipeAccessPolicy recipeAccessPolicy,
                             @Lazy ConversationService conversationService) {
         this.executionRepository = executionRepository;
         this.executionRecipeRepository = executionRecipeRepository;
@@ -114,6 +120,7 @@ public class ExecutionService {
         this.apiEndpointRepository = apiEndpointRepository;
         this.conversationLock = conversationLock;
         this.ssePublisher = ssePublisher;
+        this.recipeAccessPolicy = recipeAccessPolicy;
         this.conversationService = conversationService;
     }
 
@@ -152,6 +159,20 @@ public class ExecutionService {
         try {
             Recipe recipe = recipeRepository.findByIdAndDeletedAtIsNull(request.recipeId())
                     .orElseThrow(() -> ApiException.recipeNotFound(request.recipeId()));
+
+            // 접근 권한 검증(auth.md): 타인 PRIVATE 레시피를 recipeId 직접 지정으로 실행하는 우회를 차단한다.
+            // 존재 은폐를 위해 canView 실패 시 404(recipeNotFound). userId/role은 세션(CurrentUser)에서만 도출한다.
+            // 반드시 usageCount 증가/스냅샷 저장보다 앞에 위치시켜, 권한 없는 실행이 부작용을 남기지 않게 한다.
+            UserRole actorRole = CurrentUser.role();
+            if (!recipeAccessPolicy.canView(recipe, requesterId, actorRole)) {
+                throw ApiException.recipeNotFound(request.recipeId());
+            }
+
+            // 사용 통계 갱신: 실행 시작 시점에 usageCount+1, lastUsedAt=now (목록 정렬 recent/usage용).
+            // 실행 스냅샷은 독립 저장되므로 여기서 원본 레시피 카운터만 올린다(플랜 등 recipeId 없는 경로는 이 start를 타지 않음).
+            recipe.setUsageCount(recipe.getUsageCount() + 1);
+            recipe.setLastUsedAt(LocalDateTime.now());
+            recipeRepository.save(recipe);
 
             ExecutionMode mode = request.mode() == null ? ExecutionMode.AUTO : request.mode();
 

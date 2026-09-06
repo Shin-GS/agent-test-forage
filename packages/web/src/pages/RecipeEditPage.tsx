@@ -10,11 +10,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, recipesApi } from "../api";
-import type { RecipeCreateRequest, RecipeUpdateRequest } from "../api/types";
+import type { RecipeCreateRequest, RecipeDetail, RecipeUpdateRequest } from "../api/types";
 import { MetaSection } from "../components/recipe/MetaSection";
 import { VariablesSection } from "../components/recipe/VariablesSection";
 import { StepsSection } from "../components/recipe/StepsSection";
 import { ResultDefinitionSection } from "../components/recipe/ResultDefinitionSection";
+import { VersionDrawer } from "../components/recipe/VersionDrawer";
+import { VersionPreviewModal } from "../components/recipe/VersionPreviewModal";
+import { ConfirmModal } from "../components/common/ConfirmModal";
+import { useToastStore } from "../store/toastStore";
 import {
   detailToForm,
   emptyForm,
@@ -41,6 +45,7 @@ export function RecipeEditPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const params = useParams<{ id?: string }>();
+  const showToast = useToastStore((s) => s.show);
 
   const recipeId = params.id ? Number(params.id) : null;
   const isEdit = recipeId != null;
@@ -48,6 +53,19 @@ export function RecipeEditPage() {
   const [form, setForm] = useState<RecipeFormState>(emptyForm());
   const [validation, setValidation] = useState<RecipeValidationResult>(EMPTY_VALIDATION);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // 현재 레시피 버전/권한 (상세 로드 후 채워짐)
+  const [currentVersion, setCurrentVersion] = useState(0);
+  const [canEdit, setCanEdit] = useState(true);
+
+  // 버전 UI 상태
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [previewVersionNo, setPreviewVersionNo] = useState<number | null>(null);
+  const [restoreVersionNo, setRestoreVersionNo] = useState<number | null>(null);
+  const versionTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // 읽기 전용: 편집 모드 + canEdit=false (공통 레시피를 non-admin 이 연 경우)
+  const readOnly = isEdit && !canEdit;
 
   // dirty 추적: 초기 스냅샷과 현재 폼 비교 (저장 성공 시 이탈 경고 해제)
   const initialSnapshotRef = useRef<string>(formSnapshot(emptyForm()));
@@ -66,13 +84,17 @@ export function RecipeEditPage() {
     enabled: isEdit,
   });
 
+  const applyDetail = useCallback((loadedDetail: RecipeDetail) => {
+    const loaded = detailToForm(loadedDetail);
+    setForm(loaded);
+    initialSnapshotRef.current = formSnapshot(loaded);
+    setCurrentVersion(loadedDetail.currentVersion ?? 0);
+    setCanEdit(loadedDetail.canEdit ?? true);
+  }, []);
+
   useEffect(() => {
-    if (detail) {
-      const loaded = detailToForm(detail);
-      setForm(loaded);
-      initialSnapshotRef.current = formSnapshot(loaded);
-    }
-  }, [detail]);
+    if (detail) applyDetail(detail);
+  }, [detail, applyDetail]);
 
   // 브라우저 새로고침/닫기/뒤로가기 시 dirty 경고
   useEffect(() => {
@@ -129,6 +151,47 @@ export function RecipeEditPage() {
     saveMutation.mutate(body);
   }
 
+  // --- 버전 복원 ---
+  const restoreMutation = useMutation({
+    mutationFn: (versionNo: number) => recipesApi.restoreVersion(recipeId as number, versionNo),
+    onSuccess: (restored, versionNo) => {
+      applyDetail(restored);
+      void queryClient.invalidateQueries({ queryKey: ["recipe", recipeId] });
+      void queryClient.invalidateQueries({ queryKey: ["recipe", recipeId, "versions"] });
+      void queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      setRestoreVersionNo(null);
+      setPreviewVersionNo(null);
+      setDrawerOpen(false);
+      const invalid = (restored.validationStatus?.code ?? "").toUpperCase() === "INVALID";
+      showToast(
+        `v${versionNo} 내용으로 복원했습니다 (현재 v${restored.currentVersion})${invalid ? " · 유효성 경고 있음" : ""}`,
+        invalid ? "warning" : "success",
+      );
+    },
+    onError: (err) => {
+      setRestoreVersionNo(null);
+      showToast(
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : "복원에 실패했습니다",
+        "error",
+      );
+    },
+  });
+
+  // --- 개인 사본으로 복제 (읽기 전용 배너) ---
+  const duplicateMutation = useMutation({
+    mutationFn: () => recipesApi.duplicate(recipeId as number),
+    onSuccess: (created) => {
+      void queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      showToast(`'${created.name}' 개인 사본을 만들었습니다`, "success");
+      navigate(`/recipes/${created.id}/edit`);
+    },
+    onError: (err) =>
+      showToast(
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : "복제에 실패했습니다",
+        "error",
+      ),
+  });
+
   const title = useMemo(() => {
     if (!isEdit) return "새 레시피";
     return form.name ? `${form.name} 편집` : "레시피 편집";
@@ -174,20 +237,53 @@ export function RecipeEditPage() {
         >
           ← 목록으로
         </button>
-        <span className="page-header__title">{title}</span>
+        <span className="page-header__title">
+          {readOnly ? `${form.name || "레시피"} (읽기 전용)` : title}
+        </span>
         <div className="page-header__actions">
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={saveMutation.isPending}
-            onClick={handleSave}
-          >
-            {saveMutation.isPending ? "저장 중…" : "저장"}
-          </button>
+          {isEdit && (
+            <button
+              ref={versionTriggerRef}
+              type="button"
+              className="btn btn--secondary version-badge-btn"
+              aria-haspopup="true"
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen((prev) => !prev)}
+            >
+              🕘 버전 기록 <span className="badge badge--neutral">v{currentVersion}</span>
+            </button>
+          )}
+          {!readOnly && (
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={saveMutation.isPending}
+              onClick={handleSave}
+            >
+              {saveMutation.isPending ? "저장 중…" : "저장"}
+            </button>
+          )}
         </div>
       </div>
 
       <div className="page-body">
+        {/* 읽기 전용 배너 (공통 레시피 × non-admin) */}
+        {readOnly && (
+          <div className="alert alert--info readonly-banner">
+            <span>
+              🔒 <strong>공통 레시피 · 읽기 전용</strong> — 수정하려면 개인 사본으로 복제하세요.
+            </span>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              disabled={duplicateMutation.isPending}
+              onClick={() => duplicateMutation.mutate()}
+            >
+              개인 사본으로 복제
+            </button>
+          </div>
+        )}
+
         {/* 에러 요약 */}
         {(serverError || (!validation.valid && validation.messages.length > 0)) && (
           <div className="alert alert--error" role="alert">
@@ -206,45 +302,86 @@ export function RecipeEditPage() {
           </div>
         )}
 
-        <MetaSection form={form} onChange={patchForm} errors={validation.meta} />
+        {/* 읽기 전용이면 fieldset[disabled] 로 모든 입력을 네이티브 비활성화 */}
+        <fieldset className="recipe-form-fieldset" disabled={readOnly}>
+          <MetaSection form={form} onChange={patchForm} errors={validation.meta} />
 
-        <VariablesSection
-          variables={form.variables}
-          onChange={(next) => patchForm({ variables: next })}
-        />
-
-        <StepsSection
-          steps={form.steps}
-          onChange={(next) => patchForm({ steps: next })}
-          userVariables={form.variables}
-          currentRecipeId={recipeId}
-          stepMappingErrors={validation.stepMappingErrors}
-          errorStepIndexes={validation.errorStepIndexes}
-        />
-
-        <ResultDefinitionSection
-          items={form.resultDefinition}
-          onChange={(next) => patchForm({ resultDefinition: next })}
-        />
-
-        {/* ⑤ 결과 메시지 템플릿 */}
-        <div className="section">
-          <div className="section__title">
-            <span className="section__number">5</span> 결과 메시지 템플릿
-          </div>
-          <textarea
-            className="textarea"
-            style={{ minHeight: "80px" }}
-            placeholder="레시피 성공 시 표시할 메시지. 변수는 [변수명]으로 삽입."
-            aria-label="결과 메시지 템플릿"
-            value={form.resultTemplate}
-            onChange={(e) => patchForm({ resultTemplate: e.target.value })}
+          <VariablesSection
+            variables={form.variables}
+            onChange={(next) => patchForm({ variables: next })}
           />
-          <p className="recipe-hint" style={{ marginTop: "var(--space-2)" }}>
-            미입력 시 AI가 자동 요약합니다. 사용 가능한 변수: 결과 정의(④) + 사용자 입력 변수(②).
-          </p>
-        </div>
+
+          <StepsSection
+            steps={form.steps}
+            onChange={(next) => patchForm({ steps: next })}
+            userVariables={form.variables}
+            currentRecipeId={recipeId}
+            stepMappingErrors={validation.stepMappingErrors}
+            errorStepIndexes={validation.errorStepIndexes}
+          />
+
+          <ResultDefinitionSection
+            items={form.resultDefinition}
+            onChange={(next) => patchForm({ resultDefinition: next })}
+          />
+
+          {/* ⑤ 결과 메시지 템플릿 */}
+          <div className="section">
+            <div className="section__title">
+              <span className="section__number">5</span> 결과 메시지 템플릿
+            </div>
+            <textarea
+              className="textarea"
+              style={{ minHeight: "80px" }}
+              placeholder="레시피 성공 시 표시할 메시지. 변수는 [변수명]으로 삽입."
+              aria-label="결과 메시지 템플릿"
+              value={form.resultTemplate}
+              onChange={(e) => patchForm({ resultTemplate: e.target.value })}
+            />
+            <p className="recipe-hint" style={{ marginTop: "var(--space-2)" }}>
+              미입력 시 AI가 자동 요약합니다. 사용 가능한 변수: 결과 정의(④) + 사용자 입력 변수(②).
+            </p>
+          </div>
+        </fieldset>
       </div>
+
+      {/* 버전 기록 drawer (편집 모드) */}
+      {isEdit && drawerOpen && recipeId != null && (
+        <VersionDrawer
+          recipeId={recipeId}
+          currentVersion={currentVersion}
+          canEdit={canEdit}
+          triggerRef={versionTriggerRef}
+          onClose={() => setDrawerOpen(false)}
+          onPreview={(versionNo) => setPreviewVersionNo(versionNo)}
+          onRestore={(versionNo) => setRestoreVersionNo(versionNo)}
+        />
+      )}
+
+      {/* 버전 미리보기 모달 */}
+      {isEdit && previewVersionNo != null && recipeId != null && (
+        <VersionPreviewModal
+          recipeId={recipeId}
+          versionNo={previewVersionNo}
+          canRestore={canEdit}
+          onClose={() => setPreviewVersionNo(null)}
+          onRestore={(versionNo) => setRestoreVersionNo(versionNo)}
+        />
+      )}
+
+      {/* 복원 확인 모달 */}
+      <ConfirmModal
+        open={restoreVersionNo != null}
+        title={restoreVersionNo != null ? `v${restoreVersionNo}으로 복원` : "복원"}
+        description={
+          restoreVersionNo != null
+            ? `v${restoreVersionNo} 내용으로 새 버전(v${currentVersion + 1})을 만듭니다. 현재 내용(v${currentVersion})은 버전으로 보관되어 안전하며, 되돌리기도 이력에 남습니다. 선택한 버전 이후 스펙이 변경돼 복원 결과가 유효하지 않을(INVALID) 수 있으며, 이 경우에도 복원은 되고 실행 전 유효성 경고로 안내됩니다.`
+            : undefined
+        }
+        confirmLabel="이 버전으로 복원"
+        onConfirm={() => restoreVersionNo != null && restoreMutation.mutate(restoreVersionNo)}
+        onCancel={() => setRestoreVersionNo(null)}
+      />
     </div>
   );
 }

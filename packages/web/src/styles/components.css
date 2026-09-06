@@ -2452,3 +2452,463 @@ select.input {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   레시피 목록 UX 개선 + 버전 관리 UI + 권한 게이팅
+   (docs/design/web/recipe-editor.html Case 7~14 로컬 style 이식)
+   ═══════════════════════════════════════════════════════════ */
+
+/* --- 목록 툴바 (필터/정렬) --- */
+.list-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.list-toolbar__row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.list-toolbar__spacer {
+  flex: 1;
+}
+
+/* 체크박스 드롭다운 필터 */
+.filter-dropdown {
+  position: relative;
+}
+.filter-dropdown__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-family);
+}
+.filter-dropdown__trigger:hover {
+  border-color: var(--color-border-light);
+  background: var(--color-bg-hover);
+}
+.filter-dropdown__trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.filter-dropdown__count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: var(--radius-full);
+}
+.filter-dropdown__menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  min-width: 200px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+}
+.filter-dropdown__empty {
+  padding: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.filter-check:hover {
+  background: var(--color-bg-hover);
+}
+
+/* 필터 칩 요약 줄 */
+.filter-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.filter-summary__label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+}
+.filter-chip__remove {
+  cursor: pointer;
+  opacity: 0.7;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 0;
+  line-height: 1;
+  font-size: var(--font-size-sm);
+}
+.filter-chip__remove:hover {
+  opacity: 1;
+}
+.filter-chip__remove:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+/* 정렬 방향 토글 */
+.sort-dir {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.sort-dir:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+.sort-dir:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 결과 카운트 */
+.list-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* --- 목록 행: 이름+설명 셀 --- */
+.recipe-cell__name {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.recipe-cell__desc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+.recipe-cell__warn {
+  color: var(--color-warning);
+  cursor: help;
+}
+
+/* 행 hover 액션 (권한 게이팅) */
+.data-table .row-actions {
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.data-table tr:hover .row-actions,
+.data-table tr:focus-within .row-actions {
+  opacity: 1;
+}
+
+/* --- 툴팁 (유효성 경고 등) --- */
+.tooltip {
+  position: relative;
+  display: inline-flex;
+}
+.tooltip__content {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+  z-index: var(--z-dropdown);
+}
+.tooltip:hover .tooltip__content,
+.tooltip:focus-visible .tooltip__content,
+.tooltip:focus-within .tooltip__content {
+  opacity: 1;
+}
+
+/* --- 카드 폴백 (반응형, JS 로 <1024px 에서만 렌더) --- */
+.recipe-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.recipe-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+.recipe-card:hover {
+  border-color: var(--color-border-light);
+}
+.recipe-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.recipe-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.recipe-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+.recipe-card__actions {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+/* --- 빈 상태 --- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--color-text-secondary);
+}
+.empty-state__icon {
+  font-size: var(--font-size-2xl, 32px);
+}
+.empty-state__title {
+  font-size: var(--font-size-md, 16px);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+.empty-state__desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  max-width: 360px;
+}
+
+/* --- 읽기 전용 폼 fieldset 리셋 --- */
+.recipe-form-fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* --- 읽기 전용 배너 --- */
+.readonly-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* --- 버전 배지 버튼 (헤더) --- */
+.version-badge-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* --- 버전 기록 drawer (우측 고정 오버레이) --- */
+.version-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--panel-width);
+  min-width: var(--panel-width-min);
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-modal);
+}
+.version-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.version-drawer__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+.version-drawer__close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.version-drawer__close:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+.version-drawer__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.version-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+.version-item:hover {
+  background: var(--color-bg-hover);
+}
+.version-item--current {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+}
+.version-item__dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+  flex-shrink: 0;
+}
+.version-item--current .version-item__dot {
+  background: var(--color-accent);
+}
+.version-item__body {
+  flex: 1;
+  min-width: 0;
+}
+.version-item__no {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.version-item__time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+}
+.version-item__actions {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+/* --- 버전 미리보기 모달 --- */
+.modal--wide {
+  max-width: 720px;
+}
+.preview-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-4);
+}
+.preview-block {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.preview-block__title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-2);
+}
+.preview-field {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  padding: 2px 0;
+}
+.preview-field__key {
+  color: var(--color-text-tertiary);
+  min-width: 100px;
+}
+.preview-field__val {
+  color: var(--color-text-primary);
+}
+
+/* 모바일: drawer 전체폭 */
+@media (max-width: 768px) {
+  .version-drawer {
+    width: 100%;
+    min-width: 0;
+  }
+}

@@ -218,15 +218,18 @@ class RecipeIntegrationTest {
     }
 
     // ── update: 버전 스냅샷 + CURRENT_VERSION 증가 ──
+    // 공개범위를 COMMON으로 전환하므로 ADMIN 권한이 필요하다(auth.md: 공통 설정은 ADMIN만).
     @Test
     void update_snapshotsAndIncrementsVersion() throws Exception {
+        // 이 테스트는 COMMON 전환을 검증하므로 요청자를 ADMIN으로 승격한다(버전 스냅샷/증가 검증이 본질).
+        testAuth.ensureUser(USER_ID, UserRole.ADMIN);
         Recipe recipe = save("원본", specId, Visibility.PRIVATE, "설명");
         Long id = recipe.getId();
 
         String body = "{\"name\":\"수정본\",\"description\":\"바뀐설명\",\"visibility\":\"COMMON\",\"steps\":"
                 + "[{\"name\":\"조회\",\"type\":\"api\",\"endpointId\":" + activeEndpointId + "}]}";
 
-        mockMvc.perform(put("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID))
+        mockMvc.perform(put("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID, UserRole.ADMIN))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("수정본"))
@@ -254,6 +257,127 @@ class RecipeIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    // ── list: 소유 격리 (남의 PRIVATE 미노출) ──
+    @Test
+    void list_excludesOthersPrivateRecipes() throws Exception {
+        // 내 PRIVATE + 공통 + 남의 PRIVATE(owner=2)
+        save("내개인", specId, Visibility.PRIVATE, "mine");
+        save("공통", specId, Visibility.COMMON, "shared");
+        Recipe others = new Recipe(2L, specId, "남의개인");
+        others.setVisibility(Visibility.PRIVATE);
+        others.setStepsJson("[]");
+        others.setValidationStatus(ValidationStatus.VALID);
+        recipeRepository.save(others);
+
+        // USER_ID=1로 조회 → 내 PRIVATE + 공통 = 2건 (남의 PRIVATE 제외)
+        mockMvc.perform(get("/api/v1/recipes").with(testAuth.as(USER_ID)).param("apiSpecId", specId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+    }
+
+    // ── update: 공통 레시피를 non-admin이 수정 시도 → 403 ──
+    @Test
+    void update_commonRecipeByNonAdmin_returns403() throws Exception {
+        Recipe common = save("공통레시피", specId, Visibility.COMMON, "shared");
+        Long id = common.getId();
+
+        String body = "{\"name\":\"수정시도\",\"visibility\":\"COMMON\",\"steps\":[]}";
+        mockMvc.perform(put("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    // ── detail: 남의 PRIVATE 접근 → 404 (존재 은폐) ──
+    @Test
+    void detail_othersPrivate_returns404() throws Exception {
+        Recipe others = new Recipe(2L, specId, "남의개인");
+        others.setVisibility(Visibility.PRIVATE);
+        others.setStepsJson("[]");
+        others.setValidationStatus(ValidationStatus.VALID);
+        Long id = recipeRepository.save(others).getId();
+
+        mockMvc.perform(get("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("RECIPE_NOT_FOUND"));
+    }
+
+    // ── duplicate: 공통 → 개인 사본 (PRIVATE, 요청자 소유) ──
+    @Test
+    void duplicate_commonRecipe_createsPrivateCopy() throws Exception {
+        Recipe common = save("원본공통", specId, Visibility.COMMON, "shared");
+        common.setOwnerUserId(2L); // 남이 만든 공통
+        recipeRepository.save(common);
+        Long id = common.getId();
+
+        mockMvc.perform(post("/api/v1/recipes/{id}/duplicate", id).with(testAuth.as(USER_ID)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("원본공통 (사본)"))
+                .andExpect(jsonPath("$.visibility.code").value("PRIVATE"))
+                .andExpect(jsonPath("$.ownerUserId").value((int) USER_ID))
+                .andExpect(jsonPath("$.currentVersion").value(1))
+                .andExpect(jsonPath("$.canEdit").value(true));
+    }
+
+    // ── versions + restore: 목록/특정버전/복원 라운드트립 ──
+    @Test
+    void versions_listDetailAndRestore_roundTrip() throws Exception {
+        Recipe recipe = save("버전대상", specId, Visibility.PRIVATE, "v1설명");
+        Long id = recipe.getId();
+
+        // v1 → v2 수정 (스냅샷 v1 생성)
+        String update1 = "{\"name\":\"버전대상\",\"description\":\"v2설명\",\"visibility\":\"PRIVATE\",\"steps\":"
+                + "[{\"name\":\"조회\",\"type\":\"api\",\"endpointId\":" + activeEndpointId + "}]}";
+        mockMvc.perform(put("/api/v1/recipes/{id}", id).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON).content(update1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentVersion").value(2));
+
+        // 버전 목록 → v1 1건
+        mockMvc.perform(get("/api/v1/recipes/{id}/versions", id).with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].versionNo").value(1))
+                .andExpect(jsonPath("$.hasNext").value(false));
+
+        // 특정 버전(v1) 상세 → 스냅샷 펼침 (description=v1설명, canEdit=true)
+        mockMvc.perform(get("/api/v1/recipes/{id}/versions/{v}", id, 1).with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNo").value(1))
+                .andExpect(jsonPath("$.description").value("v1설명"))
+                .andExpect(jsonPath("$.canEdit").value(true));
+
+        // v1로 복원 → 새 버전 v3, description이 v1설명으로 되돌아감
+        mockMvc.perform(post("/api/v1/recipes/{id}/versions/{v}/restore", id, 1).with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentVersion").value(3))
+                .andExpect(jsonPath("$.description").value("v1설명"));
+
+        // 복원도 이력에 남음 → 이제 v1, v2 스냅샷 2건
+        assertThat(versionRepository.findByRecipeIdOrderByVersionNoDesc(id)).hasSize(2);
+    }
+
+    // ── restore: 공통 레시피를 non-admin이 복원 시도 → 403 ──
+    @Test
+    void restore_commonByNonAdmin_returns403() throws Exception {
+        // ADMIN으로 공통 레시피를 만들고 1회 수정하여 v1 스냅샷 생성
+        testAuth.ensureUser(2L, UserRole.ADMIN);
+        Recipe common = new Recipe(2L, specId, "공통버전");
+        common.setVisibility(Visibility.COMMON);
+        common.setStepsJson("[]");
+        common.setValidationStatus(ValidationStatus.VALID);
+        Long id = recipeRepository.save(common).getId();
+        String update = "{\"name\":\"공통버전\",\"visibility\":\"COMMON\",\"steps\":[]}";
+        mockMvc.perform(put("/api/v1/recipes/{id}", id).with(testAuth.as(2L, UserRole.ADMIN))
+                        .contentType(MediaType.APPLICATION_JSON).content(update))
+                .andExpect(status().isOk());
+
+        // 일반 사용자(USER_ID)가 복원 시도 → 403
+        mockMvc.perform(post("/api/v1/recipes/{id}/versions/{v}/restore", id, 1).with(testAuth.as(USER_ID)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
     // ── helpers ──
 
     /** 생성 요청 바디 문자열 (ownerUserId/apiSpecId 고정) */
@@ -275,5 +399,29 @@ class RecipeIntegrationTest {
         recipe.setStepsJson("[]");
         recipe.setValidationStatus(ValidationStatus.VALID);
         return recipeRepository.save(recipe);
+    }
+
+    /** 소유자를 지정해 저장하는 헬퍼 (R1 소유 격리 테스트용) */
+    private Recipe saveOwnedBy(Long ownerUserId, String name, Long apiSpecId, Visibility visibility) {
+        Recipe recipe = new Recipe(ownerUserId, apiSpecId, name);
+        recipe.setVisibility(visibility);
+        recipe.setStepsJson("[]");
+        recipe.setValidationStatus(ValidationStatus.VALID);
+        return recipeRepository.save(recipe);
+    }
+
+    // ── R1 AI 후보 소유 격리: findVisibleByApiSpecId는 "COMMON + 본인 PRIVATE"만, 남의 PRIVATE는 제외 ──
+    @Test
+    void findVisibleByApiSpecId_excludesOthersPrivate() {
+        Long actor = USER_ID; // 요청자(대화방 소유자)
+        saveOwnedBy(actor, "내 개인", specId, Visibility.PRIVATE);
+        saveOwnedBy(actor, "공통", specId, Visibility.COMMON);
+        saveOwnedBy(2L, "남의 개인", specId, Visibility.PRIVATE); // owner=2 (남)
+
+        var visible = recipeRepository.findVisibleByApiSpecId(specId, actor);
+
+        // 남의 PRIVATE는 후보에서 빠지고, 내 PRIVATE + COMMON만 로드된다
+        assertThat(visible).extracting(Recipe::getName)
+                .containsExactlyInAnyOrder("내 개인", "공통");
     }
 }

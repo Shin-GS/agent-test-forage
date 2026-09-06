@@ -38,12 +38,18 @@ export class ApiError extends Error {
   }
 }
 
+/** 단일 쿼리 값 또는 배열(반복 쿼리 파라미터로 직렬화) */
+type QueryValue = string | number | boolean | null | undefined;
+
 interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** JSON 바디 (직렬화됨) */
   body?: unknown;
-  /** 쿼리 파라미터 */
-  query?: Record<string, string | number | boolean | null | undefined>;
+  /**
+   * 쿼리 파라미터. 값이 배열이면 같은 key 로 반복해 직렬화한다
+   * (예: apiSpecId=[1,2] → ?apiSpecId=1&apiSpecId=2). BE 의 다중 필터 계약과 맞춤.
+   */
+  query?: Record<string, QueryValue | QueryValue[]>;
   signal?: AbortSignal;
 }
 
@@ -52,7 +58,15 @@ function buildUrl(path: string, query?: RequestOptions["query"]): string {
   const url = new URL(`${API_BASE}${normalizedPath}`);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined && value !== null) {
+      if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        // 배열 → 반복 쿼리 파라미터. 빈 배열은 생략(=전체)
+        for (const item of value) {
+          if (item !== undefined && item !== null) {
+            url.searchParams.append(key, String(item));
+          }
+        }
+      } else {
         url.searchParams.set(key, String(value));
       }
     }

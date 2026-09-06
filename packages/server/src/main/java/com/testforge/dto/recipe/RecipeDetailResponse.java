@@ -45,5 +45,7 @@ public record RecipeDetailResponse(
         // 생성 시각
         LocalDateTime createdAt,
         // 갱신 시각
-        LocalDateTime updatedAt) {
+        LocalDateTime updatedAt,
+        // 요청자 기준 편집 가능 여부 (권한 힌트, auth.md). FE 액션 게이팅용
+        boolean canEdit) {
 }
