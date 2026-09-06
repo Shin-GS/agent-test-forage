@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-12
+last-updated: 2026-09-14
 ---
 
 # 로그인, 권한/역할
@@ -36,8 +36,34 @@ last-updated: 2026-09-12
 
 - **모든 API는 인증 필수**다. 비로그인 요청은 **401**로 응답한다.
 - **관리자 전용 API는 ADMIN 역할을 추가로 체크**한다(권한 미달 시 403).
-- 관리자 전용 API는 **`/api/v1/admin/**` prefix**로 둔다. 이 경로는 ADMIN 역할 필수(미달 시 403). 사용자 관리·스펙 관리 등 관리자 API는 이 prefix 아래에 배치한다.
+- 관리자 전용 API는 **`/api/v1/admin/**` prefix**로 둔다. 이 경로는 ADMIN 역할 필수(미달 시 403). 사용자 관리 등 관리자 API는 이 prefix 아래에 배치한다.
 - `userId` / `role`은 **요청 파라미터가 아니라 세션에서 도출**한다. 클라이언트가 보낸 사용자 식별자를 신뢰하지 않는다.
+
+#### 스펙 API 권한 (조회 공용 / 관리 액션만 ADMIN — prefix 예외)
+
+스펙 API는 **`/api/v1/admin/**` prefix로 옮기지 않고, 액션 단위로 역할을 체크**한다. 스펙 조회는 일반 사용자도 쓰기 때문이다(레시피 편집·사이드 패널 서비스 드롭다운).
+
+| API | 권한 | 미달 시 |
+|-----|------|--------|
+| `GET /api/v1/specs` (목록) | 로그인(공용) | 401(비로그인) |
+| `GET /api/v1/specs/{id}` (상세) | 로그인(공용) | 401(비로그인) |
+| `PATCH /api/v1/specs/{id}/deactivate` (비활성) | ADMIN | 403(비-admin) |
+| `PATCH /api/v1/specs/{id}/activate` (활성) | ADMIN | 403(비-admin) |
+| `DELETE /api/v1/specs/{id}` (삭제, 소프트) | ADMIN | 403(비-admin) |
+
+- 즉 스펙은 "admin prefix로 경로를 분리"하지 않고, **조회는 공용, 관리 액션(비활성/활성/삭제)에만 ADMIN 역할을 강제**하는 예외 규칙을 따른다.
+- 관리 액션의 역할 체크도 세션에서 도출한 `role` 기준이며, 클라이언트가 보낸 역할을 신뢰하지 않는다.
+- 화면 게이팅(관리자 nav 노출, 관리자 페이지 라우트 가드)은 UX일 뿐이고, 실제 권한은 서버가 위 표대로 강제한다. 상세: [관리자 페이지 스펙 관리](../pages/admin.md#스펙-관리-a-adminspecs).
+
+##### 조회 API 공용 vs 관리 화면 admin 전용 (의도된 비대칭)
+
+`GET /api/v1/specs/{id}`(상세 **조회 API**)는 공용이지만, 관리자 스펙 상세 **화면**(`/admin/specs/:id`)은 RequireAdmin 가드로 보호한다. 조회 API를 공용으로 둔 이유는 레시피 편집·서비스 드롭다운 등 일반 사용자 기능이 스펙 상세를 읽어야 하기 때문이다. 이 비대칭은 의도된 설계다. 상세: [관리자 페이지 비대칭](../pages/admin.md#조회-api-공용-vs-관리-화면-admin-전용-의도된-비대칭).
+
+##### INACTIVE 스펙 노출 정책 (확정)
+
+- 공용 목록 API `GET /api/v1/specs`는 **ACTIVE만 반환**한다(INACTIVE·삭제 제외).
+- 관리자 화면은 전체(INACTIVE 포함)를 조회한다(`includeInactive=true`, **ADMIN만 허용**). 삭제(소프트)된 스펙은 목록·상세(404) 모두에서 제외한다.
+- **알려진 사항(후속)**: 공용 드롭다운이 ACTIVE만 노출하므로, 레시피 편집에서 이미 INACTIVE 스펙을 참조하던 경우 드롭다운에 안 나올 수 있다. "현재 선택된 INACTIVE 스펙 표시" 예외 처리는 이번 A 범위 밖(후속)이다. 상태 전이·삭제 404 규칙: [registration.md 상태 전이 규칙](../spec/registration.md#상태-전이-규칙).
 
 ### 세션 상태/역할 재확인 (비활성화·역할 변경 반영)
 

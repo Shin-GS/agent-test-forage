@@ -255,15 +255,15 @@ public class ChatProcessor {
         return s.isEmpty() ? null : s;
     }
 
-    /** ACTIVE 서비스 목록을 서비스 옵션으로 로드 (미지정 대화방에서 서비스 선택용) */
+    /**
+     * ACTIVE 서비스 목록을 서비스 옵션으로 로드 (미지정 대화방에서 서비스 선택용).
+     * ACTIVE-only 필터는 쿼리에서 보장한다(SpecQueryService 공용 목록과 정책 일원화).
+     */
     private List<ServiceOption> loadServices() {
-        List<ApiSpec> specs = apiSpecRepository.findByDeletedAtIsNullOrderByNameAsc();
+        List<ApiSpec> specs =
+                apiSpecRepository.findByStatusAndDeletedAtIsNullOrderByNameAsc(SpecStatus.ACTIVE);
         List<ServiceOption> options = new ArrayList<>();
         for (ApiSpec spec : specs) {
-            if (spec.getStatus() == SpecStatus.INACTIVE) {
-                // 비활성 서비스는 매칭/선택 대상에서 제외
-                continue;
-            }
             options.add(ServiceOption.of(spec.getId(), spec.getName(), spec.getServiceDescription()));
         }
         return options;

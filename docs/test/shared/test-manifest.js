@@ -54,10 +54,10 @@ const TEST_MANIFEST = [
   },
   {
     id: "admin",
-    name: "관리자 페이지",
+    name: "관리자 페이지 A(스펙 관리+RBAC)",
     file: "../web/admin.js",
     priority: "medium",
-    description: "접근 제어, 서비스 설명 편집(yml 우선), DEPRECATED, 사용자 관리(역할/초대/비활성)"
+    description: "RBAC(라우트 가드/nav 게이팅/관리 API 403), 스펙 목록/상세/DEPRECATED, 상태 관리(비활성·활성·삭제), 공용/관리자 목록 분리. 서비스 설명 편집=별도, 사용자 관리=B(SKIP)"
   }
 ];
 

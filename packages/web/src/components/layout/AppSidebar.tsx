@@ -206,6 +206,24 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
         </NavLink>
       </nav>
 
+      {/* 관리자 전용 메뉴 (role === ADMIN 일 때만 렌더). FE 게이팅은 UX 힌트이며
+          실제 권한은 서버가 강제한다(비-admin URL 직접 접근 시 RequireAdmin 리다이렉트 + API 403).
+          👥 사용자 관리는 이번 미표시(B, 다음 작업). */}
+      {user?.role === "ADMIN" && (
+        <nav className="sidebar-nav sidebar-nav--admin" aria-label="관리자 메뉴">
+          <div className="sidebar-nav__divider" role="presentation" />
+          <NavLink
+            to="/admin/specs"
+            aria-label="스펙 관리 (관리자)"
+            title="스펙 관리 (관리자)"
+            className={({ isActive }) => `sidebar-nav__item${isActive ? " active" : ""}`}
+          >
+            <span className="sidebar-nav__icon" aria-hidden>🖥️</span>
+            <span className="sidebar-nav__label">스펙 관리</span>
+          </NavLink>
+        </nav>
+      )}
+
       {/* 대화 목록 (이 영역만 스크롤, 레일에서는 CSS 로 숨김) */}
       <ConversationSidebar
         conversations={conversations}

@@ -1,6 +1,7 @@
 package com.testforge.repository.spec;
 
 import com.testforge.entity.spec.ApiSpec;
+import com.testforge.entity.spec.enums.SpecStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
@@ -15,8 +16,11 @@ public interface ApiSpecRepository extends JpaRepository<ApiSpec, Long> {
     /** ID로 미삭제 스펙 조회 (상세/상태변경 시 삭제 스펙 배제용) */
     Optional<ApiSpec> findByIdAndDeletedAtIsNull(Long id);
 
-    /** 미삭제 스펙 전체를 name 오름차순으로 조회 (관리자 목록용) */
+    /** 미삭제 스펙 전체를 name 오름차순으로 조회 (관리자 전체 목록용, INACTIVE 포함) */
     List<ApiSpec> findByDeletedAtIsNullOrderByNameAsc();
+
+    /** 특정 상태의 미삭제 스펙을 name 오름차순으로 조회 (공용 목록의 ACTIVE-only 필터용) */
+    List<ApiSpec> findByStatusAndDeletedAtIsNullOrderByNameAsc(SpecStatus status);
 
     /** ID 집합으로 스펙 일괄 조회 (히스토리 목록의 serviceName 매핑 N+1 방지용) */
     List<ApiSpec> findByIdIn(Collection<Long> ids);

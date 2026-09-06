@@ -47,10 +47,25 @@ public class SpecQueryService {
         this.authProfileRepository = authProfileRepository;
     }
 
-    /** 미삭제 스펙 목록 (name 오름차순). apiCount는 ACTIVE 엔드포인트 수. */
+    /**
+     * 미삭제 스펙 목록 (name 오름차순). apiCount는 ACTIVE 엔드포인트 수.
+     *
+     * <p>노출 정책(auth.md INACTIVE 노출 정책):
+     * <ul>
+     *   <li>공용(기본): ACTIVE만 반환 (INACTIVE·삭제 제외)</li>
+     *   <li>ADMIN + includeInactive=true: 전체(INACTIVE 포함, 삭제는 항상 제외)</li>
+     * </ul>
+     * includeInactive=true라도 관리자가 아니면 조용히 무시하고 ACTIVE만 반환한다(403 아님).
+     * 비-admin의 includeInactive 강제 무시는 컨트롤러에서 이미 수행되지만, 방어적으로 서비스에서도 재확인한다.
+     *
+     * @param includeInactive INACTIVE 포함 여부 (관리자 화면 전체 조회용)
+     * @param isAdmin         호출자가 ADMIN인지 (세션에서 도출된 값)
+     */
     @Transactional(readOnly = true)
-    public List<SpecSummaryResponse> list() {
-        List<ApiSpec> specs = specRepository.findByDeletedAtIsNullOrderByNameAsc();
+    public List<SpecSummaryResponse> list(boolean includeInactive, boolean isAdmin) {
+        List<ApiSpec> specs = (includeInactive && isAdmin)
+                ? specRepository.findByDeletedAtIsNullOrderByNameAsc()
+                : specRepository.findByStatusAndDeletedAtIsNullOrderByNameAsc(SpecStatus.ACTIVE);
         return specs.stream().map(this::toSummary).toList();
     }
 
@@ -67,13 +82,18 @@ public class SpecQueryService {
         return toDetail(spec, endpoints, profiles);
     }
 
-    /** 스펙 수동 비활성화 (STATUS = INACTIVE). AI 매칭/실행 대상에서 제외된다. */
+    /**
+     * 스펙 수동 비활성화 (STATUS = INACTIVE). AI 매칭/실행 대상에서 제외된다.
+     * 이미 INACTIVE인 경우는 no-op(멱등).
+     */
     @Transactional
     public void deactivate(Long id) {
         ApiSpec spec = requireActiveSpec(id);
-        spec.setStatus(SpecStatus.INACTIVE);
-        specRepository.save(spec);
-        log.info("Spec deactivated: specId={}", id);
+        if (spec.getStatus() == SpecStatus.ACTIVE) {
+            spec.setStatus(SpecStatus.INACTIVE);
+            specRepository.save(spec);
+            log.info("Spec deactivated: specId={}", id);
+        }
     }
 
     /**

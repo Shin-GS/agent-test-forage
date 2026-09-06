@@ -106,12 +106,22 @@ export interface SpecAuthProfileItem {
   loginPageUrl: string | null;
 }
 
+/** 서비스 설명 메타 (BE SpecDetailResponse.ServiceInfo). 관리자 우선(adminEdited) 규칙 표시용 */
+export interface SpecServiceInfo {
+  description: string | null;
+  domain: string | null;
+  capabilities: string[] | null;
+  notes: string | null;
+  /** 관리자가 메타를 수정했는지 (yml 원본 대신 수정본 표시 여부) */
+  adminEdited: boolean;
+}
+
 export interface SpecDetail {
   id: number;
   name: string;
   baseUrl: string;
   status: StatusView;
-  serviceInfo: unknown;
+  serviceInfo: SpecServiceInfo | null;
   endpoints: SpecEndpointItem[];
   authProfiles: SpecAuthProfileItem[];
   diagnostics: unknown;
@@ -132,6 +142,8 @@ export interface SpecListItem {
   serviceDescription?: string | null;
   /** 서비스 도메인 영역 (BE SpecSummaryResponse.serviceDomain) */
   serviceDomain?: string | null;
+  /** ACTIVE 엔드포인트 수 (DEPRECATED 제외, BE SpecSummaryResponse.apiCount). 관리자 목록 표시용 */
+  apiCount?: number;
 }
 
 // ---------------------------------------------------------------------------

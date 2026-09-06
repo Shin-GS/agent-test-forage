@@ -55,6 +55,7 @@ class SpecQueryIntegrationTest {
 
     private MockMvc mockMvc;
     private static final long USER_ID = 1L;
+    private static final long ADMIN_ID = 2L;
 
     @BeforeEach
     void setUp() {
@@ -63,6 +64,7 @@ class SpecQueryIntegrationTest {
         authProfileRepository.deleteAll();
         specRepository.deleteAll();
         testAuth.ensureUser(USER_ID, UserRole.USER);
+        testAuth.ensureUser(ADMIN_ID, UserRole.ADMIN);
     }
 
     // ── list: 삭제 스펙 제외 + name 오름차순 + apiCount(ACTIVE만) ──
@@ -154,7 +156,8 @@ class SpecQueryIntegrationTest {
         ApiSpec spec = specRepository.save(
                 newSpec("svc", "https://svc.example.com", SpecStatus.ACTIVE));
 
-        mockMvc.perform(patch("/api/v1/specs/{id}/deactivate", spec.getId()).with(testAuth.as(USER_ID)))
+        mockMvc.perform(patch("/api/v1/specs/{id}/deactivate", spec.getId())
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
                 .andExpect(status().isNoContent());
 
         ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
@@ -167,7 +170,8 @@ class SpecQueryIntegrationTest {
         ApiSpec spec = specRepository.save(
                 newSpec("svc", "https://svc.example.com", SpecStatus.INACTIVE));
 
-        mockMvc.perform(patch("/api/v1/specs/{id}/activate", spec.getId()).with(testAuth.as(USER_ID)))
+        mockMvc.perform(patch("/api/v1/specs/{id}/activate", spec.getId())
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
                 .andExpect(status().isNoContent());
 
         ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
@@ -180,7 +184,8 @@ class SpecQueryIntegrationTest {
         ApiSpec spec = specRepository.save(
                 newSpec("svc", "https://svc.example.com", SpecStatus.ACTIVE));
 
-        mockMvc.perform(delete("/api/v1/specs/{id}", spec.getId()).with(testAuth.as(USER_ID)))
+        mockMvc.perform(delete("/api/v1/specs/{id}", spec.getId())
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
                 .andExpect(status().isNoContent());
 
         ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
@@ -194,9 +199,126 @@ class SpecQueryIntegrationTest {
     // ── delete: 없는 ID → 404 ──
     @Test
     void delete_unknownId_returns404() throws Exception {
-        mockMvc.perform(delete("/api/v1/specs/{id}", 999999L).with(testAuth.as(USER_ID)))
+        mockMvc.perform(delete("/api/v1/specs/{id}", 999999L)
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("SPEC_NOT_FOUND"));
+    }
+
+    // ── list: 공용(기본)은 ACTIVE만 반환 (INACTIVE 제외) ──
+    @Test
+    void list_public_returnsActiveOnly() throws Exception {
+        specRepository.save(newSpec("active-svc", "https://a.example.com", SpecStatus.ACTIVE));
+        specRepository.save(newSpec("inactive-svc", "https://i.example.com", SpecStatus.INACTIVE));
+
+        mockMvc.perform(get("/api/v1/specs").with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("active-svc"));
+    }
+
+    // ── list: 비-admin이 includeInactive=true를 줘도 조용히 무시 → ACTIVE만 ──
+    @Test
+    void list_nonAdmin_includeInactiveIgnored() throws Exception {
+        specRepository.save(newSpec("active-svc", "https://a.example.com", SpecStatus.ACTIVE));
+        specRepository.save(newSpec("inactive-svc", "https://i.example.com", SpecStatus.INACTIVE));
+
+        mockMvc.perform(get("/api/v1/specs").param("includeInactive", "true").with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("active-svc"));
+    }
+
+    // ── list: ADMIN + includeInactive=true → 전체(INACTIVE 포함, 삭제 제외) ──
+    @Test
+    void list_admin_includeInactive_returnsAll() throws Exception {
+        specRepository.save(newSpec("active-svc", "https://a.example.com", SpecStatus.ACTIVE));
+        specRepository.save(newSpec("inactive-svc", "https://i.example.com", SpecStatus.INACTIVE));
+        ApiSpec deleted = newSpec("deleted-svc", "https://d.example.com", SpecStatus.INACTIVE);
+        deleted.setDeletedAt(LocalDateTime.now());
+        specRepository.save(deleted);
+
+        mockMvc.perform(get("/api/v1/specs").param("includeInactive", "true")
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
+                .andExpect(status().isOk())
+                // 삭제는 항상 제외 → 2건 (active + inactive)
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].name").value("active-svc"))
+                .andExpect(jsonPath("$[1].name").value("inactive-svc"));
+    }
+
+    // ── detail: INACTIVE 스펙도 상세 조회 가능 (삭제만 404) ──
+    @Test
+    void detail_inactiveSpec_isAccessible() throws Exception {
+        ApiSpec spec = specRepository.save(
+                newSpec("inactive-svc", "https://i.example.com", SpecStatus.INACTIVE));
+
+        mockMvc.perform(get("/api/v1/specs/{id}", spec.getId()).with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status.code").value("INACTIVE"));
+    }
+
+    // ── 관리 액션: 비-admin은 403 (deactivate/activate/delete) ──
+    @Test
+    void managementActions_nonAdmin_forbidden() throws Exception {
+        ApiSpec spec = specRepository.save(
+                newSpec("svc", "https://svc.example.com", SpecStatus.ACTIVE));
+
+        mockMvc.perform(patch("/api/v1/specs/{id}/deactivate", spec.getId()).with(testAuth.as(USER_ID)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+
+        mockMvc.perform(patch("/api/v1/specs/{id}/activate", spec.getId()).with(testAuth.as(USER_ID)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/specs/{id}", spec.getId()).with(testAuth.as(USER_ID)))
+                .andExpect(status().isForbidden());
+
+        // 상태/삭제가 변경되지 않았는지 확인
+        ApiSpec reloaded = specRepository.findById(spec.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(SpecStatus.ACTIVE);
+        assertThat(reloaded.getDeletedAt()).isNull();
+    }
+
+    // ── 멱등: 이미 ACTIVE에 activate → no-op 204 ──
+    @Test
+    void activate_alreadyActive_isNoOp() throws Exception {
+        ApiSpec spec = specRepository.save(
+                newSpec("svc", "https://svc.example.com", SpecStatus.ACTIVE));
+
+        mockMvc.perform(patch("/api/v1/specs/{id}/activate", spec.getId())
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
+                .andExpect(status().isNoContent());
+
+        assertThat(specRepository.findById(spec.getId()).orElseThrow().getStatus())
+                .isEqualTo(SpecStatus.ACTIVE);
+    }
+
+    // ── 멱등: 이미 INACTIVE에 deactivate → no-op 204 ──
+    @Test
+    void deactivate_alreadyInactive_isNoOp() throws Exception {
+        ApiSpec spec = specRepository.save(
+                newSpec("svc", "https://svc.example.com", SpecStatus.INACTIVE));
+
+        mockMvc.perform(patch("/api/v1/specs/{id}/deactivate", spec.getId())
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
+                .andExpect(status().isNoContent());
+
+        assertThat(specRepository.findById(spec.getId()).orElseThrow().getStatus())
+                .isEqualTo(SpecStatus.INACTIVE);
+    }
+
+    // ── INACTIVE 스펙도 소프트 삭제 허용 (ACTIVE 강제 아님) ──
+    @Test
+    void delete_inactiveSpec_allowed() throws Exception {
+        ApiSpec spec = specRepository.save(
+                newSpec("svc", "https://svc.example.com", SpecStatus.INACTIVE));
+
+        mockMvc.perform(delete("/api/v1/specs/{id}", spec.getId())
+                        .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
+                .andExpect(status().isNoContent());
+
+        assertThat(specRepository.findById(spec.getId()).orElseThrow().getDeletedAt()).isNotNull();
     }
 
     // ── helpers ──

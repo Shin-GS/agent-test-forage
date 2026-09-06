@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-08-27
+last-updated: 2026-09-14
 ---
 
 # 스펙 등록 방식
@@ -190,11 +190,28 @@ ai-test-forge:
 
 | 상태 | 설명 | 전이 |
 |------|------|------|
-| ACTIVE | 정상 (등록됨) | 재등록 시 유지 |
-| INACTIVE | 관리자가 수동 비활성 | 관리자만 ACTIVE 복귀 |
+| ACTIVE | 정상 (등록됨) | 재등록 시 유지. 비활성(→INACTIVE)·삭제(→소프트 삭제) 가능 |
+| INACTIVE | 관리자가 수동 비활성 | 관리자만 ACTIVE 복귀. **INACTIVE에서 바로 삭제 가능**(ACTIVE 강제 아님) |
+| (삭제) | 소프트 삭제(`DELETED_AT` 설정) | 되돌리기(undelete)는 백로그. 조회/목록에서 제외 |
+
+### 상태 전이 규칙
+
+- **삭제(소프트 삭제, `DELETED_AT` 설정)**: 삭제된 스펙은 없는 것으로 취급한다.
+  - `GET /api/v1/specs/{id}`는 **404**로 응답한다(레시피 소프트 삭제 404 원칙과 동일: [auth.md 404 원칙](../common/auth.md#404존재-은폐-vs-403권한-부족-원칙)).
+  - 목록(`GET /api/v1/specs`)에서도 **제외**한다(공용·관리자 목록 모두).
+- **activate/deactivate 멱등**:
+  - 이미 `ACTIVE`인 스펙에 `activate` → **no-op, 200**.
+  - 이미 `INACTIVE`인 스펙에 `deactivate` → **no-op, 200**.
+- **INACTIVE에서 바로 삭제 가능**: 삭제 전에 ACTIVE로 되돌릴 필요 없다(ACTIVE/INACTIVE 어느 상태에서도 삭제 가능).
+
+### INACTIVE 스펙 노출 정책
+
+- 공용 목록 API `GET /api/v1/specs`는 **ACTIVE만 반환**한다(INACTIVE·삭제 제외). 서비스 드롭다운 등 일반 사용자 기능이 이 목록을 쓴다.
+- 관리자 화면은 **전체(INACTIVE 포함)를 조회**한다(`includeInactive=true`, ADMIN만 허용). 상세: [관리자 페이지 INACTIVE 노출 정책](../pages/admin.md#inactive-스펙-노출-정책-확정).
+- **알려진 사항(후속)**: 공용 드롭다운이 ACTIVE만 노출하므로, 레시피 편집에서 INACTIVE 스펙을 참조하던 경우 드롭다운에 안 나올 수 있다. "현재 선택된 INACTIVE 스펙 표시" 예외 처리는 후속 작업이다.
 
 - 초기 버전은 **heartbeat 기반 자동 상태 전이(STALE)와 자동 소프트 삭제를 두지 않는다.** 등록이 기동당 1회뿐이라 "살아있는지"를 주기적으로 감시하지 않는다.
-- 등록된 스펙은 명시적으로 관리자가 비활성/삭제하기 전까지 ACTIVE로 유지된다.
+- 등록된 스펙은 명시적으로 관리자가 비활성/삭제하기 전까지 ACTIVE로 유지된다. 관리자의 비활성/활성/삭제 조작 UI·권한은 [관리자 페이지 스펙 관리](../pages/admin.md#스펙-관리-a-adminspecs) 참조(조회는 공용, 관리 액션만 ADMIN).
 - 서버가 실제로 살아있는지(가용성)는 **실행 시점 헬스체크**로 확인한다(아래 "추후: 실행 전 헬스체크").
 
 > 프로토타입에서는 스펙 파싱을 **동기 처리**한다. 대형 스펙(5MB+) 비동기 파싱(REGISTERING 상태)은 추후 필요 시 도입.

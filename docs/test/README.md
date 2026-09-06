@@ -43,7 +43,7 @@ docs/test/
     ├── spec.js            ← 스펙 등록/관리 (12개 케이스)
     ├── settings.js        ← 설정 (7개 케이스)
     ├── history.js         ← 전체 히스토리 페이지 (16개 케이스)
-    └── admin.js           ← 관리자 페이지 (8개 케이스)
+    └── admin.js           ← 관리자 페이지 A(스펙 관리+RBAC) (24개 케이스)
 ```
 
 ## 테스트 케이스 현황
@@ -57,8 +57,10 @@ docs/test/
 | 스펙 등록/관리 | high | 12 | SPEC-xxx |
 | 설정 | medium | 7 | SETTINGS-xxx |
 | 전체 히스토리 페이지 | medium | 16 | HISTORY-xxx |
-| 관리자 페이지 | medium | 8 | ADMIN-xxx |
-| **합계** | | **129** | |
+| 관리자 페이지 A(스펙 관리+RBAC) | medium | 24 | ADMIN-xxx |
+| **합계** | | **145** | |
+
+> 관리자 페이지 케이스 구분: **A(이번 작업)** = ADMIN-001~019 (RBAC + 스펙 관리), **별도 작업** = ADMIN-020 (서비스 설명 편집, SKIP), **B(다음 작업)** = ADMIN-030~033 (사용자 관리, SKIP). SKIP 케이스는 위치 확보용으로 남겨둠(삭제 금지).
 
 ## 새 테스트 추가 방법
 

@@ -11,12 +11,15 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { RequireAuth } from "./components/auth/RequireAuth";
+import { RequireAdmin } from "./components/auth/RequireAdmin";
 import { ChatPage } from "./pages/ChatPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { RecipeListPage } from "./pages/RecipeListPage";
 import { RecipeEditPage } from "./pages/RecipeEditPage";
 import { HistoryPage } from "./pages/HistoryPage";
+import { AdminSpecListPage } from "./pages/admin/AdminSpecListPage";
+import { AdminSpecDetailPage } from "./pages/admin/AdminSpecDetailPage";
 
 function App() {
   return (
@@ -33,6 +36,13 @@ function App() {
           <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+
+          {/* 관리자 전용 (RBAC) — 비-admin 은 RequireAdmin 이 "/" 로 리다이렉트 */}
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin/specs" element={<AdminSpecListPage />} />
+            <Route path="/admin/specs/:id" element={<AdminSpecDetailPage />} />
+          </Route>
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>
