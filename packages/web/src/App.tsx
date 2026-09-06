@@ -20,6 +20,7 @@ import { RecipeEditPage } from "./pages/RecipeEditPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { AdminSpecListPage } from "./pages/admin/AdminSpecListPage";
 import { AdminSpecDetailPage } from "./pages/admin/AdminSpecDetailPage";
+import { AdminUserListPage } from "./pages/admin/AdminUserListPage";
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
           <Route element={<RequireAdmin />}>
             <Route path="/admin/specs" element={<AdminSpecListPage />} />
             <Route path="/admin/specs/:id" element={<AdminSpecDetailPage />} />
+            <Route path="/admin/users" element={<AdminUserListPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

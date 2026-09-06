@@ -49,6 +49,12 @@ public class ApiException extends RuntimeException {
                 "Spec not found: " + specId);
     }
 
+    /** 존재하지 않는 사용자 (404). 역할/상태/비밀번호 변경 대상이 없을 때. */
+    public static ApiException userNotFound(Long userId) {
+        return new ApiException(ErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND,
+                "User not found: " + userId);
+    }
+
     /** 존재하지 않거나 삭제된 레시피 (404) */
     public static ApiException recipeNotFound(Long recipeId) {
         return new ApiException(ErrorCode.RECIPE_NOT_FOUND, HttpStatus.NOT_FOUND,

@@ -20,6 +20,8 @@ public enum ErrorCode implements EnumColumn {
     INVALID_REQUEST("요청 형식/필수값 오류"),
     /** 존재하지 않거나 삭제된 스펙 조회 */
     SPEC_NOT_FOUND("스펙을 찾을 수 없음"),
+    /** 존재하지 않는 사용자 조회 (역할/상태/비밀번호 변경 대상) */
+    USER_NOT_FOUND("사용자를 찾을 수 없음"),
     /** 존재하지 않거나 삭제된 레시피 조회 */
     RECIPE_NOT_FOUND("레시피를 찾을 수 없음"),
     /** 레시피 스텝 정의가 유효하지 않음 (필수 필드 누락 등) */

@@ -3335,3 +3335,63 @@ select.input {
 .api-item__deprecated-badge {
   font-size: var(--font-size-2xs);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   관리자 — 사용자 관리 (docs/design/web/admin.html Case 3~7)
+   ─ 재사용: .recipe-page / .page-header / .page-body / .data-table
+     / .empty-state / .badge--* / .status-dot / .modal / .list-count 는 위에서 정의됨.
+   ─ 아래는 사용자 관리 전용 추가 스타일(토큰만 사용, 하드코딩 금지).
+   ═══════════════════════════════════════════════════════════ */
+
+/* 툴바: 검색 + 카운트 + 추가 */
+.admin-user-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.admin-user-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.admin-user-search__icon {
+  position: absolute;
+  left: var(--space-3);
+  font-size: var(--font-size-sm);
+  pointer-events: none;
+}
+.admin-user-search__input {
+  width: 260px;
+  padding-left: calc(var(--space-3) + var(--space-5));
+}
+
+/* INACTIVE 행 dimmed (스펙 목록과 동일 톤) */
+.admin-user-table tr.is-inactive {
+  opacity: 0.55;
+}
+
+/* 라디오 그룹 (역할 선택 — 세로 배치) */
+.admin-user-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.admin-user-radio-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.admin-user-radio-option input {
+  accent-color: var(--color-accent);
+}
+
+/* aria-disabled 위험 액션 버튼: 시각적으로 비활성처럼 보이되 포커스는 유지 */
+.admin-user-table .btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -147,6 +147,30 @@ export interface SpecListItem {
 }
 
 // ---------------------------------------------------------------------------
+// Admin — User management (관리자 사용자 관리 목록 항목)
+// ---------------------------------------------------------------------------
+
+/**
+ * 관리자 사용자 목록 항목 (BE GET /admin/users). 비밀번호는 포함하지 않는다.
+ * role/status 는 StatusView(code+description) 형태로 내려온다
+ * (role.code: "ADMIN"|"USER", status.code: "ACTIVE"|"INACTIVE").
+ */
+export interface AdminUserItem {
+  id: number;
+  username: string;
+  name: string | null;
+  role: StatusView;
+  status: StatusView;
+  /** 마지막 로그인 시각(ISO). 로그인 이력 없으면 null */
+  lastLoginAt: string | null;
+  /**
+   * 유일한 ACTIVE ADMIN 여부(서버 계산). 강등·비활성 위험 액션 게이팅 힌트.
+   * 검색 필터와 무관하게 서버가 전체 기준으로 판정한다. 실제 차단은 서버가 400으로 강제.
+   */
+  lastActiveAdmin: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Execution
 // ---------------------------------------------------------------------------
 

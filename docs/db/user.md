@@ -1,7 +1,7 @@
 ---
 status: draft
-last-updated: 2026-09-10
-ref: docs/specs/common/auth.md, docs/specs/pages/settings.md
+last-updated: 2026-09-16
+ref: docs/specs/common/auth.md, docs/specs/pages/settings.md, docs/specs/pages/admin.md
 ---
 
 # 사용자 도메인 DB 설계
@@ -55,8 +55,10 @@ AI provider/모델, 대화 이력 전달 수, 스텝/전체 타임아웃 등은 
 ## 계정 생성 정책
 
 - 셀프 회원가입은 없다. 계정은 **관리자가 관리자 페이지에서 직접 생성**한다 (아이디 + 비밀번호 + 역할).
-  상세는 [관리자 페이지](../specs/pages/admin.md), 정책은 [로그인/권한](../specs/common/auth.md) 참조.
-- 비밀번호는 항상 bcrypt 해시로 저장한다. 평문 저장 금지.
+  상세는 [관리자 페이지 사용자 관리](../specs/pages/admin.md#사용자-관리-b-adminusers), 정책은 [로그인/권한](../specs/common/auth.md) 참조.
+- 비밀번호는 항상 bcrypt 해시로 저장한다. 평문 저장 금지. 관리자가 지정하는 비밀번호는 **최소 8자**이며, 관리자 페이지의 생성/비밀번호 변경 API에서 검증한다([auth.md 사용자 관리 API 권한](../specs/common/auth.md#사용자-관리-api-권한-전부-admin--admin-prefix)).
+- 역할 변경(USER↔ADMIN)·상태 변경(ACTIVE↔INACTIVE)은 `ROLE`/`STATUS` 컬럼 갱신만으로 처리하며(스키마 변경 없음), 활성 관리자가 최소 1명 유지되도록 서버가 강제한다.
+- **계정 삭제 없음**: 사용자 계정에는 삭제 액션이 없고 비활성화(`STATUS = INACTIVE`)로 대체한다. 하드/소프트 삭제 모두 백로그이며, 그래서 `APP_USER`에는 `DELETED_AT` 컬럼을 두지 않는다([admin.md 계정 삭제 정책](../specs/pages/admin.md#사용자-관리-b-adminusers)).
 
 ## 최초 관리자 계정 생성
 

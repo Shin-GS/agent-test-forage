@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-14
+last-updated: 2026-09-16
 ---
 
 # 로그인, 권한/역할
@@ -38,6 +38,41 @@ last-updated: 2026-09-14
 - **관리자 전용 API는 ADMIN 역할을 추가로 체크**한다(권한 미달 시 403).
 - 관리자 전용 API는 **`/api/v1/admin/**` prefix**로 둔다. 이 경로는 ADMIN 역할 필수(미달 시 403). 사용자 관리 등 관리자 API는 이 prefix 아래에 배치한다.
 - `userId` / `role`은 **요청 파라미터가 아니라 세션에서 도출**한다. 클라이언트가 보낸 사용자 식별자를 신뢰하지 않는다.
+
+#### 사용자 관리 API 권한 (전부 ADMIN — admin prefix)
+
+사용자 관리 API는 스펙 API와 달리 **조회조차 관리자 전용**이라, `/api/v1/admin/**` prefix 규칙을 그대로 따른다(모든 액션 ADMIN 필수, 미달 시 403). SecurityConfig의 prefix 가드 + 서비스 레이어 검증으로 이중 안전을 둔다.
+
+| API | 권한 | 미달/위반 시 |
+|-----|------|-------------|
+| `GET /api/v1/admin/users` (목록, `?q=` 아이디 검색) | ADMIN | 401(비로그인) / 403(비-admin) |
+| `POST /api/v1/admin/users` (생성) | ADMIN | 403(비-admin), username 규칙 위반 **400**, 아이디 중복 **400**, 비밀번호 8자 미만 **400** |
+| `PATCH /api/v1/admin/users/{id}/role` (역할 변경) | ADMIN | 403(비-admin), 대상 없음 **404**, 자기보호/마지막 ADMIN 위반 **400** |
+| `PATCH /api/v1/admin/users/{id}/status` (상태 변경) | ADMIN | 403(비-admin), 대상 없음 **404**, 자기보호/마지막 ADMIN 위반 **400** |
+| `PATCH /api/v1/admin/users/{id}/password` (비밀번호 지정) | ADMIN | 403(비-admin), 대상 없음 **404**, 비밀번호 8자 미만 **400** |
+
+- **username 검증(생성)**: `trim` 후 3~50자, 공백 불가(내부 공백 포함 불가). 위반 시 **400**, 중복 시 **400**. `name`은 선택(입력 시 100자 이하). 상세: [관리자 페이지 사용자 관리 API](../pages/admin.md#api-5종).
+- **대상 없음(404)**: 목록을 제외한 대상 지정 API(역할/상태/비밀번호 변경)에서 존재하지 않는 `userId`면 **404**.
+- **계정 삭제 없음**: 사용자 계정에는 삭제 액션이 없고 비활성화(STATUS = INACTIVE)로 대체한다(삭제는 백로그). 상세: [관리자 페이지 계정 삭제 정책](../pages/admin.md#사용자-관리-b-adminusers).
+- 비밀번호는 최소 8자, bcrypt 해시로 저장한다(기존 인코더 재사용). 비밀번호 지정은 관리자가 새 값을 직접 정하는 방식이며 임시 발급이 아니다. **비밀번호 변경은 기존 세션에 영향을 주지 않는다**(세션 재확인은 `STATUS`/`ROLE`만 검증). 최초 로그인 변경 강제(`MUST_CHANGE_PASSWORD`)는 백로그다([db/user.md 확장 고려](../../db/user.md#확장-고려)).
+
+##### 자기 보호 + 마지막 ACTIVE ADMIN 보호 (서버 강제)
+
+역할/상태 변경 시 서버가 아래를 강제한다(위반 시 **400**). 활성 관리자가 0명이 되어 시스템이 잠기는 것을 방지한다.
+
+| 규칙 | 대상 | 결과 |
+|------|------|------|
+| 본인 역할 강등(ADMIN→USER) | role | **차단(400)** |
+| 본인 비활성화(ACTIVE→INACTIVE) | status | **차단(400)** |
+| 마지막 ACTIVE ADMIN 강등 | role | **차단(400)** |
+| 마지막 ACTIVE ADMIN 비활성화 | status | **차단(400)** |
+| 본인 비밀번호 변경 | password | **허용** |
+
+- "마지막 ACTIVE ADMIN"은 `ROLE=ADMIN AND STATUS=ACTIVE` 계정 수가 1일 때 그 계정이다. 강등/비활성 시 **활성 관리자가 최소 1명 유지**되도록 보장한다.
+- **INACTIVE 계정도 역할 변경은 가능**하며, 마지막 ACTIVE ADMIN 보호 카운트는 `ROLE=ADMIN AND STATUS=ACTIVE`만 센다(**INACTIVE ADMIN은 카운트 제외**). 예: 유일한 ACTIVE ADMIN이 본인이면 자기보호와 마지막 ACTIVE ADMIN 보호가 둘 다 걸려 강등·비활성이 차단된다.
+- 본인 보호와 마지막 ADMIN 보호는 독립 적용된다(둘 중 하나라도 해당하면 차단). 판단 기준은 세션에서 도출한 `role`/본인 식별자다(위조 금지).
+- 화면 게이팅(위험 액션 버튼 비활성 + 툴팁)은 UX일 뿐이며, 실제 차단은 서버가 위 표대로 강제한다. 상세: [관리자 페이지 사용자 관리](../pages/admin.md#사용자-관리-b-adminusers).
+- 역할/상태 변경의 **반영 시점**은 다음 요청부터다(즉시 강제 로그아웃 없음). 상세: [세션 상태/역할 재확인](#세션-상태역할-재확인-비활성화역할-변경-반영).
 
 #### 스펙 API 권한 (조회 공용 / 관리 액션만 ADMIN — prefix 예외)
 

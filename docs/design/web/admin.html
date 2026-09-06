@@ -64,6 +64,18 @@
     .api-item__tail { margin-left: auto; }
 
     .scope-note { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--font-size-2xs); }
+
+    /* 사용자 관리 툴바 (검색 + 카운트 + 추가) */
+    .users-toolbar { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+    .users-search { position: relative; display: flex; align-items: center; }
+    .users-search__icon { position: absolute; left: var(--space-3); font-size: var(--font-size-sm); pointer-events: none; }
+    .users-search__input { width: 260px; padding-left: calc(var(--space-3) + var(--space-5)); }
+    .users-count { font-size: var(--font-size-sm); color: var(--color-text-tertiary); }
+
+    /* 라디오 그룹 (역할 선택) */
+    .radio-group { display: flex; flex-direction: column; gap: var(--space-2); }
+    .radio-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); color: var(--color-text-primary); cursor: pointer; }
+    .radio-option input { accent-color: var(--color-accent); }
   </style>
 </head>
 <body>
@@ -73,7 +85,12 @@
     <button class="case-switcher__btn" onclick="showCase('specs-empty')">1e. 스펙 빈 상태 [A]</button>
     <button class="case-switcher__btn" onclick="showCase('spec-detail')">2. 스펙 상세 [A]</button>
     <button class="case-switcher__btn" onclick="showCase('users')">3. 사용자 관리 [B]</button>
-    <button class="case-switcher__btn" onclick="showCase('user-create')">4. 계정 생성 [B]</button>
+    <button class="case-switcher__btn" onclick="showCase('users-empty')">3e. 검색 결과 없음 [B]</button>
+    <button class="case-switcher__btn" onclick="openUserCreate()">4. 계정 생성 [B]</button>
+    <button class="case-switcher__btn" onclick="openRoleConfirm('promote','user1')">5. 역할 변경-승격 [B]</button>
+    <button class="case-switcher__btn" onclick="openRoleConfirm('demote','admin2')">5b. 역할 변경-강등 [B]</button>
+    <button class="case-switcher__btn" onclick="openPasswordModal('user1')">6. 비밀번호 변경 [B]</button>
+    <button class="case-switcher__btn" onclick="openStatusConfirm('deactivate','user1')">7. 상태 변경 [B]</button>
   </div>
 
   <!-- ═══════════════════════════════════════════════
@@ -280,146 +297,264 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════
-       Case 3: 사용자 관리 (B — 다음 작업, 위치 확보용 유지)
+       Case 3: 사용자 관리 목록 (B)
        ═══════════════════════════════════════════════ -->
   <div id="case-users" class="screen">
     <div class="page">
       <div class="page-header">
         <span class="page-header__title">관리자</span>
-        <span class="badge badge--info">🔒 관리자 전용</span>
+        <span class="badge badge--info" title="관리자 전용 화면 (비-admin은 라우트 가드가 '/'로 리다이렉트)">🔒 관리자 전용</span>
         <span class="page-header__spacer"></span>
-        <span class="badge badge--neutral">B · 다음 작업</span>
       </div>
       <div class="page-body">
-        <div class="alert alert--info" style="margin-bottom: var(--space-4);">
-          <span>ℹ</span>
-          <span><strong>B(사용자 관리)에서 구현됩니다.</strong> 이번 A 범위(스펙 관리 + RBAC)에는 포함되지 않습니다. 아래는 위치 확보용 초안입니다.</span>
-        </div>
         <div class="admin-tabs" role="tablist" aria-label="관리자 메뉴">
-          <button class="admin-tab" role="tab" aria-selected="false">🖥️ 스펙 관리</button>
-          <button class="admin-tab active" role="tab" aria-selected="true">👥 사용자 관리 <span class="admin-tab__badge">(B)</span></button>
+          <button class="admin-tab" role="tab" aria-selected="false" onclick="showCase('specs')">🖥️ 스펙 관리</button>
+          <button class="admin-tab active" role="tab" aria-selected="true">👥 사용자 관리</button>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; margin-bottom: var(--space-3);">
-          <button class="btn btn--primary btn--sm" onclick="showCase('user-create')">+ 사용자 추가</button>
+        <!-- 툴바: 검색 + 카운트 + 추가 -->
+        <div class="users-toolbar">
+          <div class="users-search">
+            <span class="users-search__icon" aria-hidden="true">🔍</span>
+            <input class="input users-search__input" type="search" id="user-search" aria-label="아이디 검색" placeholder="아이디 검색">
+          </div>
+          <span class="users-count" aria-live="polite">총 4명</span>
+          <span class="page-header__spacer"></span>
+          <button class="btn btn--primary btn--sm" onclick="openUserCreate()">+ 사용자 추가</button>
         </div>
 
         <table class="data-table">
           <thead>
             <tr>
               <th scope="col">아이디</th>
+              <th scope="col">이름</th>
               <th scope="col">역할</th>
-              <th scope="col">생성일</th>
-              <th scope="col">마지막 접속</th>
               <th scope="col">상태</th>
+              <th scope="col">마지막 접속</th>
               <th scope="col">액션</th>
             </tr>
           </thead>
           <tbody>
+            <!-- 본인(admin) 행: (나) 배지 + 강등/비활성 aria-disabled (본인 사유). ADMIN 2명이라 '마지막' 사유는 아님 -->
             <tr>
-              <td class="cell-name">admin</td>
+              <td class="cell-name">admin <span class="badge badge--info" style="font-size: var(--font-size-2xs);">나</span></td>
+              <td>홍길동</td>
               <td><span class="badge badge--info">관리자</span></td>
-              <td>2026-08-01</td>
+              <td><span class="badge badge--success"><span class="status-dot status-dot--active"></span>활성</span></td>
               <td class="cell-time">10분 전</td>
-              <td><span class="badge badge--success">활성</span></td>
-              <td><button class="btn btn--ghost btn--sm" aria-label="admin 설정">⚙️</button></td>
-            </tr>
-            <tr>
-              <td class="cell-name">user1</td>
-              <td><span class="badge badge--neutral">사용자</span></td>
-              <td>2026-08-15</td>
-              <td class="cell-time">1시간 전</td>
-              <td><span class="badge badge--success">활성</span></td>
               <td>
                 <div class="row-actions">
-                  <button class="btn btn--ghost btn--sm" aria-label="user1 역할 변경" title="역할 변경">🔄</button>
-                  <button class="btn btn--ghost btn--sm" aria-label="user1 비밀번호 변경" title="비밀번호 변경">🔑</button>
-                  <button class="btn btn--ghost btn--sm" aria-label="user1 비활성화" title="비활성화" style="color: var(--color-error);">⛔</button>
+                  <button class="btn btn--ghost btn--sm" aria-disabled="true" aria-label="admin 사용자로 강등 (본인 계정은 변경할 수 없음)" title="본인 계정은 변경할 수 없습니다" onclick="return false;">🔽</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="admin 비밀번호 변경" title="비밀번호 변경" onclick="openPasswordModal('admin')">🔑</button>
+                  <button class="btn btn--ghost btn--sm" aria-disabled="true" aria-label="admin 비활성화 (본인 계정은 변경할 수 없음)" title="본인 계정은 변경할 수 없습니다" onclick="return false;">⏸️</button>
                 </div>
               </td>
             </tr>
-            <tr class="is-inactive">
-              <td class="cell-name">user2</td>
-              <td><span class="badge badge--neutral">사용자</span></td>
-              <td>2026-08-20</td>
-              <td class="cell-time">3일 전</td>
-              <td><span class="badge badge--error">비활성</span></td>
+            <!-- 다른 ADMIN(ACTIVE): ADMIN이 2명이라 마지막 아님 → 강등/비활성 가능 -->
+            <tr>
+              <td class="cell-name">admin2</td>
+              <td>이순신</td>
+              <td><span class="badge badge--info">관리자</span></td>
+              <td><span class="badge badge--success"><span class="status-dot status-dot--active"></span>활성</span></td>
+              <td class="cell-time">30분 전</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn btn--ghost btn--sm" aria-label="user2 활성화" title="활성화" style="color: var(--color-success);">✓</button>
-                  <button class="btn btn--ghost btn--sm" aria-label="user2 비밀번호 변경" title="비밀번호 변경">🔑</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="admin2 사용자로 강등" title="사용자로 강등" onclick="openRoleConfirm('demote','admin2')">🔽</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="admin2 비밀번호 변경" title="비밀번호 변경" onclick="openPasswordModal('admin2')">🔑</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="admin2 비활성화" title="비활성화" style="color: var(--color-error);" onclick="openStatusConfirm('deactivate','admin2')">⏸️</button>
+                </div>
+              </td>
+            </tr>
+            <!-- 일반 사용자(ACTIVE): 승격/비번/비활성 -->
+            <tr>
+              <td class="cell-name">user1</td>
+              <td>김철수</td>
+              <td><span class="badge badge--neutral">사용자</span></td>
+              <td><span class="badge badge--success"><span class="status-dot status-dot--active"></span>활성</span></td>
+              <td class="cell-time">1시간 전</td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn btn--ghost btn--sm" aria-label="user1 관리자로 승격" title="관리자로 승격" onclick="openRoleConfirm('promote','user1')">🔼</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="user1 비밀번호 변경" title="비밀번호 변경" onclick="openPasswordModal('user1')">🔑</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="user1 비활성화" title="비활성화" style="color: var(--color-error);" onclick="openStatusConfirm('deactivate','user1')">⏸️</button>
+                </div>
+              </td>
+            </tr>
+            <!-- 비활성(INACTIVE) 사용자: 활성화(즉시) + 비번 -->
+            <tr class="is-inactive">
+              <td class="cell-name">user2</td>
+              <td>이영희</td>
+              <td><span class="badge badge--neutral">사용자</span></td>
+              <td><span class="badge badge--error"><span class="status-dot status-dot--inactive"></span>비활성</span></td>
+              <td class="cell-time">3일 전</td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn btn--ghost btn--sm" aria-label="user2 관리자로 승격" title="관리자로 승격" onclick="openRoleConfirm('promote','user2')">🔼</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="user2 비밀번호 변경" title="비밀번호 변경" onclick="openPasswordModal('user2')">🔑</button>
+                  <button class="btn btn--ghost btn--sm" aria-label="user2 활성화 (즉시)" title="활성화 (즉시)" style="color: var(--color-success);" onclick="reactivateUser('user2')">▶️</button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+        <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: var(--space-3);">
+          계정은 삭제하지 않고 <strong>비활성화</strong>로 정리합니다(감사/이력 보존). 본인 계정(예: <code>admin</code>)과 마지막 ACTIVE 관리자 계정은 강등·비활성이 서버에서 차단됩니다(400). 위 예시는 ADMIN이 2명(<code>admin</code>/<code>admin2</code>)이라 <code>admin2</code>는 강등·비활성이 가능합니다. ACTIVE ADMIN이 1명뿐이면 그 계정의 강등·비활성이 차단됩니다.
+        </p>
       </div>
     </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════
-       Case 4: 계정 생성 (B — 다음 작업, 위치 확보용 유지)
+       Case 3e: 사용자 검색 결과 없음 (B)
        ═══════════════════════════════════════════════ -->
-  <div id="case-user-create" class="screen">
+  <div id="case-users-empty" class="screen">
     <div class="page">
       <div class="page-header">
         <span class="page-header__title">관리자</span>
         <span class="badge badge--info">🔒 관리자 전용</span>
         <span class="page-header__spacer"></span>
-        <span class="badge badge--neutral">B · 다음 작업</span>
       </div>
       <div class="page-body">
-        <div class="alert alert--info" style="margin-bottom: var(--space-4);">
-          <span>ℹ</span>
-          <span><strong>B(사용자 관리)에서 구현됩니다.</strong> 이번 A 범위 아님. 아래는 위치 확보용 초안입니다.</span>
-        </div>
         <div class="admin-tabs" role="tablist" aria-label="관리자 메뉴">
-          <button class="admin-tab" role="tab" aria-selected="false">🖥️ 스펙 관리</button>
-          <button class="admin-tab active" role="tab" aria-selected="true">👥 사용자 관리 <span class="admin-tab__badge">(B)</span></button>
+          <button class="admin-tab" role="tab" aria-selected="false" onclick="showCase('specs')">🖥️ 스펙 관리</button>
+          <button class="admin-tab active" role="tab" aria-selected="true">👥 사용자 관리</button>
         </div>
 
-        <div class="spec-detail" style="max-width: 480px;">
-          <div class="spec-detail__header">
-            <span class="spec-detail__title">사용자 추가</span>
-            <button class="btn btn--ghost btn--sm" onclick="showCase('users')" aria-label="목록으로 돌아가기">← 목록</button>
+        <div class="users-toolbar">
+          <div class="users-search">
+            <span class="users-search__icon" aria-hidden="true">🔍</span>
+            <input class="input users-search__input" type="search" aria-label="아이디 검색" placeholder="아이디 검색" value="zzz">
           </div>
+          <span class="users-count" aria-live="polite">총 0명</span>
+          <span class="page-header__spacer"></span>
+          <button class="btn btn--primary btn--sm" onclick="openUserCreate()">+ 사용자 추가</button>
+        </div>
 
-          <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-4);">
-            관리자가 아이디 · 비밀번호 · 역할을 직접 지정하여 계정을 생성합니다. (셀프 회원가입 없음)
-          </p>
-
-          <form onsubmit="return false;" style="display: flex; flex-direction: column; gap: var(--space-4);">
-            <div class="form-group">
-              <label class="form-label" for="new-user-id">아이디</label>
-              <input class="input" type="text" id="new-user-id" name="new-user-id" placeholder="아이디를 입력하세요" autocomplete="off">
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="new-user-password">비밀번호</label>
-              <input class="input" type="password" id="new-user-password" name="new-user-password" placeholder="비밀번호를 입력하세요" autocomplete="new-password">
-              <span class="form-hint">관리자가 지정한 비밀번호로 즉시 로그인할 수 있습니다.</span>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="new-user-role">역할</label>
-              <select class="input" id="new-user-role" name="new-user-role">
-                <option value="user">일반 사용자</option>
-                <option value="admin">관리자</option>
-              </select>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2);">
-              <button type="button" class="btn btn--secondary btn--sm" onclick="showCase('users')">취소</button>
-              <button type="submit" class="btn btn--primary btn--sm">생성</button>
-            </div>
-          </form>
+        <div class="empty-state">
+          <div class="empty-state__icon">🔍</div>
+          <div class="empty-state__title">검색 결과가 없습니다</div>
+          <div class="empty-state__desc">
+            "zzz"와 일치하는 아이디가 없습니다. 검색어를 지우면 전체 사용자 목록이 표시됩니다.
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════
-       ConfirmModal (비활성/삭제 확인)
+       Case 4: 계정 생성 모달 (B)
+       ═══════════════════════════════════════════════ -->
+  <div id="user-create-modal" class="modal-backdrop" style="display: none;" onclick="closeUserCreate(event)">
+    <div class="modal" style="max-width: 460px;" role="dialog" aria-modal="true" aria-labelledby="user-create-title" onclick="event.stopPropagation()">
+      <div class="modal__header">
+        <span class="modal__title" id="user-create-title">사용자 추가</span>
+      </div>
+      <div class="modal__body">
+        <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-4);">
+          관리자가 아이디 · 비밀번호 · 역할을 직접 지정하여 계정을 생성합니다. (셀프 회원가입 없음)
+        </p>
+        <form onsubmit="return false;" style="display: flex; flex-direction: column; gap: var(--space-4);">
+          <div class="form-group">
+            <label class="form-label" for="new-user-id">아이디</label>
+            <input class="input" type="text" id="new-user-id" name="new-user-id" placeholder="아이디를 입력하세요" autocomplete="off">
+            <span class="form-hint">3~50자, 공백 불가.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new-user-name">이름 <span style="color: var(--color-text-tertiary); font-weight: var(--font-weight-normal);">(선택)</span></label>
+            <input class="input" type="text" id="new-user-name" name="new-user-name" placeholder="이름을 입력하세요 (선택)" autocomplete="off">
+            <span class="form-hint">100자 이하.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new-user-password">비밀번호</label>
+            <input class="input" type="password" id="new-user-password" name="new-user-password" placeholder="비밀번호를 입력하세요" autocomplete="new-password">
+            <span class="form-hint">8자 이상. 관리자가 지정한 비밀번호로 즉시 로그인할 수 있습니다.</span>
+          </div>
+
+          <fieldset class="form-group" style="border: none; padding: 0; margin: 0;">
+            <legend class="form-label" style="padding: 0;">역할</legend>
+            <div class="radio-group">
+              <label class="radio-option" for="role-user">
+                <input type="radio" id="role-user" name="new-user-role" value="user" checked>
+                일반 사용자
+              </label>
+              <label class="radio-option" for="role-admin">
+                <input type="radio" id="role-admin" name="new-user-role" value="admin">
+                관리자
+              </label>
+            </div>
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary btn--sm" onclick="closeUserCreate()">취소</button>
+        <button class="btn btn--primary btn--sm" onclick="closeUserCreate()">생성</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       Case 5: 역할 변경 ConfirmModal (B)
+       ═══════════════════════════════════════════════ -->
+  <div id="role-confirm-modal" class="modal-backdrop" style="display: none;" onclick="closeRoleConfirm(event)">
+    <div class="modal" style="max-width: 420px;" role="dialog" aria-modal="true" aria-labelledby="role-confirm-title" aria-describedby="role-confirm-desc" onclick="event.stopPropagation()">
+      <div class="modal__header">
+        <span class="modal__title" id="role-confirm-title">역할 변경</span>
+      </div>
+      <div class="modal__body" id="role-confirm-desc">역할을 변경할까요?</div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary btn--sm" onclick="closeRoleConfirm()">취소</button>
+        <button class="btn btn--primary btn--sm" id="role-confirm-ok" onclick="closeRoleConfirm()">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       Case 6: 비밀번호 변경 모달 (B)
+       ═══════════════════════════════════════════════ -->
+  <div id="password-modal" class="modal-backdrop" style="display: none;" onclick="closePasswordModal(event)">
+    <div class="modal" style="max-width: 420px;" role="dialog" aria-modal="true" aria-labelledby="password-modal-title" onclick="event.stopPropagation()">
+      <div class="modal__header">
+        <span class="modal__title" id="password-modal-title">비밀번호 변경</span>
+      </div>
+      <div class="modal__body">
+        <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-4);">
+          관리자가 새 비밀번호를 직접 지정합니다. (임시 비밀번호 자동 발급이 아님)
+        </p>
+        <form onsubmit="return false;" style="display: flex; flex-direction: column; gap: var(--space-4);">
+          <div class="form-group">
+            <label class="form-label" for="reset-password">새 비밀번호</label>
+            <input class="input" type="password" id="reset-password" name="reset-password" placeholder="새 비밀번호를 입력하세요" autocomplete="new-password">
+            <span class="form-hint">8자 이상.</span>
+          </div>
+        </form>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary btn--sm" onclick="closePasswordModal()">취소</button>
+        <button class="btn btn--primary btn--sm" onclick="closePasswordModal()">변경</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       Case 7: 상태 변경 ConfirmModal (B, 비활성화)
+       ═══════════════════════════════════════════════ -->
+  <div id="status-confirm-modal" class="modal-backdrop" style="display: none;" onclick="closeStatusConfirm(event)">
+    <div class="modal" style="max-width: 420px;" role="dialog" aria-modal="true" aria-labelledby="status-confirm-title" aria-describedby="status-confirm-desc" onclick="event.stopPropagation()">
+      <div class="modal__header">
+        <span class="modal__title" id="status-confirm-title">계정 비활성화</span>
+      </div>
+      <div class="modal__body" id="status-confirm-desc">계정을 비활성화할까요?</div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary btn--sm" onclick="closeStatusConfirm()">취소</button>
+        <button class="btn btn--danger btn--sm" id="status-confirm-ok" onclick="closeStatusConfirm()">비활성화</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       ConfirmModal (스펙 비활성/삭제 확인 — A)
        ═══════════════════════════════════════════════ -->
   <div id="confirm-modal" class="modal-backdrop" style="display: none;" onclick="closeConfirm(event)">
     <div class="modal" style="max-width: 420px;" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-desc" onclick="event.stopPropagation()">
@@ -440,8 +575,74 @@
       document.querySelectorAll('.case-switcher__btn').forEach(b => b.classList.remove('active'));
       document.getElementById('case-' + caseId).classList.add('active');
       document.querySelectorAll('.case-switcher__btn').forEach(b => {
-        if (b.getAttribute('onclick').includes("'" + caseId + "'")) b.classList.add('active');
+        if (b.getAttribute('onclick').includes("showCase('" + caseId + "')")) b.classList.add('active');
       });
+    }
+
+    // ─── B: 사용자 관리 모달들 (디자인 명세 — 실제 동작은 FE 구현) ───
+    // 모달류는 사용자 목록 화면(Case 3) 위에 오버레이. 먼저 목록을 띄운 뒤 모달 오픈.
+    function ensureUsersScreen() {
+      if (!document.getElementById('case-users').classList.contains('active')) {
+        showCase('users');
+      }
+    }
+
+    // Case 4: 계정 생성 모달
+    function openUserCreate() {
+      ensureUsersScreen();
+      document.getElementById('user-create-modal').style.display = 'flex';
+    }
+    function closeUserCreate(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('user-create-modal').style.display = 'none';
+    }
+
+    // Case 5: 역할 변경 ConfirmModal (promote=승격 / demote=강등)
+    function openRoleConfirm(type, username) {
+      ensureUsersScreen();
+      const desc = document.getElementById('role-confirm-desc');
+      const title = document.getElementById('role-confirm-title');
+      if (type === 'promote') {
+        title.textContent = '관리자로 승격';
+        desc.innerHTML = "<strong>'" + username + "'</strong>을(를) 관리자로 승격할까요? 변경은 다음 요청부터 반영됩니다.";
+      } else {
+        title.textContent = '사용자로 강등';
+        desc.innerHTML = "<strong>'" + username + "'</strong>를 일반 사용자로 강등할까요? 관리자 권한을 잃습니다. 변경은 다음 요청부터 반영됩니다.";
+      }
+      document.getElementById('role-confirm-modal').style.display = 'flex';
+    }
+    function closeRoleConfirm(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('role-confirm-modal').style.display = 'none';
+    }
+
+    // Case 6: 비밀번호 변경 모달
+    function openPasswordModal(username) {
+      ensureUsersScreen();
+      document.getElementById('password-modal-title').textContent = '비밀번호 변경 — ' + username;
+      document.getElementById('reset-password').value = '';
+      document.getElementById('password-modal').style.display = 'flex';
+    }
+    function closePasswordModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('password-modal').style.display = 'none';
+    }
+
+    // Case 7: 상태 변경 ConfirmModal (비활성화만 확인, 활성화는 즉시)
+    function openStatusConfirm(type, username) {
+      ensureUsersScreen();
+      const desc = document.getElementById('status-confirm-desc');
+      desc.innerHTML = "<strong>'" + username + "'</strong> 계정을 비활성화할까요? 로그인이 차단되며, 진행 중인 세션은 다음 요청에서 만료됩니다.";
+      document.getElementById('status-confirm-modal').style.display = 'flex';
+    }
+    function closeStatusConfirm(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('status-confirm-modal').style.display = 'none';
+    }
+
+    // 활성화는 복귀 성격이라 확인 없이 즉시 처리
+    function reactivateUser(username) {
+      console.log('reactivate user:', username);
     }
 
     // ConfirmModal: 비활성/삭제만 확인 (활성화는 즉시)
