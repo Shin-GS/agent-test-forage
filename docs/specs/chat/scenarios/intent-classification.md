@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-19
+last-updated: 2026-09-20
 ---
 
 # Tool Use 호출 구조
@@ -89,7 +89,7 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
   "name": "select_service",
   "description": "어느 서비스에서 진행할지 선택을 요청합니다. 서비스가 미지정이거나 다른 서비스가 적합할 때 사용.",
   "parameters": {
-    "suggestedServices": { "type": "array", "items": { "type": "string" }, "description": "추천 서비스 목록 (최대 3개). 유추 불가 시 빈 배열." }
+    "apiSpecIds": { "type": "array", "items": { "type": "integer" }, "description": "추천 서비스(스펙) ID 배열 (최대 3개). 유추 불가 시 빈 배열." }
   }
 }
 ```
@@ -178,7 +178,7 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 |------|---------|------------|
 | execute_recipe | 없음 | FE가 recipeId로 레시피 정보 조회 → 고정 템플릿 |
 | propose_plan | 없음 | FE가 recipeIds로 정보 조회 → 고정 템플릿 |
-| select_service | 없음 | FE가 suggestedServices로 고정 템플릿 |
+| select_service | 없음 | FE가 apiSpecIds로 서비스 정보 조회 → 고정 템플릿 |
 | show_candidates | 없음 | FE가 candidates로 고정 템플릿 |
 | no_match | 없음 | FE 고정 문구 ("해당 레시피가 없습니다...") |
 | clarify | ✅ AI 생성 | 맥락에 맞는 재질문 필요 |

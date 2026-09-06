@@ -2,9 +2,8 @@
 // 레시피명 / 대상 서비스(스펙 드롭다운) / 설명 / 태그(칩 입력) / 공개범위(라디오).
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { specsApi } from "../../api";
 import type { RecipeFormState } from "./recipeForm";
+import { useServiceOptions } from "./useServiceOptions";
 
 interface MetaSectionProps {
   form: RecipeFormState;
@@ -15,7 +14,8 @@ interface MetaSectionProps {
 
 export function MetaSection({ form, onChange, errors = {} }: MetaSectionProps) {
   const [tagInput, setTagInput] = useState("");
-  const { data: specs } = useQuery({ queryKey: ["specs"], queryFn: () => specsApi.list() });
+  // ACTIVE 스펙 목록 + 현재 참조가 비활성/목록밖이면 보존 옵션 추가 (recipe-editor.md 정책)
+  const { options: serviceOptions, deletedReference } = useServiceOptions(form.apiSpecId);
 
   function addTag() {
     const value = tagInput.trim();
@@ -63,12 +63,17 @@ export function MetaSection({ form, onChange, errors = {} }: MetaSectionProps) {
             onChange={(e) => onChange({ apiSpecId: e.target.value === "" ? null : Number(e.target.value) })}
           >
             <option value="">서비스 선택...</option>
-            {(specs ?? []).map((spec) => (
-              <option key={spec.id} value={spec.id}>
-                {spec.name}
+            {serviceOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
               </option>
             ))}
           </select>
+          {deletedReference && (
+            <span className="form-error">
+              참조 서비스를 찾을 수 없음(삭제됨). 서비스를 다시 선택해주세요.
+            </span>
+          )}
           {errors.apiSpecId && <span className="form-error">서비스를 선택해주세요</span>}
         </div>
 

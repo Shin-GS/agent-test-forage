@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-12
+last-updated: 2026-09-20
 ref: docs/specs/recipe/versioning.md, docs/specs/common/auth.md, docs/specs/recipe/authoring.md
 ---
 
@@ -91,6 +91,17 @@ ref: docs/specs/recipe/versioning.md, docs/specs/common/auth.md, docs/specs/reci
 ```
 
 상세 form 구조는 [레시피 작성 UI/UX](../recipe/authoring.md) 참조.
+
+### 대상 서비스 선택 (비활성 스펙 참조 보존)
+
+메타의 대상 서비스와 API 스텝의 서비스 드롭다운은 기본적으로 **ACTIVE 스펙 목록**(`GET /specs`)만 노출한다. 그런데 레시피가 이미 참조 중인 스펙이 나중에 관리자에 의해 **비활성(INACTIVE)** 되면, 그 스펙은 ACTIVE 목록에 없어 드롭다운에서 사라지고 **현재 참조 값이 유실될 위험**이 있다(저장 시 apiSpecId가 빈 값으로 덮임).
+
+이를 막기 위해:
+
+- 편집 화면 진입 시 현재 참조 중인 `apiSpecId`가 ACTIVE 목록에 없으면, **단건 조회(`GET /specs/{id}`)로 그 스펙 정보를 얻어 드롭다운에 옵션으로 추가**한다. 단건 조회는 INACTIVE 스펙도 반환한다(삭제만 404 — [SpecQueryService.detail]).
+- 이 옵션은 **"{서비스명} (비활성)"** 으로 표기해 사용자가 상태를 인지하게 한다. 현재 값은 보존되며, 사용자가 원하면 ACTIVE 스펙으로 바꿀 수 있다(강제하지 않음).
+- 참조 스펙이 **삭제(soft delete)** 되어 단건 조회가 404면, 그 옵션은 복원할 수 없다. "참조 서비스를 찾을 수 없음(삭제됨)" 안내 + 서비스 재선택을 유도한다.
+- 새 레시피 작성이나 서비스 신규 선택 시에는 ACTIVE 목록만 노출한다(비활성 스펙을 새로 선택하게 하지 않음). 비활성 옵션은 **기존 참조 보존 목적에 한정**한다.
 
 ### 읽기 전용 모드 (공통 레시피 + 일반 사용자)
 

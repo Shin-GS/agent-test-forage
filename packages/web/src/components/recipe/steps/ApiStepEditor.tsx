@@ -19,6 +19,7 @@ import type {
 import { DataExplorer } from "../DataExplorer";
 import { FieldMappingTable } from "../FieldMappingTable";
 import { newExtract, newFieldMapping, type StepVariableGroup } from "../recipeForm";
+import { useServiceOptions } from "../useServiceOptions";
 
 /** 참조 문자열(userInput.x / stepN.x)로 매핑 source 추론 */
 function sourceForReference(ref: string): MappingSourceType {
@@ -48,13 +49,15 @@ export function ApiStepEditor({
   priorSteps,
   mappingErrorIndexes,
 }: ApiStepEditorProps) {
-  // 스펙 상세 (엔드포인트 목록) — apiSpecId 있을 때만
+  // 스펙 상세 (엔드포인트 목록) — apiSpecId 있을 때만.
+  // queryKey ["spec", id] 는 useServiceOptions 의 단건 조회와 캐시를 공유한다(중복 요청 없음).
   const { data: spec } = useQuery({
     queryKey: ["spec", step.apiSpecId],
     queryFn: () => specsApi.getSpec(step.apiSpecId as number),
     enabled: step.apiSpecId != null,
   });
-  const { data: specs } = useQuery({ queryKey: ["specs"], queryFn: () => specsApi.list() });
+  // ACTIVE 스펙 목록 + 현재 참조가 비활성/목록밖이면 보존 옵션 추가 (recipe-editor.md 정책)
+  const { options: serviceOptions, deletedReference } = useServiceOptions(step.apiSpecId ?? null);
 
   const selectedEndpoint = spec?.endpoints.find((e) => e.id === step.endpointId) ?? null;
 
@@ -114,12 +117,17 @@ export function ApiStepEditor({
               }
             >
               <option value="">서비스 선택...</option>
-              {(specs ?? []).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+              {serviceOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
                 </option>
               ))}
             </select>
+            {deletedReference && (
+              <span className="form-hint" style={{ color: "var(--color-error)" }}>
+                참조 서비스를 찾을 수 없음(삭제됨). 서비스를 다시 선택해주세요.
+              </span>
+            )}
           </div>
         </div>
 
