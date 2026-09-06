@@ -7,13 +7,14 @@
 // - Enter 전송 / Shift+Enter 줄바꿈
 // - 구조: .chat-input-wrapper > textarea.chat-input + button.btn.btn--primary
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useOverlayDismiss } from "../../hooks/useOverlayDismiss";
 import type { ConversationRuntimeStatus } from "../../store/types";
 
 interface Props {
   status: ConversationRuntimeStatus;
   onSend: (content: string) => void;
-  /** executing 상태에서 실행 중지 요청 */
+  /** executing 상태에서 실행 중지 요청 (확인 모달 확정 시 호출) */
   onStop?: () => void;
 }
 
@@ -27,6 +28,40 @@ const STATUS_TEXT: Record<ConversationRuntimeStatus, { locked: boolean; hint: st
 
 export function ChatInput({ status, onSend, onStop }: Props) {
   const [value, setValue] = useState("");
+  // 중지 확인 모달 (실행 중 [중지] 클릭 시 노출 — 완료분 되돌릴 수 없음 경고, chat.cases.md Case 20)
+  const [confirmStop, setConfirmStop] = useState(false);
+  const { containerRef, triggerRef } = useOverlayDismiss<HTMLDivElement, HTMLButtonElement>(
+    confirmStop,
+    () => setConfirmStop(false)
+  );
+
+  // 중지 확인 모달 Tab 포커스 트랩(순환 가둠). ESC/바깥클릭/열릴 때 포커스 이동/닫힐 때 복원은
+  // useOverlayDismiss 가 담당하므로 여기서는 Tab 순환만 추가한다(UserCreateModal 트랩 패턴).
+  useEffect(() => {
+    if (!confirmStop) return;
+    const handleTabKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const root = containerRef.current;
+      if (!root) return;
+      const focusables = root.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleTabKey);
+    return () => document.removeEventListener("keydown", handleTabKey);
+  }, [confirmStop, containerRef]);
+
   const meta = STATUS_TEXT[status];
   const canSend = !meta.locked && value.trim().length > 0;
   const executing = status === "executing";
@@ -35,6 +70,11 @@ export function ChatInput({ status, onSend, onStop }: Props) {
     if (!canSend) return;
     onSend(value.trim());
     setValue("");
+  };
+
+  const confirmStopAndClose = () => {
+    setConfirmStop(false);
+    onStop?.();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -60,10 +100,11 @@ export function ChatInput({ status, onSend, onStop }: Props) {
         />
         {executing ? (
           <button
+            ref={triggerRef}
             type="button"
             className="btn btn--danger"
-            onClick={() => onStop?.()}
-            aria-label="실행 중지"
+            onClick={() => setConfirmStop(true)}
+            aria-label="실행 중지 (확인 모달 노출)"
           >
             중지
           </button>
@@ -73,6 +114,48 @@ export function ChatInput({ status, onSend, onStop }: Props) {
           </button>
         )}
       </div>
+
+      {/* 중지 확인 모달: 완료분 되돌릴 수 없음 경고 (chat.cases.md Case 20 / plan.md 사용자 중단) */}
+      {confirmStop && (
+        <div className="modal-backdrop">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stop-confirm-title"
+            ref={containerRef}
+            style={{ maxWidth: 380 }}
+          >
+            <div className="modal__header">
+              <h3 className="modal__title" id="stop-confirm-title">
+                실행 중지
+              </h3>
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon"
+                onClick={() => setConfirmStop(false)}
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal__body">
+              <p>이미 완료된 레시피는 되돌릴 수 없습니다. 중단하시겠습니까?</p>
+              <p style={{ marginTop: "var(--space-2)", color: "var(--color-text-tertiary)", fontSize: "var(--font-size-xs)" }}>
+                이미 생성된 데이터는 유지됩니다.
+              </p>
+            </div>
+            <div className="modal__footer">
+              <button type="button" className="btn btn--secondary" onClick={() => setConfirmStop(false)}>
+                계속 실행
+              </button>
+              <button type="button" className="btn btn--danger" onClick={confirmStopAndClose}>
+                중단
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

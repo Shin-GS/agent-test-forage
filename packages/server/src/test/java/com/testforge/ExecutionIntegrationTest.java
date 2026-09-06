@@ -141,50 +141,39 @@ class ExecutionIntegrationTest {
                 .get(0).getRecipeSnapshotJson()).contains("회원가입");
     }
 
-    // ── 종료: idle 전이 + 상태 확정 + 락 해제 + 멱등 ──
+    // ── 자동완료: 마지막 레시피 마지막 스텝 reportStep(SUCCESS) → idle 전이 + 락 해제 + 상태 확정 ──
+    //    (외부 complete API 폐지: 완료 진입점은 reportStep 자동완료로 단일화됨)
     @Test
-    void complete_transitionsToIdle_andReleasesLock_idempotent() throws Exception {
+    void reportLastStep_autoCompletes_transitionsToIdle_andReleasesLock() throws Exception {
         Long specId = 10L;
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
 
-        String startResponse = mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
+                .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        // 종료 보고 (SUCCESS)
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"SUCCESS\",\"resultSummary\":\"완료\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.resultSummary").value("완료"))
-                .andExpect(jsonPath("$.finishedAt").isNotEmpty());
+        // 2스텝 레시피의 모든 스텝을 순서대로 SUCCESS 보고 → 마지막 스텝에서 자동완료
+        reportAllStepsSuccess(executionId);
 
-        // idle 전이 + 락 해제
+        // idle 전이 + 락 해제 + 실행 SUCCESS 확정
         assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
                 .isEqualTo(ConversationStatus.IDLE);
         assertThat(conversationLock.isLocked(conversationId)).isFalse();
-        assertThat(executionRepository.findById(executionId).orElseThrow().getStatus())
-                .isEqualTo(ExecutionStatus.SUCCESS);
+        Execution execution = executionRepository.findById(executionId).orElseThrow();
+        assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.SUCCESS);
+        assertThat(execution.getFinishedAt()).isNotNull();
         // 계층 정합: 하위 레시피도 SUCCESS로 종료됨
         assertThat(executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId)
                 .get(0).getStatus()).isEqualTo(ExecutionRecipeStatus.SUCCESS);
-
-        // 멱등: 이미 종료된 실행 재호출 → 200 no-op, 상태 유지
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"FAILED\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status.code").value("SUCCESS"));
     }
 
-    // ── 종료: RUNNING을 최종 상태로 보고 → 400 ──
+    // ── 자동완료 멱등: 이미 terminal인 실행에 추가 reportStep → 400 "already terminal" ──
+    //    (완료 진입점 단일화 + reportStep 종료검증 재사용으로 이중완료를 구조적으로 방지)
     @Test
-    void complete_withRunningStatus_returns400() throws Exception {
+    void reportStep_afterAutoComplete_returns400_alreadyTerminal() throws Exception {
         Long specId = 10L;
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
@@ -193,17 +182,29 @@ class ExecutionIntegrationTest {
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
+        List<Long> stepIds = stepIdsOf(executionId);
 
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
+        // 모든 스텝 성공 → 자동완료
+        for (Long sid : stepIds) {
+            mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, sid).with(testAuth.as(USER_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"SUCCESS\"}"))
+                    .andExpect(status().isOk());
+        }
+        assertThat(executionRepository.findById(executionId).orElseThrow().getStatus())
+                .isEqualTo(ExecutionStatus.SUCCESS);
+
+        // terminal 실행에 추가 reportStep → 400 (기존 reportStep 종료검증 재사용)
+        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepIds.get(0)).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"RUNNING\"}"))
+                        .content("{\"status\":\"SUCCESS\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
 
-    // ── 종료: 중단 상태(STOPPED/CANCELLED)는 complete로 보고 불가 → 400 (stop/cancel API 전용) ──
+    // ── 중간 스텝 실패: 전체 중단 + 실행 PARTIAL (전이 안 함) ──
     @Test
-    void complete_withInterruptStatus_returns400() throws Exception {
+    void reportStep_failure_stopsWholeExecutionAsPartial() throws Exception {
         Long specId = 10L;
         Long recipeId = newRecipe(specId);
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
@@ -212,15 +213,21 @@ class ExecutionIntegrationTest {
                         .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
+        List<Long> stepIds = stepIdsOf(executionId);
 
-        // STOPPED, CANCELLED 모두 complete로는 거부된다 (반드시 stop/cancel API 경유)
-        for (String interrupt : new String[]{"STOPPED", "CANCELLED"}) {
-            mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"status\":\"" + interrupt + "\"}"))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
-        }
+        // 첫 스텝을 FAILED로 보고 → 전체 중단, PARTIAL 종료
+        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepIds.get(0)).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"FAILED\",\"errorMessage\":\"boom\"}"))
+                .andExpect(status().isOk());
+
+        Execution execution = executionRepository.findById(executionId).orElseThrow();
+        assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.PARTIAL);
+        assertThat(execution.getFinishedAt()).isNotNull();
+        // 대화방 idle + 락 해제 (완료 진입점 공유)
+        assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.IDLE);
+        assertThat(conversationLock.isLocked(conversationId)).isFalse();
     }
 
     // ── 락 경합: 이미 처리 중이면 409 ──
@@ -267,11 +274,8 @@ class ExecutionIntegrationTest {
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
-        // 실행 종료 후 대화방 삭제 (실행 중 삭제는 다음 조각의 중지 흐름)
-        mockMvc.perform(post("/api/v1/executions/{id}/complete", executionId).with(testAuth.as(USER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"SUCCESS\"}"))
-                .andExpect(status().isOk());
+        // 실행 종료 후 대화방 삭제. 종료는 모든 스텝 SUCCESS 보고로 자동완료(외부 complete 폐지)
+        reportAllStepsSuccess(executionId);
 
         mockMvc.perform(delete("/api/v1/conversations/{id}", conversationId).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNoContent());
@@ -305,6 +309,29 @@ class ExecutionIntegrationTest {
         mockMvc.perform(get("/api/v1/executions/{id}", 999999L).with(testAuth.as(USER_ID)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("EXECUTION_NOT_FOUND"));
+    }
+
+    /** 실행에 속한 (현재 RUNNING 레시피의) 스텝 ID 목록을 순서대로 반환 */
+    private List<Long> stepIdsOf(Long executionId) {
+        Long recipeRowId = executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId)
+                .stream()
+                .filter(r -> r.getStatus() == ExecutionRecipeStatus.RUNNING)
+                .findFirst()
+                .orElseThrow()
+                .getId();
+        return executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(recipeRowId).stream()
+                .map(com.testforge.entity.execution.ExecutionStep::getId)
+                .toList();
+    }
+
+    /** 현재 RUNNING 레시피의 모든 스텝을 순서대로 SUCCESS 보고 (마지막 스텝에서 자동완료 유도) */
+    private void reportAllStepsSuccess(Long executionId) throws Exception {
+        for (Long stepId : stepIdsOf(executionId)) {
+            mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, stepId).with(testAuth.as(USER_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"SUCCESS\"}"))
+                    .andExpect(status().isOk());
+        }
     }
 
     /** 실행을 시작하고 첫 스텝 ID를 돌려주는 헬퍼 */

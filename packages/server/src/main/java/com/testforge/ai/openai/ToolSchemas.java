@@ -76,8 +76,10 @@ public final class ToolSchemas {
 
     private static OpenAiDtos.Tool proposePlan() {
         return fn(ToolName.PROPOSE_PLAN,
-                "여러 레시피를 순서대로 실행하는 복합 작업(플랜)을 제안한다.",
-                object(Map.of("recipeIds", integerArrayProp("순차 실행할 레시피 ID 배열(실행 순서대로)")),
+                "여러 레시피를 순서대로 실행하는 복합 작업(플랜)을 제안한다. 레시피가 1개뿐이면 execute_recipe를 쓴다.",
+                object(Map.of(
+                        "recipeIds", integerArrayProp("순차 실행할 레시피 ID 배열(실행 순서대로, 2개 이상)"),
+                        "rationale", stringProp("이 순서로 조합한 근거를 한국어 한 줄로. 예: '가입 후 로그인해야 하므로 순서대로 실행합니다.'")),
                         List.of("recipeIds")));
     }
 

@@ -2,11 +2,11 @@ package com.testforge.controller.execution;
 
 import com.testforge.dto.common.CursorPage;
 import com.testforge.dto.execution.ActionPickerRespondRequest;
-import com.testforge.dto.execution.ExecutionCompleteRequest;
 import com.testforge.dto.execution.ExecutionResponse;
 import com.testforge.dto.execution.ExecutionStartRequest;
 import com.testforge.dto.execution.ExecutionStepView;
 import com.testforge.dto.execution.ExecutionSummaryView;
+import com.testforge.dto.execution.PlanStartRequest;
 import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.entity.execution.enums.ExecutionStatus;
 import com.testforge.security.CurrentUser;
@@ -60,13 +60,24 @@ public class ExecutionController {
     }
 
     /**
-     * 실행 종료 보고. 최종 상태(SUCCESS/PARTIAL/FAILED/STOPPED)를 확정하고 대화방을 idle로 되돌린다.
-     * 이미 종료된 실행이면 멱등 no-op(200). 실행 없으면 404, RUNNING을 최종 상태로 보고하면 400.
+     * 플랜 실행 시작 (레시피 여러 개 순차 실행). plan 카드의 [실행]이 트리거한다. recipeIds 순서가
+     * 실행 순서이며, 첫 레시피만 RUNNING으로 시작하고 각 레시피 완료 시 자동으로 다음 레시피로 전이한다.
+     * recipeIds가 1개면 단일 실행과 동일하게 수렴한다(TYPE 표시만 SINGLE).
+     * 이미 처리 중이면 409, 레시피/대화방 없으면 404, recipeIds가 비면 400.
+     *
+     * <p>실행 완료 보고(complete)용 외부 엔드포인트는 없다. 마지막 레시피의 마지막 스텝을
+     * reportStep(SUCCESS/SKIPPED)으로 보고하면 서버가 자동으로 실행을 완료한다(완료 진입점 단일화).
      */
-    @PostMapping("/executions/{executionId}/complete")
-    public ExecutionResponse complete(@PathVariable Long executionId,
-                                      @RequestBody ExecutionCompleteRequest request) {
-        return executionService.complete(executionId, CurrentUser.id(), request);
+    @PostMapping("/conversations/{conversationId}/plan-executions")
+    public ResponseEntity<ExecutionResponse> startPlan(@PathVariable Long conversationId,
+                                                       @RequestBody PlanStartRequest request) {
+        // userId는 세션에서 도출 (클라이언트 값 무시)
+        Long requesterId = CurrentUser.id();
+        PlanStartRequest secured = new PlanStartRequest(
+                requesterId, request.recipeIds(), request.mode(),
+                request.messageId(), request.initialContext());
+        ExecutionResponse response = executionService.startPlan(conversationId, requesterId, secured);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**

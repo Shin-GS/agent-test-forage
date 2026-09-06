@@ -9,6 +9,7 @@ import { useState } from "react";
 import type { ExecutionResponse } from "../../api/types";
 import { runExecution } from "../../services/executionRunner";
 import type { RunExecutionOptions } from "../../services/executionRunner";
+import { applyRunResult } from "../../services/executionResult";
 import { useChatStore } from "../../store/chatStore";
 
 export function AuthRequiredCard() {
@@ -43,8 +44,10 @@ export function AuthRequiredCard() {
         });
         setError("아직 로그인되지 않았습니다. 로그인 후 다시 시도해주세요.");
       } else {
-        // 재개 성공/종료 — 인증 대기 해제(진행/완료는 SSE 로 갱신됨)
+        // 재개 성공/종료 — 인증 대기 해제(진행/완료는 SSE 로 갱신됨).
         setAuthPause(null);
+        // 플랜에서 다음 레시피 pre-run 입력이 필요할 수 있다 → 공통 후처리(INPUT_REQUIRED면 액션 피커).
+        await applyRunResult(execution, result, authPause.mode);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "계속 진행에 실패했습니다");

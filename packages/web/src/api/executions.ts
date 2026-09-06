@@ -11,6 +11,15 @@ export interface StartExecutionPayload {
   initialContext?: Record<string, unknown>;
 }
 
+export interface StartPlanPayload {
+  /** 실행할 레시피 ID 순서 (= 실행 순서). recipeIds 1개면 BE 가 단일(SINGLE)로 수렴한다 */
+  recipeIds: number[];
+  /** 실행 모드 코드 (플랜은 항상 AUTO). 미지정 시 BE 기본값 */
+  mode?: string;
+  /** 첫 레시피에 시드할 초기값 (AI 추출값 등). 없으면 생략 */
+  initialContext?: Record<string, unknown>;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export interface ReportStepPayload {
   /** 스텝 결과 상태 코드 */
@@ -23,18 +32,28 @@ export interface ReportStepPayload {
   extractedValues?: Record<string, any>;
 }
 
-export interface CompleteExecutionPayload {
-  /** 최종 상태 코드 */
-  status: string;
-  resultSummary?: string;
-}
-
-/** 대화방에서 실행 시작 */
+/** 대화방에서 실행 시작 (단일 레시피) */
 export function startExecution(
   conversationId: number,
   payload: StartExecutionPayload
 ): Promise<ExecutionResponse> {
   return request<ExecutionResponse>(`/conversations/${conversationId}/executions`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+/**
+ * 플랜 실행 시작 (레시피 여러 개 순차 실행). plan 카드의 [자동 실행]이 트리거한다.
+ * recipeIds 순서가 실행 순서이며, BE 가 첫 레시피만 RUNNING 으로 시작하고 각 레시피 완료 시
+ * 자동으로 다음 레시피로 전이한다(FE 는 reportStep 만 보고, complete 호출 없음).
+ * recipeIds 가 1개면 단일 실행과 동일하게 수렴한다(TYPE 표시만 SINGLE).
+ */
+export function startPlan(
+  conversationId: number,
+  payload: StartPlanPayload
+): Promise<ExecutionResponse> {
+  return request<ExecutionResponse>(`/conversations/${conversationId}/plan-executions`, {
     method: "POST",
     body: payload,
   });
@@ -52,16 +71,9 @@ export function reportStep(
   });
 }
 
-/** 실행 완료 처리 */
-export function completeExecution(
-  executionId: number,
-  payload: CompleteExecutionPayload
-): Promise<ExecutionResponse> {
-  return request<ExecutionResponse>(`/executions/${executionId}/complete`, {
-    method: "POST",
-    body: payload,
-  });
-}
+// 실행 완료(complete)용 외부 엔드포인트는 제거됨(BE 계약 변경).
+// 마지막 레시피의 마지막 스텝을 reportStep(SUCCESS/SKIPPED)으로 보고하면 BE 가 자동 완료한다.
+// (FE 러너는 reportStep 만 호출하고 complete 를 부르지 않는다 — 부르면 404)
 
 /** 실행 단건 조회 */
 export function getExecution(executionId: number): Promise<ExecutionResponse> {

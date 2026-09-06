@@ -22,6 +22,8 @@ public record IntentResult(
         Long recipeId,
         // propose_plan: 순차 실행 레시피 ID 배열 (그 외 null)
         List<Long> recipeIds,
+        // propose_plan: 플랜 제안 근거 한 줄 (그 외 null). plan 카드에 표시된다
+        String rationale,
         // select_service: 추천 서비스 (그 외 빈 리스트)
         List<ServiceOption> suggestedServices,
         // show_candidates: 후보 레시피 (그 외 빈 리스트)
@@ -32,36 +34,36 @@ public record IntentResult(
     /** execute_recipe: 단일 레시피 실행 (발화에서 추출한 초기값 시드 포함) */
     public static IntentResult executeRecipe(Long recipeId, Map<String, Object> extractedValues) {
         Map<String, Object> values = extractedValues == null ? Map.of() : Map.copyOf(extractedValues);
-        return new IntentResult(ToolName.EXECUTE_RECIPE, null, recipeId, null, List.of(), List.of(), values);
+        return new IntentResult(ToolName.EXECUTE_RECIPE, null, recipeId, null, null, List.of(), List.of(), values);
     }
 
-    /** propose_plan: 여러 레시피 순차 실행 제안 */
-    public static IntentResult proposePlan(List<Long> recipeIds) {
-        return new IntentResult(ToolName.PROPOSE_PLAN, null, null, List.copyOf(recipeIds), List.of(), List.of(), Map.of());
+    /** propose_plan: 여러 레시피 순차 실행 제안 ({@code rationale}은 제안 근거, null 허용) */
+    public static IntentResult proposePlan(List<Long> recipeIds, String rationale) {
+        return new IntentResult(ToolName.PROPOSE_PLAN, null, null, List.copyOf(recipeIds), rationale, List.of(), List.of(), Map.of());
     }
 
     /** select_service: 서비스 선택 요청 (유추 불가 시 빈 리스트 전달) */
     public static IntentResult selectService(List<ServiceOption> suggestedServices) {
-        return new IntentResult(ToolName.SELECT_SERVICE, null, null, null, List.copyOf(suggestedServices), List.of(), Map.of());
+        return new IntentResult(ToolName.SELECT_SERVICE, null, null, null, null, List.copyOf(suggestedServices), List.of(), Map.of());
     }
 
     /** show_candidates: 후보 레시피 목록 제시 */
     public static IntentResult showCandidates(List<RecipeCandidate> candidates) {
-        return new IntentResult(ToolName.SHOW_CANDIDATES, null, null, null, List.of(), List.copyOf(candidates), Map.of());
+        return new IntentResult(ToolName.SHOW_CANDIDATES, null, null, null, null, List.of(), List.copyOf(candidates), Map.of());
     }
 
     /** clarify: 모호하여 재질문 (AI 생성 메시지) */
     public static IntentResult clarify(String message) {
-        return new IntentResult(ToolName.CLARIFY, message, null, null, List.of(), List.of(), Map.of());
+        return new IntentResult(ToolName.CLARIFY, message, null, null, null, List.of(), List.of(), Map.of());
     }
 
     /** no_match: 매칭 레시피 없음 (message는 FE 고정 문구이므로 없음) */
     public static IntentResult noMatch() {
-        return new IntentResult(ToolName.NO_MATCH, null, null, null, List.of(), List.of(), Map.of());
+        return new IntentResult(ToolName.NO_MATCH, null, null, null, null, List.of(), List.of(), Map.of());
     }
 
     /** chat: 일반 대화 응답 (AI 생성 메시지) */
     public static IntentResult chat(String message) {
-        return new IntentResult(ToolName.CHAT, message, null, null, List.of(), List.of(), Map.of());
+        return new IntentResult(ToolName.CHAT, message, null, null, null, List.of(), List.of(), Map.of());
     }
 }

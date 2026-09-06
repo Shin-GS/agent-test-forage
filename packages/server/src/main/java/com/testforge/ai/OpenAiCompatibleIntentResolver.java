@@ -207,7 +207,11 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
                 if (ids.isEmpty()) {
                     yield IntentResult.clarify("어떤 작업들을 순서대로 진행할지 알려주시겠어요?");
                 }
-                yield IntentResult.proposePlan(ids);
+                // 레시피가 1개면 플랜이 아니라 단일 실행이다 → execute_recipe로 폴백(카드/실행 일관).
+                if (ids.size() == 1) {
+                    yield IntentResult.executeRecipe(ids.get(0), Map.of());
+                }
+                yield IntentResult.proposePlan(ids, asString(args.get("rationale"), null));
             }
             case SELECT_SERVICE -> {
                 List<ServiceOption> suggested = mapServices(context, asLongList(args.get("apiSpecIds")));

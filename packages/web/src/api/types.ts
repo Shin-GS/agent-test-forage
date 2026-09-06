@@ -269,8 +269,32 @@ export interface ExecutionModeCard {
   extractedValues?: Record<string, unknown>;
 }
 
+/** plan 카드 레시피별 값 미리보기 항목 (기본값 📌만, source="default") */
+export interface PlanRecipePreview {
+  key: string;
+  label: string;
+  value: unknown;
+  source: string; // "default"
+}
+
+/** plan 카드 레시피 항목 (BE ChatProcessor.planCard 출력). 삭제 레시피는 recipeId만 채워짐 */
+export interface PlanRecipeItem {
+  recipeId: number | null;
+  recipeName?: string;
+  /** 서비스 표시명 (serviceDescription > name). 미지정이면 없음 */
+  serviceName?: string | null;
+  /** 값 미리보기 (기본값만). 없으면 빈 배열/미포함 */
+  inputPreview?: PlanRecipePreview[];
+}
+
 export interface PlanCard {
   cardType: "plan";
+  /** 실행할 레시피 ID 순서 (plan-executions body 로 전달) */
+  recipeIds: number[];
+  /** 레시피별 경량 정보 (표시용) */
+  recipes: PlanRecipeItem[];
+  /** 제안 근거 한 줄 (💡). 없을 수 있음 */
+  rationale?: string;
   [key: string]: any;
 }
 
@@ -295,7 +319,7 @@ export type CardMeta =
 // content 는 표시용 요약(파생물), 아래 payload 가 진실. kind 로 판별.
 // ---------------------------------------------------------------------------
 
-/** 진행 스텝 한 줄 (PROGRESS payload) */
+/** 진행 스텝 한 줄 (PROGRESS payload recipes[].steps[]) */
 export interface ProgressStepPayload {
   index: number;
   name: string | null;
@@ -304,34 +328,67 @@ export interface ProgressStepPayload {
   summary: string | null;
 }
 
-/** PROGRESS 메시지 payload */
+/** 진행 블록 레시피 그룹 (PROGRESS payload recipes[]) */
+export interface ProgressRecipePayload {
+  /** 실행 순서 (0-based) */
+  sequence: number;
+  recipeName: string | null;
+  /** pending | running | success | skipped | failed | stopped | cancelled */
+  status: string;
+  /** 완료 레시피 접힘 요약 한 줄 (없으면 null) */
+  summary: string | null;
+  /** 현재 running 레시피만 스텝이 채워진다. 대기 레시피는 빈 배열 */
+  steps: ProgressStepPayload[];
+}
+
+/**
+ * PROGRESS 메시지 payload (schemaVersion 2, 레시피 그룹 구조).
+ * 단일 실행(N=1)도 recipes 1개로 통일된다.
+ */
 export interface ProgressPayload {
   kind: "progress";
   schemaVersion: number;
   executionId: number;
-  recipeName: string | null;
+  title: string | null;
   /** running | success | partial | failed | stopped | cancelled */
-  status: string;
-  steps: ProgressStepPayload[];
+  overallStatus: string;
+  /** 레시피 단위 진행률 (k/N 레시피 표기용) */
+  recipeProgress: { current: number; total: number };
+  recipes: ProgressRecipePayload[];
 }
 
-/** RESULT 메시지 payload */
+/** 결과 블록 레시피별 항목 (RESULT payload recipes[]) */
+export interface ResultRecipePayload {
+  sequence: number;
+  recipeName: string | null;
+  /** success | partial | failed | skipped | stopped | cancelled */
+  status: string;
+  resultValues: Record<string, unknown>;
+  /**
+   * 결과키 → 표시명(사람말) 맵. label 등록된 key만 포함(선택, messaging.md).
+   * 표시 폴백: resultLabels[key]가 있으면 표시명, 없으면 원본 key 그대로.
+   */
+  resultLabels?: Record<string, string>;
+  /** 레시피별 결과 요약 한 줄 (템플릿 치환 또는 폴백) */
+  summary: string | null;
+}
+
+/**
+ * RESULT 메시지 payload (schemaVersion 2, 레시피별 구조).
+ * 단일 실행(N=1)도 recipes 1개로 통일된다.
+ */
 export interface ResultPayload {
   kind: "result";
   schemaVersion: number;
   executionId: number;
-  recipeName: string | null;
-  resultValues: Record<string, unknown>;
-  /**
-   * 결과키 → 표시명(사람말) 맵. 결과 정의(④)에 label이 등록된 key만 포함(선택, messaging.md RESULT.resultLabels).
-   * 표시 폴백: resultLabels[key]가 있으면 표시명, 없으면 원본 key 그대로. 하위호환(없으면 무시).
-   */
-  resultLabels?: Record<string, string>;
-  template?: string;
+  title: string | null;
+  /** success | partial | failed | stopped | cancelled */
+  overallStatus: string;
+  recipes: ResultRecipePayload[];
 }
 
 /** FE 가 아는 최신 payload schemaVersion. 이보다 큰 버전이면 content 폴백 */
-export const SUPPORTED_PAYLOAD_SCHEMA_VERSION = 1;
+export const SUPPORTED_PAYLOAD_SCHEMA_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // SSE

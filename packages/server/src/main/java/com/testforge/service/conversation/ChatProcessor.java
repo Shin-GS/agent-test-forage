@@ -278,7 +278,7 @@ public class ChatProcessor {
                     NO_MATCH_NOTICE, RecipeJsonUtil.toJsonString(Map.of("level", "info")));
             case EXECUTE_RECIPE -> AssistantMessageDraft.card(
                     executionModeCard(result.recipeId(), result.extractedValues()));
-            case PROPOSE_PLAN -> AssistantMessageDraft.card(planCard(result.recipeIds()));
+            case PROPOSE_PLAN -> AssistantMessageDraft.card(planCard(result.recipeIds(), result.rationale()));
             case SELECT_SERVICE -> AssistantMessageDraft.card(serviceSelectCard(result.suggestedServices()));
             case SHOW_CANDIDATES -> AssistantMessageDraft.card(candidatesCard(result.candidates()));
         };
@@ -376,12 +376,76 @@ public class ChatProcessor {
         return required != null && "true".equalsIgnoreCase(required.toString());
     }
 
-    /** plan 카드: 순차 실행 레시피 목록 (플랜 UI 진입) */
-    private String planCard(List<Long> recipeIds) {
+    /**
+     * plan 카드: 순차 실행 레시피 목록 (플랜 UI 진입). recipeIds 순서대로 각 레시피의 경량 정보
+     * ({@code recipeId/recipeName/serviceName})와 값 미리보기(기본값만, source={@code "default"} 📌)를 담는다.
+     * {@code rationale}(제안 근거)이 있으면 함께 실어 사용자가 "왜 이 조합인지"를 카드에서 바로 볼 수 있게 한다.
+     *
+     * <p>값 미리보기는 <b>기본값(📌)만</b> 담는다(발화 추출값 미사용) — 플랜은 여러 레시피를 조합 제안하는
+     * 단계라 발화값 매핑을 확정하지 않고, 실제 값 확정/입력은 실행 시작 후 각 레시피의 액션 피커에서 한다.
+     * 삭제된 레시피는 최소 정보(recipeId만)로 남긴다.
+     */
+    private String planCard(List<Long> recipeIds, String rationale) {
+        List<Long> ids = recipeIds == null ? List.of() : recipeIds;
+        List<Map<String, Object>> recipeItems = new ArrayList<>();
+        for (Long recipeId : ids) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("recipeId", recipeId);
+            Recipe recipe = recipeId == null ? null
+                    : recipeRepository.findByIdAndDeletedAtIsNull(recipeId).orElse(null);
+            if (recipe != null) {
+                item.put("recipeName", recipe.getName());
+                item.put("serviceName", resolveServiceName(recipe.getApiSpecId()));
+                // 값 미리보기: 기본값이 있는 변수만 (📌 default). 발화값은 담지 않는다.
+                item.put("inputPreview", buildDefaultPreview(recipe.getVariablesJson()));
+            }
+            recipeItems.add(item);
+        }
+
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("cardType", "plan");
-        meta.put("recipeIds", recipeIds == null ? List.of() : recipeIds);
+        meta.put("recipeIds", ids);
+        meta.put("recipes", recipeItems);
+        if (rationale != null && !rationale.isBlank()) {
+            meta.put("rationale", rationale);
+        }
         return RecipeJsonUtil.toJsonString(meta);
+    }
+
+    /** apiSpecId → 서비스 표시명(serviceDescription > name). 없으면 null. */
+    private String resolveServiceName(Long apiSpecId) {
+        if (apiSpecId == null) {
+            return null;
+        }
+        ApiSpec spec = apiSpecRepository.findByIdAndDeletedAtIsNull(apiSpecId).orElse(null);
+        if (spec == null) {
+            return null;
+        }
+        String description = spec.getServiceDescription();
+        return (description != null && !description.isBlank()) ? description : spec.getName();
+    }
+
+    /**
+     * plan 카드 값 미리보기: 변수 정의 중 {@code default}가 있는 것만 {@code {key,label,value,source:"default"}}로.
+     * 발화 추출값을 쓰지 않으므로(플랜 단계) 기본값(📌)만 노출한다. 기본값 없는 변수는 미리보기에서 제외한다.
+     */
+    private List<Map<String, Object>> buildDefaultPreview(String variablesJson) {
+        List<Map<String, Object>> variables = RecipeJsonUtil.parseSteps(variablesJson);
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Map<String, Object> variable : variables) {
+            String key = variableKey(variable);
+            if (key == null || !variable.containsKey("default") || variable.get("default") == null) {
+                continue;
+            }
+            Object label = variable.get("label");
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("key", key);
+            item.put("label", label == null ? key : label);
+            item.put("value", variable.get("default"));
+            item.put("source", "default");
+            items.add(item);
+        }
+        return items;
     }
 
     /** service_select 카드: 서비스 선택 버튼 (messaging.md: services:[{name,label}]) */

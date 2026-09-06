@@ -1,7 +1,10 @@
 ---
 status: confirmed
-last-updated: 2026-09-16
+last-updated: 2026-09-17
 ---
+
+<!-- 2026-09-16: 플랜 1단계 — reportStep 자동 전이/완료 계약, 단일=N=1 통일, 액션 피커 레시피별 일반화 반영 -->
+<!-- 2026-09-17: 1단계 리뷰 반영 — 단일 재개/완료 BE 자동 판단 명시, respond 불변식, usageCount 갱신 시점(RUNNING 전이), 표기 "실행 중 결정" 통일 -->
 
 # 레시피 실행 플로우
 
@@ -22,10 +25,11 @@ AI 의도 분석 → 레시피 매칭 (참조 태그 있으면 우선 참조)
 
 ### 사용 통계 갱신 (usageCount / lastUsedAt)
 
-레시피 실행은 FE 브라우저가 주도하지만, 실행 시작이 BE의 실행 시작 엔드포인트를 거치므로 **BE가 실행 시작 시점에 해당 레시피의 사용 통계를 갱신**한다.
+레시피 실행은 FE 브라우저가 주도하지만, 실행 전이가 BE 오케스트레이션을 거치므로 **BE가 각 `EXECUTION_RECIPE`를 RUNNING으로 전이(=해당 레시피 실행 시작)시키는 시점에 그 원본 레시피 기준으로 사용 통계를 갱신**한다.
 
-- `USAGE_COUNT += 1`, `LAST_USED_AT = now` ([db/recipe.md `RECIPE`](../../db/recipe.md) 컬럼).
-- 갱신 시점은 **실행 시작**(스텝 성공/완료 여부와 무관). 목록 정렬(최근 사용순/사용 많은순, [recipe-editor.md 정렬](../pages/recipe-editor.md#검색--필터--정렬))의 기준이 된다.
+- `USAGE_COUNT += 1`, `LAST_USED_AT = now` ([db/recipe.md `RECIPE`](../../db/recipe.md) 컬럼). 스냅샷이 아니라 **원본 레시피(RECIPE_ID)** 기준으로 갱신한다.
+- 갱신 시점은 **각 레시피의 RUNNING 전이**(스텝 성공/완료 여부와 무관). 플랜(N≥2)은 레시피별로 각각 갱신되고, 단일(N=1)은 그 1개만 갱신된다.
+- 목록 정렬(최근 사용순/사용 많은순, [recipe-editor.md 정렬](../pages/recipe-editor.md#검색--필터--정렬))의 기준이 된다.
 
 ## 실행 모드
 
@@ -107,14 +111,22 @@ AI: 📋 입사지원 (사람인)
               → input_waiting 해제 → executing 전파(SSE)
                     │
                     ▼
-        레시피 첫 스텝부터 순차 실행 → PROGRESS 메시지 갱신(message_update)
+        레시피 첫 스텝부터 순차 실행 → 각 스텝 reportStep → PROGRESS 갱신(message_update)
+                    │
+                    ▼
+        BE 자동 완료 판단 (FE는 complete 미호출)
+              — 남은 PENDING 스텝 없음 + 다음 EXECUTION_RECIPE 없음
                     │
                     ▼
         완료 → PROGRESS 확정(message_update) + RESULT(message_new) → session_status: idle
 ```
 
+- **실행 완료 판단은 BE 자동이다.** FE는 스텝 결과만 `reportStep`으로 보고하고 **complete를 호출하지 않는다**. 단일 실행도 **N=1 플랜의 첫(유일) 레시피**로 통일 처리되므로, 위 재개 흐름과 완료 판단은 플랜과 동일 경로다(단일=N=1 통일: [plan.md 실행 계약](plan.md#실행-계약-be-오케스트레이션--중대)).
+- **`stop`/`cancel`(사용자 중단)은 여전히 별도 API로 유지**된다(자동 완료와 병존). 사용자가 명시적으로 멈추는 경로이므로 BE 자동 완료 판단과 별개다.
 - 프로토타입은 pre-run 수집이므로 respond의 `stepIndex`는 **입력을 수집한 사용자 입력 스텝의 인덱스**를 가리킨다.
   실행 전 메타 변수 일괄 수집(USER_INPUT 스텝 없음)인 경우 `stepIndex`는 `-1`(pre-run 마커)로 보낸다.
+- **플랜(N≥2)에서는 respond가 "현재 RUNNING인 레시피" 기준으로 값을 병합**한다. 서버는 `executionId`로 현재 RUNNING인 `EXECUTION_RECIPE`를 식별하므로, pre-run 수집이면 `stepIndex=-1`이 그 레시피의 pre-run을 가리킨다(레시피 순번은 서버가 실행 상태로 판단, FE가 별도 지정 불필요). 상세: [plan.md 액션 피커 일반화](plan.md#액션-피커-일반화-레시피별-pre-run).
+- **불변식**: 액션 피커 대기(`input_waiting`) 중 현재 RUNNING인 `EXECUTION_RECIPE`는 **대화방 락으로 고정**되어, respond로 재개할 때 대상 레시피가 바뀌지 않는다(한 대화방 동시 요청 불가).
 - respond는 서버가 상태를 `input_waiting → executing`으로 바꾸고 SSE로 전파한 뒤 실행을 재개한다. FE가 단독으로 상태를 바꾸지 않는다. (상태 해제 원칙: [messaging.md](../common/messaging.md#상태-해제-취소--중지--완료))
 - respond 실패(검증 에러 등) 시 서버는 `input_waiting`을 유지하고 액션 피커를 다시 노출한다.
 
@@ -229,6 +241,24 @@ session_status: idle + 히스토리 refresh
 ## 플랜 실행
 
 여러 레시피를 조합한 실행 계획(플랜)의 경우, 각 레시피가 순차 자동 실행됨.
+
+### 단일 = N=1 플랜 (경로 통일)
+
+**모든 실행은 내부적으로 하나의 EXECUTION으로 처리**한다(단일 레시피 = 레시피 1개짜리 플랜). 오케스트레이션 코드를 단일화하고, 사용자에게 보여줄 때만 단일/플랜을 구분한다(레시피 1개면 "레시피 실행" 표시, 2개+면 "플랜" 표시). 상세: [plan.md 단일 = N=1 플랜](plan.md#내부-구현-통일-단일--n1-플랜).
+
+### 실행 전이·완료는 BE 자동 판단 (계약 변경)
+
+- **FE는 각 스텝 결과를 `reportStep`으로 보고만 한다. 실행 완료(complete)를 호출하지 않는다.** (기존 계약 변경 — 전이/완료 판단은 전적으로 BE)
+- BE는 `reportStep` 수신 시 현재 위치를 기준으로 다음을 자동 판단한다:
+  - 스텝이 현재 레시피의 마지막이 아니면 → PROGRESS 갱신(`message_update`).
+  - 마지막 스텝이면 → 다음 `EXECUTION_RECIPE`가 있으면 RUNNING 전이 + 스텝 생성 + CONTEXT 매핑(같은 key 자동 전달, 미충족 필수값은 그 레시피 pre-run 액션 피커) / 없으면 실행 자동 완료(outcome=SUCCESS) + RESULT + `idle`.
+- **완료 처리 로직 단일화(이중 완료 방지)**: BE 자동 완료는 기존 완료 처리(상태 확정 + PROGRESS 확정 + RESULT 발행 + `idle`/락 해제)를 **내부 재사용**한다. 외부에 노출되던 정상완료 보고 엔드포인트(complete)는 **제거하거나 내부 전용으로 전환**한다(FE가 호출하지 않으므로). 완료 처리가 두 경로로 갈라져 RESULT/락 해제가 중복 실행되는 것을 막기 위함이다. (`stop`/`cancel`은 사용자 중단 경로로 별도 유지 — 위 참조.)
+- 오케스트레이션 상세: [plan.md 실행 계약](plan.md#실행-계약-be-오케스트레이션--중대).
+
+### 액션 피커 일반화 (레시피별 pre-run)
+
+플랜에서는 액션 피커가 "**현재 RUNNING인 `EXECUTION_RECIPE`의 pre-run 입력 수집**"으로 일반화된다. 각 레시피가 RUNNING으로 전이될 때 그 레시피의 미충족 입력 변수만 수집하고, `respond`가 현재 레시피 기준으로 값을 병합해 재개한다. 단일 실행은 N=1 플랜의 첫 레시피 pre-run과 동일 메커니즘이다(위 [액션 피커 응답 후 실행 재개 흐름](#액션-피커-응답-후-실행-재개-흐름-확정)의 일반화).
+
 상세: [플랜](plan.md)
 
 ## 히스토리 조회 API 계약 (GET /executions)
@@ -294,7 +324,7 @@ API 호출은 사용자 브라우저에서 실행되므로, 브라우저가 닫�
 
 | 동작 | 처리 |
 |------|------|
-| 새로고침 | 대화방 재진입 시 실행+스텝을 서버에서 조회해 진행 블록 복원(아래). 브라우저 종료로 중단된 RUNNING 실행은 "중단됨"으로 표시. [이어서 실행] 버튼 제공 |
+| 새로고침 | 대화방 재진입 시 실행+스텝을 서버에서 조회해 진행 블록 복원(아래). 브라우저 종료로 중단된 RUNNING 실행은 "중단됨"으로 표시. (1단계는 중단 지점 재개 없이 "처음부터 다시 실행"만 제공 — 아래 [이어서 실행] 방침) |
 | 탭 닫기 후 재방문 | 동일 |
 
 **진행 블록 복원 (메시지-실행 연결)**

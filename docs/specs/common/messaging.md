@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-15
+last-updated: 2026-09-17
 ---
 
 # 메시징 및 SSE 이벤트 정의
@@ -133,44 +133,74 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
 
 실행 시작 시 1개 생성되고, 스텝 진행마다 `message_update`로 **같은 메시지를 갱신**한다.
 
+payload는 **레시피 그룹 구조**다(플랜 진행 카드 = chat.html Case 12 정본: 레시피 그룹 단위 + 완료 접힘 + 현재만 스텝 펼침 + k/N 레시피). **단일 실행(N=1)도 `recipes` 1개로 통일**한다 — FE는 단일/플랜을 동일 구조로 렌더하되 표시만 분기한다(단일이면 그룹 헤더 없이 스텝을 바로 노출).
+
 ```json
 {
   "kind": "progress",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "executionId": 456,
-  "recipeName": "입사지원",
-  "status": "running | success | failed",
-  "steps": [
-    { "index": 0, "name": "로그인 확인", "status": "pending | running | success | failed | skipped", "summary": "..." }
+  "title": "입사지원",
+  "overallStatus": "running | success | partial | failed | stopped | cancelled",
+  "recipeProgress": { "current": 2, "total": 3 },
+  "recipes": [
+    {
+      "sequence": 0,
+      "recipeName": "이력서 작성",
+      "status": "pending | running | success | skipped | failed | stopped | cancelled",
+      "summary": "이력서 ID: RES-001",
+      "steps": [
+        { "index": 0, "name": "로그인 확인", "status": "pending | running | success | failed | skipped", "summary": "..." }
+      ]
+    }
   ]
 }
 ```
 
-- `status`: 실행 전체 상태. 완료 시 `success`/`failed`로 확정.
+- `title`: 실행 제목(플랜명 또는 단일 레시피명). 플랜 진행 헤더("📋 {title} 플랜 실행 중 (k/N 레시피)")에 쓰인다.
+- `overallStatus`: 실행 전체 상태. 완료 시 `success`/`partial`/`failed` 등으로 확정.
+- `recipeProgress`: **레시피 단위 진행률**(k/N 레시피 표기용). `total`=전체 레시피 수, `current`=종료(성공/스킵/실패/중지/취소)된 레시피 + 현재 `running` 레시피(= "완료+현재"). 예) 1개 완료 + 1개 진행 중 = `current:2`.
+- `recipes[]`: 레시피 그룹. `sequence`(플랜 내 순서, 0-base), `recipeName`(실행 시점 스냅샷 이름), `status`(레시피 상태 소문자 코드), `summary`(완료 접힘 표시용 결과 한 줄, 없으면 `null`), `steps[]`.
+- `recipes[].summary`: 레시피 결과값(RESULT_VALUES_JSON)의 스칼라 값을 `·`로 이어 붙인 한 줄(값 위주, 표시명은 RESULT payload가 별도 제공). 완료 레시피 접힘 헤더에 노출된다.
 - `steps[].status`: 스텝별 상태. `content`에는 이 구조에서 파생한 표시용 진행 요약(Markdown)을 담는다.
 - `steps[].name`: 스텝 표시명. 서버가 [표시명 폴백 체인](../recipe/structure.md#표시명label-폴백-체인)((1) 스텝 표시명 → (2) 엔드포인트 summary → (3) method+path)으로 미리 결정해 채운 사람말 이름을 담는다(FE 추가 폴백 불필요). **이 값은 실행 시점에 확정되어 PROGRESS 메시지에 저장되므로**, label 없이 summary로 폴백된 경우라도 히스토리 재현·새로고침 복원 시 조회 당시 summary가 아니라 **그때 그 실행 시점의 이름이 고정 표시**된다([structure.md 스냅샷 포함](../recipe/structure.md#스냅샷-포함)).
+- **`content` 텍스트 분기**: 플랜(N≥2)이면 "{title} 플랜 실행 중 (k/N 레시피)"(레시피 단위), 단일(N=1)이면 "{레시피명} 실행 중 (k/N)"(스텝 단위, 기존 관측 유지).
 
 ### RESULT (실행 결과 블록)
 
 실행 완료 시 생성되는 결과 메시지. PROGRESS와 별개의 MESSAGE다.
 
+payload는 **레시피별 구조**다(플랜 결과 카드 = chat.html Case 21 정본: 레시피별 결과 한 줄). **단일 실행(N=1)도 `recipes` 1개로 통일**한다.
+
 ```json
 {
   "kind": "result",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "executionId": 456,
-  "recipeName": "입사지원",
-  "resultValues": { "applicationId": "A-123", "status": "제출완료" },
-  "resultLabels": { "applicationId": "지원번호" },
-  "template": "지원이 완료되었습니다 (번호: {{applicationId}})"
+  "title": "입사지원",
+  "overallStatus": "success | partial",
+  "recipes": [
+    {
+      "sequence": 0,
+      "recipeName": "입사지원",
+      "status": "success | skipped | failed | stopped | cancelled",
+      "resultValues": { "applicationId": "A-123", "status": "제출완료" },
+      "resultLabels": { "applicationId": "지원번호" },
+      "summary": "지원이 완료되었습니다 (번호: A-123)"
+    }
+  ]
 }
 ```
 
-- `resultValues`: ④ 결과 정의로 추린 결과 값(진실). key는 결과 정의 변수명(원본 key) 그대로.
-- `resultLabels`: 결과 key → 표시명(사람말) 맵. **결과 정의(④)에 `label`이 등록된 key만 포함**한다(선택). 값 자체(`resultValues`)와 표기(`resultLabels`)를 분리해, 스키마를 깨지 않고 표시명을 동반한다.
+- `title`: 실행 제목. 플랜 결과 헤더("📋 플랜 완료 (N/N)")·단일 결과 표시에 쓰인다.
+- `overallStatus`: 실행 전체 최종 상태(`success`/`partial`). RESULT 메시지는 정상 종료(SUCCESS/PARTIAL)에서만 생성된다(FAILED는 결과 미발행).
+- `recipes[]`: 레시피별 결과. `sequence`(0-base), `recipeName`(스냅샷 이름), `status`(레시피 상태 소문자 코드), `resultValues`, `resultLabels`(선택), `summary`(레시피별 결과 요약 텍스트 = 템플릿 치환 결과 또는 최소 요약).
+- `recipes[].resultValues`: ④ 결과 정의로 추린 결과 값(진실). key는 결과 정의 변수명(원본 key) 그대로. 그 레시피 스냅샷 정의 기준으로 산출한다.
+- `recipes[].resultLabels`: 결과 key → 표시명(사람말) 맵. **결과 정의(④)에 `label`이 등록된 key만 포함**한다(선택). 값 자체(`resultValues`)와 표기(`resultLabels`)를 분리해, 스키마를 깨지 않고 표시명을 동반한다.
 - **표시명 폴백**: FE는 값을 표기할 때 `resultLabels[key]`가 있으면 표시명, 없으면 **원본 key 그대로** 쓴다. 중첩/배열 key(`items[0].price`)는 label 없으면 key 경로 그대로, 값이 없거나 null이면 "값 없음"으로 표시한다(폴백 체인: [structure.md](../recipe/structure.md#표시명label-폴백-체인)).
-- `template`(선택)은 결과 메시지 템플릿 원문. `content`에는 최종 결과 요약 텍스트(템플릿 치환 결과 또는 fast AI 요약)를 담는다. 생성 방식은 [execution.md 실행 완료/결과 요약](../recipe/execution.md#실행-완료--결과-요약) 참조.
-- 표시명은 사람말 요약(`content`/템플릿)을 보강할 뿐, 상세·히스토리에서 원본 key 노출을 막지 않는다([기존 이원화](#content-vs-payloadjson-필드-이원화) 유지).
+- `recipes[].summary`: 그 레시피의 결과 요약 텍스트(레시피 스냅샷 `resultTemplate`이 있으면 `{{key}}` 치환 결과, 없으면 최소 요약). 생성 방식은 [execution.md 실행 완료/결과 요약](../recipe/execution.md#실행-완료--결과-요약) 참조.
+- **`content` 텍스트 분기**: 플랜(N≥2)이면 "{title} 플랜 N개 레시피를 완료했습니다" + 레시피별 한 줄("✓ 1. 이름 — 결과") 나열, 단일(N=1)이면 그 레시피의 `summary`를 그대로 담는다.
+- 표시명은 사람말 요약(`content`/`summary`)을 보강할 뿐, 상세·히스토리에서 원본 key 노출을 막지 않는다([기존 이원화](#content-vs-payloadjson-필드-이원화) 유지).
 
 ### CARD
 
@@ -185,6 +215,7 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
 | cardType | 용도 | 추가 필드 |
 |----------|------|-----------|
 | `execution_mode` | 실행 모드 선택 | `recipeId`, `recipeName`, `description`, `inputVariables: [{ key, label, value, source, required }]`, `buttons: ["auto", "manual"]` |
+| `plan` | 플랜 제안 (읽기 전용 미리보기) | `rationale`, `recipes: [{ recipeId, name, serviceName, previewValues: [{ key, label, value, source }] }]`, `buttons: ["cancel", "auto"]` |
 | `result` | 실행 결과 보기 | `recipeId`, `executionId`, `timestamp` |
 | `retry` | 실패 후 재시도 | `executionId`, `failedStepIndex` |
 | `auth_required` | 인증 필요 | `loginPageUrl`, `executionId` |
@@ -223,6 +254,20 @@ MESSAGE의 페이로드는 두 필드로 나뉜다. 역할이 다르므로 혼�
 |-----------|---------|------|
 | `auto` | **바로 실행** | 발화/기본값으로 즉시 진행 |
 | `manual` | **값 확인 후 실행** | 액션 피커로 전체 값 확인·수정 후 진행 |
+
+### plan 카드 상세
+
+플랜 제안(`propose_plan`)을 읽기 전용으로 보여준다(1단계). 편집 UI는 [2단계 백로그](../chat/scenarios/plan-proposal.md#2단계-백로그).
+
+| 필드 | 설명 |
+|------|------|
+| `rationale` | AI가 이 조합을 제안한 짧은 한국어 근거 (`propose_plan.rationale`). 카드 상단 💡로 노출 |
+| `recipes` | 순서대로 실행할 레시피 목록. 각 항목: `{ recipeId, name, serviceName, previewValues }` |
+| `previewValues[]` | 각 레시피의 값 미리보기. `{ key, label, value, source }` |
+| `buttons` | `["cancel", "auto"]` — [취소](실행 안 함) / [자동 실행](플랜 실행 진입) |
+
+- **`previewValues[].source` (정직화):** 제안 시점엔 **레시피 기본값만** 확정 표시한다. `default`(📌 기본값) / **`runtime`(값 미정 — `value`는 null)** 2종만 사용한다. `runtime`의 화면 표기는 **"실행 중 결정" 하나로 통일**한다("실행 중 입력"과 혼용하지 않음). **발화 추출값(🗣️)은 제안 카드에 표시하지 않는다**(레시피별 분배 규칙이 1단계 범위 밖 — [plan-proposal.md 값 미리보기](../chat/scenarios/plan-proposal.md#값-미리보기-결정-1--정직하게-축소)). 🗣️ 발화·🔗 이전 결과는 **실행 중 액션 피커**에서만 등장([plan.md 데이터 자동 채움](../recipe/plan.md#데이터-자동-채움-우선순위-실행-중-액션-피커)).
+- 실행 승인([자동 실행]) 이후의 오케스트레이션·진행/실패/중단은 [plan.md](../recipe/plan.md) 참조.
 
 ---
 

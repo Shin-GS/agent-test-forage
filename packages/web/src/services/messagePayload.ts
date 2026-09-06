@@ -19,7 +19,8 @@ export function asProgressPayload(metadata: unknown): ProgressPayload | null {
   const p = metadata as Partial<ProgressPayload>;
   if (p.kind !== "progress") return null;
   if (!isSupportedVersion(p)) return null;
-  if (!Array.isArray(p.steps)) return null;
+  // schemaVersion 2: recipes 그룹 구조. recipes 배열이 진실이다.
+  if (!Array.isArray(p.recipes)) return null;
   return p as ProgressPayload;
 }
 
@@ -29,5 +30,7 @@ export function asResultPayload(metadata: unknown): ResultPayload | null {
   const p = metadata as Partial<ResultPayload>;
   if (p.kind !== "result") return null;
   if (!isSupportedVersion(p)) return null;
+  // schemaVersion 2: recipes 배열 구조.
+  if (!Array.isArray(p.recipes)) return null;
   return p as ResultPayload;
 }

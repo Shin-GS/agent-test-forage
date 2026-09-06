@@ -1,12 +1,20 @@
-// 레시피 실행 엔진 (프로토타입 최소 구현).
+// 레시피 실행 엔진 (프로토타입 최소 구현 — 플랜 멀티레시피 지원).
 //
-// startExecution 응답(ExecutionResponse)을 받아 브라우저에서 스텝을 순차 실행한다.
-// - recipeSnapshot 의 스텝 정의(steps 배열)와 서버 스텝 레코드(recipes[0].steps[]: id=stepId)를
+// startExecution/startPlan 응답(ExecutionResponse)을 받아 브라우저에서 스텝을 순차 실행한다.
+// - recipeSnapshot 의 스텝 정의(steps 배열)와 서버 스텝 레코드(recipe.steps[]: id=stepId)를
 //   순서(stepIndex / 배열 순서)로 매칭한다.
 // - 각 스텝을 실행하고 executionsApi.reportStep 으로 결과를 보고한다.
-// - 모든 스텝 종료 후 completeExecution 으로 마무리한다.
-// - 진행/완료 화면 갱신은 SSE(execution_progress/execution_complete)로 스토어가 처리하므로,
-//   러너는 실제 실행 로직에만 집중한다.
+//
+// ── 플랜(멀티레시피) 오케스트레이션 계약 (execution.md / plan.md) ─────────────
+// - 실행 전이/완료는 전적으로 BE가 판단한다. FE는 각 스텝을 reportStep으로 보고만 한다.
+// - complete 엔드포인트는 없다(제거됨). 마지막 레시피의 마지막 스텝을 reportStep(SUCCESS/SKIPPED)으로
+//   보고하면 BE가 자동으로 실행을 완료한다(SSE로 RESULT/idle 전파). FE가 complete를 부르면 안 된다.
+// - 러너는 "현재 RUNNING인 EXECUTION_RECIPE의 스텝들"을 실행한다. 한 레시피의 스텝을 모두 보고하면
+//   BE가 다음 레시피를 RUNNING으로 전이(스텝 생성)하거나 실행을 완료한다. reportStep 응답은 스텝 뷰뿐이라
+//   러너는 실행을 재조회(getExecution)해 다음 RUNNING 레시피/스텝을 얻어 이어간다.
+// - 다음 레시피 전이 시 BE가 pre-run 액션 피커가 필요하다고 판단하면 대화방을 WAITING_INPUT으로 둔다.
+//   러너는 재조회한 실행에서 "RUNNING 레시피인데 필수 입력 미충족"을 감지하면 INPUT_REQUIRED로 반환하여
+//   호출측이 액션 피커를 띄우게 한다(respond → 재개 실행으로 runExecution 재호출).
 //
 // ── 알려진 한계 (프로토타입) ─────────────────────────────────────────────
 // - baseUrl: 실행 응답/스냅샷에 외부 서버 baseUrl 이 없을 수 있어, 못 찾으면 상수(DEFAULT_BASE_URL)
@@ -21,7 +29,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { executionsApi, specsApi } from "../api";
-import type { ExecutionResponse, ExecutionRecipeView, SpecDetail } from "../api/types";
+import type {
+  ActionPickerVariable,
+  ExecutionResponse,
+  ExecutionRecipeView,
+  SpecDetail,
+} from "../api/types";
 
 /** baseUrl 을 못 찾을 때 사용할 임시 기본값 (demo-shop) */
 const DEFAULT_BASE_URL = "http://localhost:9101";
@@ -44,8 +57,6 @@ export class AuthRequiredError extends Error {
 
 /** 스텝 상태 코드 (EXECUTION_STEP.STATUS) */
 type StepStatus = "SUCCESS" | "FAILED" | "SKIPPED";
-/** 실행 최종 상태 코드 (EXECUTION.STATUS) */
-type ExecutionStatus = "SUCCESS" | "PARTIAL" | "FAILED";
 
 /** 실행 컨텍스트: extract 변수 + StepN 원시응답 + userInput 누적 */
 type RunContext = Record<string, any>;
@@ -86,6 +97,7 @@ export interface RunExecutionOptions {
   /**
    * 재개 상태. 인증(401) 대기 후 "계속 진행" 시, 중단된 스텝 인덱스와 그때까지의 context 를
    * 넘겨 이미 성공한 스텝을 재실행하지 않고 이어서 실행한다(중복 호출 방지 — UX).
+   * 재개는 현재 RUNNING 레시피 내부의 스텝 인덱스 기준이다.
    */
   resume?: { startIndex: number; context: RunContext; anySucceeded?: boolean };
 }
@@ -93,43 +105,41 @@ export interface RunExecutionOptions {
 /**
  * 실행 결과.
  * - outcome=AUTH_REQUIRED: 401/403 로 중단. auth 정보로 인증 안내 카드를 띄우고,
- *   로그인 후 resumeState 를 넘겨 runExecution 을 다시 호출하면 그 지점부터 재개한다.
- *   이 경우 completeExecution 을 호출하지 않는다(실행은 아직 끝나지 않음).
- * - 그 외: 실행이 종료되어 completeExecution 까지 마쳤다.
+ *   로그인 후 resumeState 를 넘겨 runExecution 을 다시 호출하면 그 스텝부터 재개한다.
+ * - outcome=INPUT_REQUIRED: 플랜에서 다음 레시피 전이 후 pre-run 필수 입력이 미충족. 호출측이
+ *   input.variables 로 액션 피커를 띄우고, respond 후 반환된 실행으로 runExecution 을 재호출한다.
+ * - outcome=SUCCESS/PARTIAL/FAILED: 실행이 서버에서 자동 종료됨(FE가 complete 호출하지 않음).
+ *   진행/완료 화면 갱신은 SSE(PROGRESS/RESULT message_update/new)로 스토어가 처리한다.
+ * - outcome=STALLED: 러너가 진행 불가로 중단됨(getExecution 재조회 실패 / reportStep 보고 실패).
+ *   FE는 complete 를 못 부르므로 BE가 EXECUTING 이면 대화방 락이 남아 입력창이 계속 잠긴다.
+ *   호출측이 이 신호를 받아 사용자에게 안내(토스트: 새로고침)해야 한다.
  */
 export interface RunResult {
-  outcome: ExecutionStatus | "AUTH_REQUIRED";
+  outcome: "SUCCESS" | "PARTIAL" | "FAILED" | "AUTH_REQUIRED" | "INPUT_REQUIRED" | "STALLED";
   auth?: {
     httpStatus: number;
-    /** 인증이 필요한 스텝 인덱스 (0-based) */
+    /** 인증이 필요한 (현재 RUNNING 레시피 내부의) 스텝 인덱스 (0-based) */
     stepIndex: number;
     /** 재개용 상태 */
     resumeState: { startIndex: number; context: RunContext; anySucceeded: boolean };
   };
+  input?: {
+    /** 입력을 수집할 실행 ID */
+    executionId: number;
+    /** 액션 피커로 수집할 변수 (현재 RUNNING 레시피의 미충족 필수) */
+    variables: ActionPickerVariable[];
+  };
 }
 
 /**
- * 실행 응답을 받아 스텝을 순차 실행한다. 401/403 을 만나면 실행을 "실패"가 아닌
- * "인증 대기(AUTH_REQUIRED)"로 반환하여, 로그인 후 그 스텝부터 재개할 수 있게 한다.
+ * 실행 응답을 받아 스텝을 순차 실행한다. 플랜(멀티레시피)은 현재 RUNNING 레시피의 스텝을 실행하고,
+ * 레시피가 끝날 때마다 실행을 재조회해 다음 RUNNING 레시피로 이어간다(전이/완료는 BE 판단).
+ * 401/403 을 만나면 AUTH_REQUIRED, 다음 레시피 pre-run 필수 미충족이면 INPUT_REQUIRED 를 반환한다.
  */
 export async function runExecution(
   execution: ExecutionResponse,
   options: RunExecutionOptions
 ): Promise<RunResult> {
-  const recipe = execution.recipes?.[0];
-  if (!recipe) {
-    await safeComplete(execution.id, "FAILED", "실행할 레시피가 없습니다");
-    return { outcome: "FAILED" };
-  }
-
-  const snapshotSteps = extractSnapshotSteps(recipe);
-  // 재개면 이전 context 를 이어받고, 아니면 실행 응답의 초기 context(BE 가 시드한 userInput 등)로 시작한다.
-  // BE 는 execute_recipe 추출값 + 레시피 변수 기본값을 병합해 execution.context.userInput 에 넣어준다.
-  const context: RunContext = options.resume?.context ?? initialContextOf(execution);
-  const startIndex = options.resume?.startIndex ?? 0;
-  // 진행 블록은 BE 가 PROGRESS 메시지로 생성/갱신하고, FE 는 message_new/message_update 로만 그린다.
-  // (러너는 스텝을 실행하고 reportStep 으로 보고만 한다 — 별도 진행 상태 초기화 없음)
-
   // 스펙 상세를 조회해 baseUrl 과 endpointId→{method,path} 맵을 구성한다.
   // 레시피 스텝은 path/method 를 직접 담지 않고 endpointId 만 가지므로 이 해석이 필요하다.
   let spec: SpecDetail | null = null;
@@ -139,10 +149,137 @@ export async function runExecution(
     // 스펙 조회 실패 시 baseUrl 상수 + endpoint 미해석으로 진행(스텝에 path 가 직접 있으면 동작)
   }
   const endpointMap = buildEndpointMap(spec);
-  const baseUrl = resolveBaseUrl(execution, recipe, spec);
 
-  let anyFailed = false;
-  let anySucceeded = options.resume?.anySucceeded ?? false;
+  // context 는 실행 전체 공유. 재개면 이전 context 를 이어받고, 아니면 실행 응답의 초기 context 로 시작한다.
+  const context: RunContext = options.resume?.context ?? initialContextOf(execution);
+
+  // 현재 처리 대상 실행 스냅샷. 레시피 완료 후 재조회로 갱신하며 루프를 이어간다.
+  let current: ExecutionResponse = execution;
+  // 첫 레시피에 한해 인증 재개(resume) 시작 인덱스를 적용한다(이후 레시피는 0부터).
+  let resumeForThisRecipe = options.resume;
+
+  // 안전장치: 레시피 수 + 여유. 무한 재조회 루프 방지.
+  const maxRecipeIterations = Math.max(current.recipes?.length ?? 1, 1) + 2;
+
+  for (let iteration = 0; iteration < maxRecipeIterations; iteration += 1) {
+    const recipe = findRunningRecipe(current);
+    if (!recipe) {
+      // RUNNING 레시피가 없으면 서버가 이미 종료했거나(SSE로 반영) 대기 상태다.
+      // 대화방이 WAITING_INPUT 인지 여부는 재조회 실행의 recipe 상태로는 알 수 없으므로,
+      // 여기서는 종료로 간주하고 반환한다(진행/완료 표시는 SSE 가 처리).
+      return { outcome: overallOutcomeOf(current) };
+    }
+
+    // 이 레시피의 스텝을 실행한다.
+    const recipeRun = await runRecipeSteps(recipe, context, {
+      execution: current,
+      baseUrl: resolveBaseUrl(current, recipe, spec),
+      endpointMap,
+      mode: options.mode,
+      collectInput: options.collectInput,
+      resume: resumeForThisRecipe,
+    });
+    resumeForThisRecipe = undefined; // 재개 인덱스는 첫 레시피에만 적용
+
+    if (recipeRun.outcome === "AUTH_REQUIRED") {
+      return {
+        outcome: "AUTH_REQUIRED",
+        auth: {
+          httpStatus: recipeRun.httpStatus,
+          stepIndex: recipeRun.stepIndex,
+          resumeState: {
+            startIndex: recipeRun.stepIndex,
+            context,
+            anySucceeded: recipeRun.anySucceeded,
+          },
+        },
+      };
+    }
+
+    if (recipeRun.outcome === "STALLED") {
+      // 스텝 결과 보고 실패로 BE 상태를 갱신할 수 없어 진행 불가. 호출측이 사용자에게 안내.
+      return { outcome: "STALLED" };
+    }
+
+    if (recipeRun.outcome === "FAILED") {
+      // 스텝 실패를 reportStep 으로 이미 보고했다. BE가 전체 중단(PARTIAL)로 확정한다.
+      // FE는 complete 를 부르지 않는다. 최종 표시는 SSE(PROGRESS 실패 확정)로 갱신된다.
+      return { outcome: "PARTIAL" };
+    }
+
+    // 레시피의 모든 스텝을 성공/스킵으로 보고했다. BE가 전이/완료를 판단했을 것이다.
+    // 다음 상태를 알기 위해 실행을 재조회한다.
+    let refreshed: ExecutionResponse;
+    try {
+      refreshed = await executionsApi.getExecution(current.id);
+    } catch {
+      // 재조회 실패: 다음 상태를 알 수 없어 진행 불가. BE가 EXECUTING 이면 대화방 락이 남으므로
+      // 조용히 종료로 간주하지 않고 STALLED 로 알려 호출측이 사용자에게 안내(새로고침)하게 한다.
+      return { outcome: "STALLED" };
+    }
+    current = refreshed;
+
+    // 실행 자체가 종료됐으면(SUCCESS/PARTIAL/FAILED/STOPPED/CANCELLED) 종료.
+    if (isExecutionTerminal(current)) {
+      return { outcome: overallOutcomeOf(current) };
+    }
+
+    // 다음 RUNNING 레시피 확인.
+    const next = findRunningRecipe(current);
+    if (!next) {
+      // RUNNING 레시피가 없는데 종료도 아니면(경계) 종료 처리.
+      return { outcome: overallOutcomeOf(current) };
+    }
+
+    // 다음 레시피 pre-run 입력 대기 판정은 전적으로 BE가 한다(자체 계산 제거).
+    // getExecution 재조회 응답의 pendingInputs 는 "대화방 WAITING_INPUT + 현재 RUNNING 레시피의
+    // 미충족 필수" 목록이다(대기 아니면 빈 배열). 최초 실행 pre-run 과 동일한 소스/변환을 사용한다.
+    const pendingVariables = current.pendingInputs ?? [];
+    if (pendingVariables.length > 0) {
+      return {
+        outcome: "INPUT_REQUIRED",
+        input: { executionId: current.id, variables: pendingVariables },
+      };
+    }
+    // 값 충족 → 계속 다음 레시피 스텝 실행(루프 지속).
+  }
+
+  // 반복 상한 도달(비정상) — 마지막으로 확인한 실행 상태로 반환.
+  return { outcome: overallOutcomeOf(current) };
+}
+
+// ---------------------------------------------------------------------------
+// 레시피 단위 스텝 실행
+// ---------------------------------------------------------------------------
+
+interface RecipeRunEnv {
+  execution: ExecutionResponse;
+  baseUrl: string;
+  endpointMap: EndpointMap;
+  mode: string;
+  collectInput?: RunExecutionOptions["collectInput"];
+  resume?: RunExecutionOptions["resume"];
+}
+
+type RecipeRunResult =
+  | { outcome: "DONE"; anySucceeded: boolean }
+  | { outcome: "FAILED"; anySucceeded: boolean }
+  | { outcome: "AUTH_REQUIRED"; httpStatus: number; stepIndex: number; anySucceeded: boolean }
+  // 스텝 결과 보고(reportStep) 실패로 BE 상태를 갱신할 수 없어 진행 불가. STALLED 로 상위 전파.
+  | { outcome: "STALLED"; anySucceeded: boolean };
+
+/**
+ * 한 EXECUTION_RECIPE 의 스텝을 순차 실행하고 reportStep 으로 보고한다.
+ * 실패 시 그 스텝을 FAILED 로 보고하고 중단한다(이후 스텝 실행 안 함). 인증 필요면 AUTH_REQUIRED 반환.
+ */
+async function runRecipeSteps(
+  recipe: ExecutionRecipeView,
+  context: RunContext,
+  env: RecipeRunEnv
+): Promise<RecipeRunResult> {
+  const snapshotSteps = extractSnapshotSteps(recipe);
+  const startIndex = env.resume?.startIndex ?? 0;
+  let anySucceeded = env.resume?.anySucceeded ?? false;
 
   for (let index = startIndex; index < recipe.steps.length; index += 1) {
     const stepRecord = recipe.steps[index];
@@ -151,19 +288,22 @@ export async function runExecution(
 
     // 조건 평가 — 불만족 시 SKIPPED
     if (snapshot.condition && !evaluateCondition(snapshot.condition, context)) {
-      await safeReport(execution.id, stepRecord.id, {
+      const reported = await safeReport(env.execution.id, stepRecord.id, {
         status: "SKIPPED",
         summary: "조건 불만족으로 스킵",
       });
+      if (!reported) {
+        return { outcome: "STALLED", anySucceeded };
+      }
       continue;
     }
 
     try {
       const result = await executeStep(stepType, snapshot, context, {
-        baseUrl,
-        endpointMap,
-        mode: options.mode,
-        collectInput: options.collectInput,
+        baseUrl: env.baseUrl,
+        endpointMap: env.endpointMap,
+        mode: env.mode,
+        collectInput: env.collectInput,
         stepName: stepRecord.stepName ?? snapshot.name ?? `Step${index}`,
       });
 
@@ -171,54 +311,73 @@ export async function runExecution(
       context[`Step${index}`] = result.response;
       Object.assign(context, result.extractedValues);
 
-      await safeReport(execution.id, stepRecord.id, {
+      const reported = await safeReport(env.execution.id, stepRecord.id, {
         status: "SUCCESS",
         summary: result.summary,
         response: result.response,
         userInput: result.userInput,
-        // 추출값을 서버 전역 context에도 누적(다음 스텝이 참조 — structure.md 스텝 간 데이터 전달)
+        // 추출값을 서버 전역 context에도 누적(다음 스텝/레시피가 참조 — structure.md 스텝 간 데이터 전달)
         extractedValues: result.extractedValues,
       });
+      if (!reported) {
+        // 성공했지만 BE 가 결과를 못 받았다 → 계속 진행하면 상태 불일치. 여기서 STALLED 로 중단한다.
+        return { outcome: "STALLED", anySucceeded };
+      }
       anySucceeded = true;
     } catch (error) {
       // 인증 필요(401/403): 실행을 종료하지 않고 인증 대기로 반환한다.
       // 이 스텝은 아직 성공/실패로 보고하지 않는다(로그인 후 이 스텝부터 재개).
       if (error instanceof AuthRequiredError) {
-        return {
-          outcome: "AUTH_REQUIRED",
-          auth: {
-            httpStatus: error.httpStatus,
-            stepIndex: index,
-            resumeState: { startIndex: index, context, anySucceeded },
-          },
-        };
+        return { outcome: "AUTH_REQUIRED", httpStatus: error.httpStatus, stepIndex: index, anySucceeded };
       }
 
       const message = error instanceof Error ? error.message : String(error);
-      await safeReport(execution.id, stepRecord.id, {
+      const reported = await safeReport(env.execution.id, stepRecord.id, {
         status: "FAILED",
         summary: "스텝 실패",
         errorMessage: message,
       });
-      anyFailed = true;
-      // 프로토타입: 실패 시 이후 스텝 중단
-      break;
+      if (!reported) {
+        // 실패조차 BE 에 전달 못 함 → BE 는 EXECUTING 으로 남는다. STALLED 로 안내.
+        return { outcome: "STALLED", anySucceeded };
+      }
+      // 프로토타입: 실패 시 이후 스텝 중단. BE가 전체 중단(PARTIAL)을 확정한다.
+      return { outcome: "FAILED", anySucceeded };
     }
   }
 
-  const finalStatus: ExecutionStatus = anyFailed
-    ? anySucceeded
-      ? "PARTIAL"
-      : "FAILED"
-    : "SUCCESS";
+  return { outcome: "DONE", anySucceeded };
+}
 
-  await safeComplete(
-    execution.id,
-    finalStatus,
-    buildResultSummary(recipe, finalStatus)
-  );
+// ---------------------------------------------------------------------------
+// 실행/레시피 상태 헬퍼
+// ---------------------------------------------------------------------------
 
-  return { outcome: finalStatus };
+/** 현재 RUNNING 상태인 EXECUTION_RECIPE (sequence 순 첫 번째). 없으면 null */
+function findRunningRecipe(execution: ExecutionResponse): ExecutionRecipeView | null {
+  const recipes = execution.recipes ?? [];
+  for (const recipe of recipes) {
+    if ((recipe.status?.code ?? "").toUpperCase() === "RUNNING") {
+      return recipe;
+    }
+  }
+  return null;
+}
+
+/** 실행 전체가 종료 상태인지 (EXECUTION.STATUS). SUCCESS/PARTIAL/FAILED/STOPPED/CANCELLED */
+function isExecutionTerminal(execution: ExecutionResponse): boolean {
+  const code = (execution.status?.code ?? "").toUpperCase();
+  return code === "SUCCESS" || code === "PARTIAL" || code === "FAILED"
+    || code === "STOPPED" || code === "CANCELLED";
+}
+
+/** 실행 상태 → RunResult outcome (표시용은 SSE가 담당, 여기선 요약만) */
+function overallOutcomeOf(execution: ExecutionResponse): "SUCCESS" | "PARTIAL" | "FAILED" {
+  const code = (execution.status?.code ?? "").toUpperCase();
+  if (code === "SUCCESS") return "SUCCESS";
+  if (code === "FAILED") return "FAILED";
+  // PARTIAL/STOPPED/CANCELLED/RUNNING 등은 부분/미완으로 취급(FE는 표시를 SSE에 위임)
+  return "PARTIAL";
 }
 
 // ---------------------------------------------------------------------------
@@ -502,6 +661,7 @@ function applyExtract(
 // 헬퍼
 // ---------------------------------------------------------------------------
 
+/** 레시피 스냅샷에서 스텝 배열을 뽑는다 (steps / recipeSteps / stepsJson 문자열 지원) */
 function extractSnapshotSteps(recipe: ExecutionRecipeView): SnapshotStep[] {
   const snapshot = recipe.recipeSnapshot as any;
   if (!snapshot) return [];
@@ -598,12 +758,12 @@ function joinUrl(baseUrl: string, path: string): string {
   return `${base}${suffix}`;
 }
 
-function buildResultSummary(recipe: ExecutionRecipeView, status: ExecutionStatus): string {
-  const label =
-    status === "SUCCESS" ? "성공" : status === "PARTIAL" ? "부분 성공" : "실패";
-  return `${recipe.recipeName} — ${label}`;
-}
-
+/**
+ * 스텝 결과를 보고한다. 성공 시 true, 실패 시 false 를 반환한다.
+ * 보고 실패는 BE 가 스텝/실행 상태를 갱신하지 못한다는 뜻이라, 이후 러너가 계속 진행하면
+ * BE 는 EXECUTING 인데 FE 는 완료를 못 보고 대화방 락이 남는다. 호출측이 STALLED 로 다룰 수 있게
+ * false 를 반환한다(과거에는 조용히 삼켰음).
+ */
 async function safeReport(
   executionId: number,
   stepId: number,
@@ -615,22 +775,11 @@ async function safeReport(
     errorMessage?: string;
     extractedValues?: Record<string, any>;
   }
-): Promise<void> {
+): Promise<boolean> {
   try {
     await executionsApi.reportStep(executionId, stepId, payload);
+    return true;
   } catch {
-    // 보고 실패는 실행 흐름을 막지 않는다 (SSE 로 상태가 갱신되지 않을 뿐)
-  }
-}
-
-async function safeComplete(
-  executionId: number,
-  status: ExecutionStatus,
-  resultSummary: string
-): Promise<void> {
-  try {
-    await executionsApi.completeExecution(executionId, { status, resultSummary });
-  } catch {
-    // 무시
+    return false;
   }
 }

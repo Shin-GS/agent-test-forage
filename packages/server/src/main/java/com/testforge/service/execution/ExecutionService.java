@@ -8,11 +8,11 @@ import com.testforge.dto.common.CursorPage;
 import com.testforge.dto.common.StatusView;
 import com.testforge.dto.execution.ActionPickerRespondRequest;
 import com.testforge.dto.execution.ExecutionSummaryView;
-import com.testforge.dto.execution.ExecutionCompleteRequest;
 import com.testforge.dto.execution.ExecutionRecipeView;
 import com.testforge.dto.execution.ExecutionResponse;
 import com.testforge.dto.execution.ExecutionStartRequest;
 import com.testforge.dto.execution.ExecutionStepView;
+import com.testforge.dto.execution.PlanStartRequest;
 import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.conversation.enums.ConversationStatus;
@@ -143,7 +143,41 @@ public class ExecutionService {
         if (request.recipeId() == null) {
             throw ApiException.invalidRequest("recipeId is required");
         }
+        // 단일 실행 = 레시피 1개짜리 플랜. 공통 오케스트레이션(startInternal)으로 수렴한다.
+        return startInternal(conversationId, requesterId, List.of(request.recipeId()),
+                request.mode(), request.initialContext());
+    }
 
+    /**
+     * 플랜 실행 시작 (레시피 여러 개 순차 실행). {@code recipeIds} 순서가 곧 실행 순서다.
+     * 단일 실행과 동일한 공통 오케스트레이션({@link #startInternal})으로 수렴하며, recipeIds가 1개면
+     * 단일 실행과 동작이 같다(TYPE 표시만 SINGLE). 각 레시피는 canView로 접근 권한을 검증한다.
+     *
+     * <p>이미 처리 중인 대화방이면 409, 레시피/대화방이 없으면 404. recipeIds가 비면 400.
+     */
+    @Transactional
+    public ExecutionResponse startPlan(Long conversationId, Long requesterId, PlanStartRequest request) {
+        if (request.userId() == null) {
+            throw ApiException.invalidRequest("userId is required");
+        }
+        if (request.recipeIds() == null || request.recipeIds().isEmpty()) {
+            throw ApiException.invalidRequest("recipeIds is required (at least one)");
+        }
+        return startInternal(conversationId, requesterId, request.recipeIds(),
+                request.mode(), request.initialContext());
+    }
+
+    /**
+     * 실행 시작 공통 오케스트레이션. 단일/플랜 모두 이 경로로 수렴한다(단일 = N=1).
+     * 대화방 락을 잡고, {@code recipeIds} 순서대로 EXECUTION(TYPE 자동) + EXECUTION_RECIPE N개(스냅샷)를
+     * 만든다. <b>첫 레시피만</b> RUNNING 전이(스텝 생성 + usageCount 갱신)하고 나머지는 PENDING으로 둔다.
+     * 첫 레시피에 pre-run 액션 피커가 필요하면 WAITING_INPUT으로 대기하고, 아니면 executing으로 전이한다.
+     *
+     * <p>usageCount는 여기 start가 아니라 각 레시피의 RUNNING 전이 시점({@link #transitionRecipeToRunning})에서
+     * 원본 레시피 기준으로 갱신한다(플랜은 레시피가 실제 시작될 때 카운트). 단일도 첫 레시피 RUNNING 시 갱신되어 동작은 동일하다.
+     */
+    private ExecutionResponse startInternal(Long conversationId, Long requesterId, List<Long> recipeIds,
+                                            ExecutionMode requestedMode, Map<String, Object> initialContext) {
         // 소유자 검증을 락 획득보다 먼저 수행한다. 타인이 남의 conversationId로 호출해도
         // 락을 건드리지 않고 404로 거절되어, 정당한 소유자가 락 경합(409)을 겪지 않는다.
         Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
@@ -159,83 +193,63 @@ public class ExecutionService {
         }
         boolean started = false;
         try {
-            Recipe recipe = recipeRepository.findByIdAndDeletedAtIsNull(request.recipeId())
-                    .orElseThrow(() -> ApiException.recipeNotFound(request.recipeId()));
-
-            // 접근 권한 검증(auth.md): 타인 PRIVATE 레시피를 recipeId 직접 지정으로 실행하는 우회를 차단한다.
-            // 존재 은폐를 위해 canView 실패 시 404(recipeNotFound). userId/role은 세션(CurrentUser)에서만 도출한다.
-            // 반드시 usageCount 증가/스냅샷 저장보다 앞에 위치시켜, 권한 없는 실행이 부작용을 남기지 않게 한다.
             UserRole actorRole = CurrentUser.role();
-            if (!recipeAccessPolicy.canView(recipe, requesterId, actorRole)) {
-                throw ApiException.recipeNotFound(request.recipeId());
+            // 모든 레시피를 순서대로 로드 + canView 검증 (부작용 전에 전량 검증하여 권한 없는 실행이 흔적을 남기지 않게 함).
+            List<Recipe> recipes = new java.util.ArrayList<>();
+            for (Long recipeId : recipeIds) {
+                if (recipeId == null) {
+                    throw ApiException.invalidRequest("recipeId must not be null");
+                }
+                Recipe recipe = recipeRepository.findByIdAndDeletedAtIsNull(recipeId)
+                        .orElseThrow(() -> ApiException.recipeNotFound(recipeId));
+                if (!recipeAccessPolicy.canView(recipe, requesterId, actorRole)) {
+                    // 접근 권한 검증(auth.md): 타인 PRIVATE 우회 차단. 존재 은폐 위해 404.
+                    throw ApiException.recipeNotFound(recipeId);
+                }
+                recipes.add(recipe);
             }
 
-            // 사용 통계 갱신: 실행 시작 시점에 usageCount+1, lastUsedAt=now (목록 정렬 recent/usage용).
-            // 실행 스냅샷은 독립 저장되므로 여기서 원본 레시피 카운터만 올린다(플랜 등 recipeId 없는 경로는 이 start를 타지 않음).
-            recipe.setUsageCount(recipe.getUsageCount() + 1);
-            recipe.setLastUsedAt(LocalDateTime.now());
-            recipeRepository.save(recipe);
+            ExecutionMode mode = requestedMode == null ? ExecutionMode.AUTO : requestedMode;
+            // recipeIds 1개면 TYPE 표시만 SINGLE, 여러 개면 PLAN.
+            ExecutionType type = recipes.size() == 1 ? ExecutionType.SINGLE : ExecutionType.PLAN;
+            Recipe firstRecipe = recipes.get(0);
 
-            ExecutionMode mode = request.mode() == null ? ExecutionMode.AUTO : request.mode();
-
-            // 1) EXECUTION 생성 (단일 = 레시피 1개짜리 플랜)
-            //    소유자는 세션 주체(requesterId)로 저장한다. 위에서 conversation.getUserId()와
-            //    일치함을 검증했으므로 request.userId()가 아닌 requesterId를 신뢰값으로 사용한다.
-            Execution execution = new Execution(requesterId, ExecutionType.SINGLE, mode);
+            // 1) EXECUTION 생성. 소유자는 세션 주체(requesterId)로 저장. 대상 서비스/표시명은 첫 레시피 기준.
+            Execution execution = new Execution(requesterId, type, mode);
             execution.setConversationId(conversationId);
-            // MESSAGE_ID는 진행 블록(PROGRESS) 메시지를 가리킨다. 실제 실행 시작(executing 전이) 시점에
-            // PROGRESS 메시지를 만들며 setMessageId로 채운다(입력 대기면 respond 재개 시점).
-            execution.setApiSpecId(recipe.getApiSpecId());
-            execution.setTitle(recipe.getName());
+            execution.setApiSpecId(firstRecipe.getApiSpecId());
+            execution.setTitle(planTitle(type, recipes));
             Execution savedExecution = executionRepository.save(execution);
 
-            // 2) EXECUTION_RECIPE 생성 + 레시피 스냅샷 저장 (원본 독립)
-            ExecutionRecipe executionRecipe = new ExecutionRecipe(savedExecution.getId(), 0);
-            executionRecipe.setRecipeId(recipe.getId());
-            executionRecipe.setRecipeName(recipe.getName());
-            executionRecipe.setRecipeVersionNo(recipe.getCurrentVersion());
-            executionRecipe.setRecipeSnapshotJson(snapshotOf(recipe));
-            executionRecipe.setStatus(ExecutionRecipeStatus.RUNNING);
-            executionRecipe.setStartedAt(LocalDateTime.now());
-            ExecutionRecipe savedRecipe = executionRecipeRepository.save(executionRecipe);
-
-            // 3) EXECUTION_STEP(PENDING) 생성 — 레시피 스텝 스냅샷 기준
-            //    스텝 표시명(stepName)은 실행 시점에 표시명 폴백 체인((1) 스텝 label →
-            //    (2) 엔드포인트 summary → (3) method+path)으로 확정해 저장한다(structure.md 스냅샷 포함).
-            //    이렇게 실행 시점에 고정해야 스펙 summary가 나중에 바뀌어도 과거 히스토리 표기가 흔들리지 않는다.
-            List<Map<String, Object>> steps = RecipeJsonUtil.parseSteps(recipe.getStepsJson());
-            Map<Long, ApiEndpoint> endpointsById = loadEndpointsForSteps(steps);
-            for (int i = 0; i < steps.size(); i++) {
-                Map<String, Object> step = steps.get(i);
-                ExecutionStep executionStep = new ExecutionStep(
-                        savedRecipe.getId(), i, resolveStepType(step.get("type")));
-                executionStep.setStepName(resolveStepDisplayName(step, endpointsById));
-                executionStepRepository.save(executionStep);
+            // 2) EXECUTION_RECIPE N개 생성 + 스냅샷 저장 (원본 독립). 순서 = sequence. 전부 PENDING으로 둔다.
+            for (int seq = 0; seq < recipes.size(); seq++) {
+                Recipe recipe = recipes.get(seq);
+                ExecutionRecipe executionRecipe = new ExecutionRecipe(savedExecution.getId(), seq);
+                executionRecipe.setRecipeId(recipe.getId());
+                executionRecipe.setRecipeName(recipe.getName());
+                executionRecipe.setRecipeVersionNo(recipe.getCurrentVersion());
+                executionRecipe.setRecipeSnapshotJson(snapshotOf(recipe));
+                executionRecipe.setStatus(ExecutionRecipeStatus.PENDING);
+                executionRecipeRepository.save(executionRecipe);
             }
 
-            // 3-1) 실행 context 초기 시드: userInput = { 레시피 변수 기본값 ..., initialContext ... }
-            //      (initialContext가 기본값을 덮어씀). 레시피 body의 {{userInput.x}} 참조가 시작부터
-            //      값을 갖게 한다. 스텝 실행 후 누적(reportStep)은 별도로 유지된다.
-            // 발화 추출값(initialContext)을 레시피 변수 type에 맞게 정규화한 뒤 시드에 반영한다
-            // (ai-config.md: 추출값은 실행 시작 전 type에 맞게 파싱/정규화). 변환 실패값은 버려 미충족 처리.
-            Map<String, Object> normalizedContext =
-                    normalizeExtractedValues(recipe.getVariablesJson(), request.initialContext());
-            Map<String, Object> userInput = seedUserInput(recipe.getVariablesJson(), normalizedContext);
-            savedExecution.setContextJson(RecipeJsonUtil.toJsonString(Map.of("userInput", userInput)));
-            executionRepository.save(savedExecution);
+            // 3) 첫 레시피만 RUNNING 전이: 스텝(PENDING) 생성 + usageCount 갱신 + context 시드.
+            //    initialContext(발화 추출값)는 첫 레시피에만 시드된다.
+            List<ExecutionRecipe> executionRecipes =
+                    executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(savedExecution.getId());
+            transitionRecipeToRunning(savedExecution, executionRecipes.get(0), firstRecipe,
+                    initialContext);
 
-            // 4) 액션 피커 pre-run 분기 (execution.md 액션 피커 트리거)
-            //    - MANUAL(직접 입력): 미충족 여부와 무관하게 모든 입력변수를 pendingInputs로 노출
-            //    - AUTO + 미충족 있음: 미충족 변수만 pendingInputs로 노출
-            //    - AUTO + 미충족 없음: 바로 executing 전이 (기존 흐름)
+            // 4) 액션 피커 pre-run 분기 (execution.md 액션 피커 트리거) — 첫 레시피 기준.
+            //    - MANUAL: 모든 입력변수 노출 / AUTO + 미충족: 미충족만 / AUTO + 충족: 바로 executing
             Long ownerId = conversation.getUserId();
             Long executionId = savedExecution.getId();
+            Map<String, Object> userInput = currentUserInput(savedExecution.getContextJson());
             List<Map<String, Object>> pendingInputs =
-                    resolvePendingInputs(recipe.getVariablesJson(), userInput, mode);
+                    resolvePendingInputs(firstRecipe.getVariablesJson(), userInput, mode);
 
             if (!pendingInputs.isEmpty()) {
-                // 입력 대기: 대화방 WAITING_INPUT 전이 + session_status만 발행 (락 유지 → respond/cancel에서 해제).
-                // execution_progress started는 실제 실행 재개(respond) 시점에 발행하므로 여기선 발행하지 않음.
+                // 입력 대기: WAITING_INPUT 전이 + session_status만 발행 (락 유지 → respond/cancel에서 해제).
                 conversation.setStatus(ConversationStatus.WAITING_INPUT);
                 conversationRepository.save(conversation);
 
@@ -243,8 +257,8 @@ public class ExecutionService {
                         com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.WAITING_INPUT));
 
                 started = true; // 락 유지 (respond/cancel에서 해제)
-                log.info("Execution started, waiting for action-picker input: executionId={}, conversationId={}, recipeId={}, pending={}",
-                        executionId, conversationId, recipe.getId(), pendingInputs.size());
+                log.info("Execution started, waiting for action-picker input: executionId={}, conversationId={}, recipes={}, pending={}",
+                        executionId, conversationId, recipes.size(), pendingInputs.size());
 
                 return toResponse(savedExecution, pendingInputs);
             }
@@ -253,17 +267,15 @@ public class ExecutionService {
             conversation.setStatus(ConversationStatus.EXECUTING);
             conversationRepository.save(conversation);
 
-            // 실행 진행 블록(PROGRESS) 메시지 생성 + message_new 발행. 그 메시지 ID를 EXECUTION.MESSAGE_ID로
-            // 저장(진행 블록을 가리킴). 이후 스텝 보고/완료는 같은 메시지를 message_update로 갱신한다.
+            // 진행 블록(PROGRESS) 메시지 생성 + message_new. 그 ID를 EXECUTION.MESSAGE_ID로 저장.
             beginProgressMessage(savedExecution, conversationId);
 
-            // SSE: 대화방 상태(executing). 커밋 후 발행. (실행 진행은 위 PROGRESS 메시지로 흐른다)
             publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
                     com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.EXECUTING));
 
             started = true;
-            log.info("Execution started: executionId={}, conversationId={}, recipeId={}, steps={}",
-                    executionId, conversationId, recipe.getId(), steps.size());
+            log.info("Execution started: executionId={}, conversationId={}, type={}, recipes={}",
+                    executionId, conversationId, type, recipes.size());
 
             return toResponse(savedExecution);
         } finally {
@@ -275,39 +287,82 @@ public class ExecutionService {
     }
 
     /**
-     * 실행 종료 보고. FE가 스텝 실행을 마쳤을 때(성공/부분/실패/중지) 최종 상태를 알린다.
-     * EXECUTION 상태/종료시각/소요시간을 확정하고, 대화방을 idle로 되돌리며(락 해제), PROGRESS 메시지를
-     * 최종 상태로 확정({@code message_update})하고 정상 종료면 RESULT 메시지 생성({@code message_new}),
-     * {@code session_status: idle}을 커밋 후 발행한다.
+     * 하위 레시피(EXECUTION_RECIPE)를 RUNNING으로 전이시킨다. 스텝(PENDING) 스냅샷 레코드를 생성하고,
+     * 원본 레시피 기준으로 usageCount/lastUsedAt을 갱신한다(레시피가 실제로 시작되는 시점에 카운트).
+     * context 시드(userInput = 변수 기본값 + initialContext 정규화)도 이 시점에 수행한다.
      *
-     * <p>이미 종료된 실행에 대한 재호출은 <b>멱등 no-op</b>(현재 상태 그대로 반환). RUNNING을 최종
-     * 상태로 보고하면 400. 실행/대화방이 없으면 404.
+     * <p><b>usageCount 위치</b>: start가 아니라 각 레시피 RUNNING 전이 시점으로 옮겼다. 플랜에서 뒤 레시피가
+     * 실제로 시작될 때만 카운트되며, 단일/첫 레시피도 여기서 갱신되어 기존 동작과 동일하다.
+     *
+     * @param execution       소속 실행 (context 시드 대상)
+     * @param executionRecipe 전이 대상 EXECUTION_RECIPE
+     * @param originRecipe    원본 레시피 (usageCount 갱신 + 스텝/변수 스냅샷 소스). 삭제됐으면 null 허용
+     * @param initialContext  발화 추출 초기값 (첫 레시피에만 전달; 이후 레시피는 null → 기본값만 시드)
      */
-    @Transactional
-    public ExecutionResponse complete(Long executionId, Long requesterId, ExecutionCompleteRequest request) {
-        // complete는 정상 완료 보고 전용(SUCCESS/PARTIAL/FAILED). 중지/취소(STOPPED/CANCELLED)는
-        // 반드시 stop/cancel API 경유여야 대화방 해제·안내 메시지·요약이 일관되게 처리되므로 거부한다.
-        if (request.status() == null
-                || request.status() == ExecutionStatus.RUNNING
-                || request.status() == ExecutionStatus.STOPPED
-                || request.status() == ExecutionStatus.CANCELLED) {
-            throw ApiException.invalidRequest(
-                    "complete accepts SUCCESS/PARTIAL/FAILED only; use stop/cancel for STOPPED/CANCELLED");
-        }
-        Execution execution = executionRepository.findById(executionId)
-                .orElseThrow(() -> ApiException.executionNotFound(executionId));
-        requireOwner(execution, requesterId);
+    private void transitionRecipeToRunning(Execution execution, ExecutionRecipe executionRecipe,
+                                           Recipe originRecipe, Map<String, Object> initialContext) {
+        // 스텝 스냅샷은 EXECUTION_RECIPE의 스냅샷 JSON에서 읽는다(원본 독립 재현). 원본이 삭제돼도 동작.
+        String stepsJson = snapshotStepsJson(executionRecipe);
+        String variablesJson = snapshotVariablesJsonOf(executionRecipe);
 
-        // 멱등: 이미 종료된 실행이면 상태 변경 없이 그대로 반환 (락/발행 재수행 안 함)
-        if (execution.getStatus().isTerminal()) {
-            log.info("Execution complete is no-op (already terminal): executionId={}, status={}",
-                    executionId, execution.getStatus());
-            return toResponse(execution);
+        // 스텝(PENDING) 생성 — 스냅샷 스텝 기준, 표시명 폴백 체인 확정
+        List<Map<String, Object>> steps = RecipeJsonUtil.parseSteps(stepsJson);
+        Map<Long, ApiEndpoint> endpointsById = loadEndpointsForSteps(steps);
+        for (int i = 0; i < steps.size(); i++) {
+            Map<String, Object> step = steps.get(i);
+            ExecutionStep executionStep = new ExecutionStep(
+                    executionRecipe.getId(), i, resolveStepType(step.get("type")));
+            executionStep.setStepName(resolveStepDisplayName(step, endpointsById));
+            executionStepRepository.save(executionStep);
         }
 
+        // 레시피 실행 상태 RUNNING 전이
+        executionRecipe.setStatus(ExecutionRecipeStatus.RUNNING);
+        executionRecipe.setStartedAt(LocalDateTime.now());
+        executionRecipeRepository.save(executionRecipe);
+
+        // usageCount 갱신 (원본 레시피가 살아 있을 때만). 목록 정렬 recent/usage용.
+        if (originRecipe != null) {
+            originRecipe.setUsageCount(originRecipe.getUsageCount() + 1);
+            originRecipe.setLastUsedAt(LocalDateTime.now());
+            recipeRepository.save(originRecipe);
+        }
+
+        // context 시드: userInput = { 변수 기본값 ..., initialContext(정규화) ... } (initialContext가 덮어씀).
+        // 이미 context가 있으면(다음 레시피 전이) 기존 extract 누적값은 보존하고 userInput만 이 레시피 기준으로 재시드한다.
+        Map<String, Object> normalizedContext = normalizeExtractedValues(variablesJson, initialContext);
+        Map<String, Object> seededUserInput = seedUserInput(variablesJson, normalizedContext);
+        execution.setContextJson(reseedUserInput(execution.getContextJson(), seededUserInput));
+        executionRepository.save(execution);
+    }
+
+    /** 실행 표시명. 단일은 레시피명, 플랜은 "플랜: {첫레시피}"로 요약. */
+    private String planTitle(ExecutionType type, List<Recipe> recipes) {
+        if (type == ExecutionType.SINGLE) {
+            return recipes.get(0).getName();
+        }
+        return "플랜: " + recipes.get(0).getName();
+    }
+
+    /**
+     * 실행 완료 처리(단일 종료 진입점). reportStep의 자동완료(마지막 레시피 마지막 스텝 성공/스킵)와
+     * stop/cancel 경유의 중단이 모두 이 내부 메서드를 공유한다. 완료 진입점을 하나로 단일화해
+     * 이중완료를 <b>구조적으로</b> 방지한다(외부 complete API 없음 → 멱등 방어에 의존하지 않음).
+     *
+     * <p>수행 내용: EXECUTION 상태/종료시각/소요시간 확정 → 진행 중 하위 레시피 종료 정합
+     * ({@link #finalizeRunningRecipes}) → PROGRESS 메시지 최종 확정({@code message_update}) →
+     * 정상 종료(SUCCESS/PARTIAL)면 RESULT 메시지 생성({@code message_new}) → 대화방 idle 전이 +
+     * 락 해제 → {@code session_status: idle} 발행. 대화방에 연결되지 않은 실행이면 대화방 관련 처리는 건너뛴다.
+     *
+     * <p>중단(STOPPED/CANCELLED)은 stop/cancel API가 {@link #terminateRunningForConversation} 경유로
+     * 대화방 해제/안내를 담당하므로, 이 메서드는 완료(SUCCESS/PARTIAL/FAILED) 경로에서만 호출된다.
+     *
+     * @param execution 종료 대상 실행 (RUNNING 상태 가정 — 호출측이 terminal 여부를 이미 걸러냄)
+     * @param outcome   최종 상태 (SUCCESS/PARTIAL/FAILED)
+     */
+    private ExecutionResponse finalizeExecution(Execution execution, ExecutionStatus outcome) {
         // 상태/종료시각/소요시간 확정
-        execution.setStatus(request.status());
-        execution.setResultSummary(request.resultSummary());
+        execution.setStatus(outcome);
         LocalDateTime finishedAt = LocalDateTime.now();
         execution.setFinishedAt(finishedAt);
         if (execution.getStartedAt() != null) {
@@ -315,20 +370,24 @@ public class ExecutionService {
         }
         Execution saved = executionRepository.save(execution);
 
-        // 계층 정합: 아직 진행 중인 하위 레시피(EXECUTION_RECIPE)를 실행 최종 상태에 맞춰 종료한다.
-        // (단일 실행 기준. 플랜의 레시피별 세밀한 성공/실패 롤업은 플랜 조각에서 다룬다.)
-        finalizeRunningRecipes(executionId, request.status(), finishedAt);
+        // 계층 정합: 아직 진행 중/대기인 하위 레시피(EXECUTION_RECIPE)를 실행 최종 상태에 맞춰 종료한다.
+        finalizeRunningRecipes(saved.getId(), outcome, finishedAt);
 
         Long conversationId = saved.getConversationId();
         Long ownerId = resolveOwnerId(saved);
 
-        // 대화방을 idle로 되돌리고 락 해제 (실행이 대화방에 연결된 경우에만)
         if (conversationId != null) {
-            // 1) 진행 블록(PROGRESS 메시지) status를 최종 상태로 확정 + 남은 pending 스텝 정리 → message_update
-            refreshProgressMessage(saved, progressStatusOf(saved.getStatus()));
+            // 1) 진행 블록(PROGRESS 메시지) status를 최종 상태로 확정 + 남은 pending 스텝 정리 → message_update.
+            //    완료의 핵심(상태 확정 + idle 전이 + 락 해제)이 메시지 발행 부수 작업 예외로 롤백되지 않도록,
+            //    publishResult와 동일하게 예외를 방어적으로 격리한다(진행 블록 갱신 실패해도 완료는 확정).
+            try {
+                refreshProgressMessage(saved, progressStatusOf(saved.getStatus()));
+            } catch (Exception e) {
+                log.warn("Failed to refresh progress message on finalize: executionId={}, conversationId={}",
+                        saved.getId(), conversationId, e);
+            }
 
-            // 2) 결과 블록(RESULT 메시지) 생성 (정상 종료 SUCCESS/PARTIAL만). FAILED는 결과를 내지 않는다
-            //    (execution.md 실행 완료/결과 요약은 성공/부분 종료 대상). idle 전이보다 먼저 발행 등록.
+            // 2) 결과 블록(RESULT 메시지) 생성 (정상 종료 SUCCESS/PARTIAL만). FAILED는 결과를 내지 않는다.
             if (saved.getStatus() == ExecutionStatus.SUCCESS || saved.getStatus() == ExecutionStatus.PARTIAL) {
                 publishResult(saved, conversationId);
             }
@@ -339,24 +398,62 @@ public class ExecutionService {
             });
             conversationLock.unlock(conversationId);
 
-            // 순서: PROGRESS 확정(message_update) → RESULT(message_new) → session_status idle.
-            // 모두 publishAfterCommit이라 등록 순서대로 커밋 후 발행된다.
+            // 순서: PROGRESS 확정 → RESULT → session_status idle (모두 커밋 후 등록 순서대로 발행)
             publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
                     com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.IDLE));
         }
 
-        log.info("Execution completed: executionId={}, status={}, conversationId={}",
-                executionId, saved.getStatus(), conversationId);
+        log.info("Execution finalized: executionId={}, status={}, conversationId={}",
+                saved.getId(), saved.getStatus(), conversationId);
         return toResponse(saved);
     }
 
-    /** 실행 상세 조회 (없으면 404) */
+    /**
+     * 실행 상세 조회 (없으면 404).
+     *
+     * <p><b>pendingInputs 채움(입력 대기 판정 단일화):</b> FE 러너가 다음 레시피 pre-run 미충족을 자체
+     * 계산하지 않고 BE 판정을 그대로 신뢰하도록, 이 실행이 <i>현재 입력 대기 중</i>이면 미충족 변수 목록을
+     * 응답에 담는다. 대기 판정은 respondActionPicker/전이와 <b>동일한 경로</b>(runningRecipeVariablesJson +
+     * currentUserInput + resolvePendingInputs)를 재사용해 규칙 이중화를 없앤다.
+     *
+     * <p>대기로 보는 조건(모두 만족): 이 실행이 RUNNING이고, 대화방에 연결돼 있으며, 그 대화방이
+     * WAITING_INPUT 상태다. 대화방 락으로 한 대화방에 RUNNING 실행이 하나로 고정되므로, RUNNING인 이 실행이
+     * 곧 대화방의 현재 실행이다. 그 외(종료 실행, 대화방 없음/EXECUTING/IDLE 등)는 빈 리스트를 유지한다.
+     * detail은 단건 조회라 추가 조회(대화방 status, 현재 RUNNING 레시피 스냅샷)를 허용한다(목록 경로 영향 없음).
+     */
     @Transactional(readOnly = true)
     public ExecutionResponse detail(Long executionId, Long requesterId) {
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> ApiException.executionNotFound(executionId));
         requireOwner(execution, requesterId);
-        return toResponse(execution);
+        return toResponse(execution, resolveDetailPendingInputs(execution));
+    }
+
+    /**
+     * detail 응답용 pendingInputs 산출. 이 실행이 대화방 입력 대기 중이면 미충족 변수 목록을, 아니면 빈 리스트를
+     * 돌려준다. 판정/계산은 기존 경로 재사용(새 규칙 없음): 현재 RUNNING 레시피 스냅샷 variablesJson +
+     * 현재 context.userInput + execution.getMode() 로 {@link #resolvePendingInputs}를 호출한다.
+     */
+    private List<Map<String, Object>> resolveDetailPendingInputs(Execution execution) {
+        // 종료된 실행은 대화방의 현재 실행이 아니므로 대기 아님.
+        if (execution.getStatus() != ExecutionStatus.RUNNING) {
+            return List.of();
+        }
+        Long conversationId = execution.getConversationId();
+        if (conversationId == null) {
+            return List.of();
+        }
+        // 대화방이 WAITING_INPUT일 때만 입력 대기. EXECUTING/IDLE 등은 대기 아님(빈 리스트).
+        boolean waiting = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+                .map(conversation -> conversation.getStatus() == ConversationStatus.WAITING_INPUT)
+                .orElse(false);
+        if (!waiting) {
+            return List.of();
+        }
+        // respondActionPicker와 동일 경로: 현재 RUNNING 레시피 스냅샷 변수 + 현재 userInput 기준으로 미충족 산출.
+        Map<String, Object> userInput = currentUserInput(execution.getContextJson());
+        String variablesJson = runningRecipeVariablesJson(execution.getId());
+        return resolvePendingInputs(variablesJson, userInput, execution.getMode());
     }
 
     /** 히스토리 목록 페이지 기본/최대 크기 (무한 스크롤 UX + 과도 로딩 방지) */
@@ -654,14 +751,115 @@ public class ExecutionService {
             executionRepository.save(execution);
         }
 
-        // 진행 블록(PROGRESS 메시지) 갱신: steps[stepIndex]를 status/summary/name으로 갱신하고
-        // content 요약("(k/N)")을 갱신한 뒤 message_update 발행.
-        Long conversationId = execution.getConversationId();
-        refreshProgressMessage(execution, "running");
-
         log.info("Step reported: executionId={}, stepId={}, stepIndex={}, status={}",
                 executionId, stepId, step.getStepIndex(), request.status());
+
+        // 오케스트레이션: 스텝 결과에 따라 실행 흐름을 진행한다.
+        orchestrateAfterStep(execution, recipe, request.status());
+
         return toStepView(step);
+    }
+
+    /**
+     * 스텝 보고 후 실행 흐름 오케스트레이션(execution.md 실행 진행/전이). 스텝 결과에 따라 갈린다:
+     * <ul>
+     *   <li><b>FAILED</b>: 전체 중단. 다음 레시피로 전이하지 않고 실행을 PARTIAL로 종료
+     *       ({@link #finalizeExecution}). 남은 pending 레시피/스텝은 finalize가 정합 처리한다.</li>
+     *   <li><b>SUCCESS/SKIPPED</b>: 현재 레시피에 남은 pending 스텝이 있으면 PROGRESS만 갱신하고 계속 진행.
+     *       없으면(레시피 완료) 다음 EXECUTION_RECIPE(PENDING)가 있으면 RUNNING 전이(스텝 생성 +
+     *       context userInput 재시드 + usageCount 갱신, 미충족 필수면 pre-run 액션 피커 WAITING_INPUT).
+     *       다음 레시피가 없으면 실행 전체를 SUCCESS로 완료한다.</li>
+     * </ul>
+     * "마지막 스텝" 판정은 현재 레시피의 남은 PENDING 스텝 유무로 한다("마지막 = 남은 PENDING 없음").
+     */
+    private void orchestrateAfterStep(Execution execution, ExecutionRecipe currentRecipe,
+                                      ExecutionStepStatus reportedStatus) {
+        // 실패: 전체 중단 → PARTIAL 종료 (전이 안 함)
+        if (reportedStatus == ExecutionStepStatus.FAILED) {
+            currentRecipe.setStatus(ExecutionRecipeStatus.FAILED);
+            currentRecipe.setFinishedAt(LocalDateTime.now());
+            executionRecipeRepository.save(currentRecipe);
+            finalizeExecution(execution, ExecutionStatus.PARTIAL);
+            return;
+        }
+
+        // 진행/전이는 SUCCESS/SKIPPED만 허용하는 명시적 화이트리스트. reportStep은 PENDING만 거부하므로
+        // FAILED 외 나머지가 무조건 "성공 취급"으로 다음 레시피 전이되면 안 된다. 중단(STOPPED/CANCELLED 등)은
+        // stop/cancel API(terminateRunningForConversation)가 정상 경로이고, 향후 스텝 상태가 확장되더라도
+        // 여기서 자동 전이되지 않도록 화이트리스트 밖 값은 no-op으로 무시한다.
+        if (reportedStatus != ExecutionStepStatus.SUCCESS && reportedStatus != ExecutionStepStatus.SKIPPED) {
+            log.warn("Ignoring non-success/skipped step status in orchestration: executionId={}, status={}",
+                    execution.getId(), reportedStatus);
+            return;
+        }
+
+        // 성공/스킵: 현재 레시피에 남은 pending 스텝이 있으면 진행 표시만 갱신하고 계속.
+        if (hasPendingStep(currentRecipe.getId())) {
+            refreshProgressMessage(execution, "running");
+            return;
+        }
+
+        // 현재 레시피 완료 → SUCCESS 마감
+        currentRecipe.setStatus(ExecutionRecipeStatus.SUCCESS);
+        currentRecipe.setFinishedAt(LocalDateTime.now());
+        executionRecipeRepository.save(currentRecipe);
+
+        // 다음 EXECUTION_RECIPE(PENDING, sequence 순) 찾기
+        ExecutionRecipe next = nextPendingRecipe(execution.getId(), currentRecipe.getSequence());
+        if (next == null) {
+            // 남은 레시피 없음 → 실행 전체 SUCCESS 완료
+            finalizeExecution(execution, ExecutionStatus.SUCCESS);
+            return;
+        }
+
+        // 다음 레시피 RUNNING 전이: 스텝 생성 + userInput 재시드 + usageCount 갱신.
+        // initialContext는 첫 레시피에서만 시드하므로 여기선 null(기본값만 재시드, 기존 extract 누적값은 보존).
+        Recipe originRecipe = next.getRecipeId() == null ? null
+                : recipeRepository.findByIdAndDeletedAtIsNull(next.getRecipeId()).orElse(null);
+        transitionRecipeToRunning(execution, next, originRecipe, null);
+
+        // 다음 레시피 pre-run 액션 피커: 미충족 필수 있으면(AUTO) 또는 MANUAL이면 WAITING_INPUT 전이.
+        Long conversationId = execution.getConversationId();
+        Map<String, Object> userInput = currentUserInput(execution.getContextJson());
+        List<Map<String, Object>> pendingInputs =
+                resolvePendingInputs(snapshotVariablesJsonOf(next), userInput, execution.getMode());
+        if (!pendingInputs.isEmpty() && conversationId != null) {
+            // 입력 대기: 진행 블록은 다음 레시피 스텝을 반영해 갱신하되, 대화방을 WAITING_INPUT으로.
+            // respond로 값 채우면 다시 executing으로 재개된다(락 유지).
+            refreshProgressMessage(execution, "running");
+            conversationRepository.findByIdAndDeletedAtIsNull(conversationId).ifPresent(conversation -> {
+                conversation.setStatus(ConversationStatus.WAITING_INPUT);
+                conversationRepository.save(conversation);
+            });
+            Long ownerId = resolveOwnerId(execution);
+            publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                    com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.WAITING_INPUT));
+            log.info("Plan advanced to next recipe, waiting for action-picker input: executionId={}, nextSequence={}, pending={}",
+                    execution.getId(), next.getSequence(), pendingInputs.size());
+            return;
+        }
+
+        // 값 충족 → 진행 블록 갱신 후 다음 레시피 계속 진행
+        refreshProgressMessage(execution, "running");
+        log.info("Plan advanced to next recipe: executionId={}, nextSequence={}",
+                execution.getId(), next.getSequence());
+    }
+
+    /** 레시피 실행에 아직 PENDING 스텝이 남아 있는지. "마지막 스텝" 판정의 기준(남은 PENDING 없음 = 레시피 완료). */
+    private boolean hasPendingStep(Long executionRecipeId) {
+        return executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(executionRecipeId).stream()
+                .anyMatch(s -> s.getStatus() == ExecutionStepStatus.PENDING);
+    }
+
+    /** 현재 sequence 다음의 PENDING EXECUTION_RECIPE (없으면 null). 플랜 다음 레시피 전이 대상. */
+    private ExecutionRecipe nextPendingRecipe(Long executionId, int currentSequence) {
+        for (ExecutionRecipe recipe : executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId)) {
+            if (recipe.getSequence() > currentSequence
+                    && recipe.getStatus() == ExecutionRecipeStatus.PENDING) {
+                return recipe;
+            }
+        }
+        return null;
     }
 
     /**
@@ -707,9 +905,10 @@ public class ExecutionService {
         executionRepository.save(execution);
 
         // 재검증: 병합 후에도 required 변수가 비면 WAITING_INPUT 유지 + 액션 피커 재노출 (400).
-        // 검증 기준은 실행 시작 시점의 레시피 스냅샷(원본 독립)에 담긴 variablesJson을 사용한다.
+        // 레시피 인식: 현재 RUNNING인 EXECUTION_RECIPE의 스냅샷 variablesJson을 기준으로 검증한다.
+        // 대화방 락으로 RUNNING 레시피가 고정돼 있어(동시 요청 불가), 지금 대기 중인 그 레시피의 값만 본다.
         Map<String, Object> userInput = currentUserInput(mergedContext);
-        String variablesJson = snapshotVariablesJson(execution.getId());
+        String variablesJson = runningRecipeVariablesJson(execution.getId());
         List<Map<String, Object>> stillMissing = missingRequired(variablesJson, userInput);
         if (!stillMissing.isEmpty()) {
             // 상태/락 그대로 유지 (WAITING_INPUT). 액션 피커를 다시 노출하도록 미충족 목록을 돌려준다.
@@ -757,33 +956,56 @@ public class ExecutionService {
      */
     private void publishResult(Execution execution, Long conversationId) {
         try {
-            Map<String, Object> snapshot = firstRecipeSnapshot(execution.getId());
             Map<String, Object> context = asMap(RecipeJsonUtil.toObject(execution.getContextJson()));
             Map<String, Object> userInput = asMap(context.get("userInput"));
 
-            String recipeName = execution.getTitle();
-            Map<String, Object> resultValues = resolveResultValues(snapshot, context, userInput);
-            // 결과키 표시명(사람말) 맵: 결과 정의(④)에 label이 등록된 key만 담는다(messaging.md RESULT.resultLabels).
-            // label 미등록 key는 미포함 → FE가 원본 key로 폴백한다(값/표기 분리).
-            Map<String, String> resultLabels = resolveResultLabels(snapshot);
+            List<ExecutionRecipe> executionRecipes =
+                    executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(execution.getId());
+            boolean isPlan = executionRecipes.size() >= 2;
 
-            // 상세 드릴다운(ExecutionRecipeView.resultValues)에서 결과값을 보여줄 수 있도록
-            // 산출한 resultValues 를 첫(단일 실행 기준) EXECUTION_RECIPE 에 저장한다.
-            // (RESULT 메시지 payload 와 별개로, 히스토리 상세 조회는 이 컬럼을 읽는다.)
-            persistResultValues(execution.getId(), resultValues);
+            List<ResultRecipe> resultRecipes = new java.util.ArrayList<>();
+            List<String> lineSummaries = new java.util.ArrayList<>();
+            for (ExecutionRecipe er : executionRecipes) {
+                Map<String, Object> snapshot = recipeSnapshot(er);
+                // 결과값(④): 그 레시피 스냅샷 정의 기준으로 실행 context에서 추출(정의 없으면 context+userInput fallback).
+                Map<String, Object> resultValues = resolveResultValues(snapshot, context, userInput);
+                // 결과키 표시명(사람말) 맵: 결과 정의(④)에 label이 등록된 key만 담는다(messaging.md RESULT.resultLabels).
+                Map<String, String> resultLabels = resolveResultLabels(snapshot);
 
-            String template = snapshot == null ? null : asString(snapshot.get("resultTemplate"));
-            String content;
-            if (template != null && !template.isBlank()) {
-                // (a) 템플릿 치환: {{key}} → resultValues 우선, 없으면 userInput. 둘 다 없으면 원문 유지.
-                content = renderTemplate(template, resultValues, userInput);
-            } else {
-                // (b) 템플릿 없음: 최소 요약. 등록된 표시명(resultLabels)이 있으면 사람말 이름으로 나열한다.
-                //     TODO(fast AI): 후속에서 steps summary + resultValues로 AI 요약.
-                content = buildFallbackSummary(recipeName, resultValues, resultLabels);
+                // 상세 드릴다운(ExecutionRecipeView.resultValues) + PROGRESS 접힘 요약 재사용을 위해 레시피별로 저장.
+                if (!resultValues.isEmpty()) {
+                    er.setResultValuesJson(RecipeJsonUtil.toJsonString(resultValues));
+                    executionRecipeRepository.save(er);
+                }
+
+                String recipeName = firstNonNull(er.getRecipeName(), execution.getTitle());
+                String template = snapshot == null ? null : asString(snapshot.get("resultTemplate"));
+                String recipeContent;
+                if (template != null && !template.isBlank()) {
+                    recipeContent = renderTemplate(template, resultValues, userInput);
+                } else {
+                    recipeContent = buildFallbackSummary(recipeName, resultValues, resultLabels);
+                }
+
+                resultRecipes.add(new ResultRecipe(
+                        er.getSequence() == null ? 0 : er.getSequence(),
+                        recipeName,
+                        recipeStatusCode(er.getStatus()),
+                        resultValues,
+                        resultLabels,
+                        recipeContent));
+
+                // 플랜 content 나열용 한 줄 요약: "✓ {seq}. {name} — {결과 한 줄}" (Case 21 정본)
+                String oneLine = recipeSummaryLine(er, resultValues, resultLabels);
+                lineSummaries.add(oneLine);
             }
 
-            String payloadJson = buildResultPayload(execution.getId(), recipeName, resultValues, resultLabels, template);
+            String content = isPlan
+                    ? buildPlanResultContent(execution.getTitle(), executionRecipes.size(), lineSummaries)
+                    : (resultRecipes.isEmpty() ? "" : resultRecipes.get(0).summary());
+
+            String payloadJson = buildResultPayload(execution.getId(), execution.getTitle(),
+                    progressStatusOf(execution.getStatus()), resultRecipes);
             conversationService.createResultMessage(conversationId, payloadJson, content);
         } catch (Exception e) {
             // 결과 발행 실패가 실행 종료(상태 확정/idle/락 해제)를 막지 않도록 방어적으로 삼킨다.
@@ -792,11 +1014,56 @@ public class ExecutionService {
         }
     }
 
+    /** 플랜 결과 content(표시용): "{title} 플랜 N개 레시피 완료" + 레시피별 한 줄 나열(Case 21). */
+    private String buildPlanResultContent(String title, int total, List<String> lineSummaries) {
+        String name = (title == null || title.isBlank()) ? "플랜" : title;
+        StringBuilder sb = new StringBuilder();
+        sb.append(name).append(" 플랜 ").append(total).append("개 레시피를 완료했습니다.");
+        for (String line : lineSummaries) {
+            sb.append("\n").append(line);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 플랜 결과 레시피별 한 줄: "{상태아이콘} {seq}. {name} — {결과 한 줄}" (Case 21 "✓ 이름 — 결과").
+     * 결과 한 줄은 resultValues 스칼라를 표시명(있으면)과 함께 이어 붙인다. 값이 없으면 상태만 표기.
+     */
+    private String recipeSummaryLine(ExecutionRecipe er, Map<String, Object> resultValues,
+                                     Map<String, String> resultLabels) {
+        String icon = switch (recipeStatusCode(er.getStatus())) {
+            case "success" -> "✓";
+            case "skipped" -> "⏭";
+            case "failed" -> "✕";
+            case "stopped", "cancelled" -> "⊘";
+            default -> "·";
+        };
+        int seq = (er.getSequence() == null ? 0 : er.getSequence()) + 1;
+        String name = firstNonNull(er.getRecipeName(), "레시피");
+        StringBuilder tail = new StringBuilder();
+        for (Map.Entry<String, Object> e : resultValues.entrySet()) {
+            if (!isScalar(e.getValue())) {
+                continue;
+            }
+            if (tail.length() > 0) {
+                tail.append(", ");
+            }
+            String display = resultLabels == null ? null : resultLabels.get(e.getKey());
+            if (display != null && !display.isBlank()) {
+                tail.append(display).append(": ").append(e.getValue());
+            } else {
+                tail.append(e.getValue());
+            }
+        }
+        String line = icon + " " + seq + ". " + name;
+        return tail.length() == 0 ? line : line + " — " + tail;
+    }
+
     // ── 진행 블록(PROGRESS 메시지) payload/발행 ──
 
     /** PROGRESS/RESULT payload 스키마 버전 (messaging.md payloadJson 공통 필드) */
-    private static final int PROGRESS_SCHEMA_VERSION = 1;
-    private static final int RESULT_SCHEMA_VERSION = 1;
+    private static final int PROGRESS_SCHEMA_VERSION = 2;
+    private static final int RESULT_SCHEMA_VERSION = 2;
 
     /**
      * 실행 시작(또는 재개) 시점에 진행 블록(PROGRESS) 메시지를 만들고 그 ID를 {@code EXECUTION.MESSAGE_ID}에
@@ -807,9 +1074,9 @@ public class ExecutionService {
         if (conversationId == null) {
             return;
         }
-        List<ProgressStep> steps = progressSteps(execution.getId());
-        String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), "running", steps);
-        String content = progressContent(execution.getTitle(), "running", steps);
+        List<ProgressRecipe> recipes = progressRecipes(execution.getId());
+        String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), "running", recipes);
+        String content = progressContent(execution.getTitle(), "running", recipes);
 
         Long messageId = conversationService.createProgressMessage(conversationId, payloadJson, content);
         if (messageId != null) {
@@ -829,9 +1096,9 @@ public class ExecutionService {
         if (conversationId == null || messageId == null) {
             return;
         }
-        List<ProgressStep> steps = progressSteps(execution.getId());
-        String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), overallStatus, steps);
-        String content = progressContent(execution.getTitle(), overallStatus, steps);
+        List<ProgressRecipe> recipes = progressRecipes(execution.getId());
+        String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), overallStatus, recipes);
+        String content = progressContent(execution.getTitle(), overallStatus, recipes);
         conversationService.updateProgressMessage(conversationId, messageId, payloadJson, content);
     }
 
@@ -848,19 +1115,31 @@ public class ExecutionService {
     }
 
     /**
-     * 실행의 스텝 스냅샷을 진행 블록용 뷰로 구성한다. 하위 EXECUTION_RECIPE의 스텝을 순서대로 이어 담으며,
-     * {@code status}는 EXECUTION_STEP.STATUS를 progress 스키마 코드(소문자)로 매핑한다. PENDING은 "pending".
+     * 실행의 진행 상태를 <b>레시피 그룹 단위</b>로 구성한다(플랜 진행 카드 = chat.html Case 12 정본).
+     * 하위 EXECUTION_RECIPE를 sequence 순서대로 돌며, 각 레시피의 상태(소문자 코드) + 스텝 목록을 담는다.
+     * 스텝 index는 각 레시피 내부에서 0부터 시작한다(레시피 그룹 내 지역 인덱스). 완료 접힘 표시용
+     * {@code summary}(결과 한 줄)는 그 레시피의 RESULT_VALUES_JSON에서 파생한다(없으면 null).
+     *
+     * <p>단일 실행(N=1)도 레시피 1개짜리 리스트로 통일한다. FE는 단일/플랜을 동일 구조로 렌더하되 표시만 분기한다.
      */
-    private List<ProgressStep> progressSteps(Long executionId) {
-        List<ProgressStep> steps = new java.util.ArrayList<>();
-        int index = 0;
+    private List<ProgressRecipe> progressRecipes(Long executionId) {
+        List<ProgressRecipe> result = new java.util.ArrayList<>();
         for (ExecutionRecipe recipe : executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId)) {
+            List<ProgressStep> steps = new java.util.ArrayList<>();
+            int index = 0;
             for (ExecutionStep step : executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(recipe.getId())) {
                 steps.add(new ProgressStep(index++, step.getStepName(),
                         stepStatusCode(step.getStatus()), step.getSummary()));
             }
+            String recipeName = firstNonNull(recipe.getRecipeName(), null);
+            result.add(new ProgressRecipe(
+                    recipe.getSequence() == null ? 0 : recipe.getSequence(),
+                    recipeName,
+                    recipeStatusCode(recipe.getStatus()),
+                    recipeSummary(recipe),
+                    steps));
         }
-        return steps;
+        return result;
     }
 
     /** EXECUTION_STEP.STATUS → progress steps[].status 코드(소문자). PENDING/SUCCESS/FAILED/SKIPPED */
@@ -868,28 +1147,94 @@ public class ExecutionService {
         return status == null ? "pending" : status.name().toLowerCase(Locale.ROOT);
     }
 
+    /** EXECUTION_RECIPE.STATUS → progress recipes[].status 코드(소문자). PENDING/RUNNING/SUCCESS/SKIPPED/FAILED/STOPPED/CANCELLED */
+    private String recipeStatusCode(ExecutionRecipeStatus status) {
+        return status == null ? "pending" : status.name().toLowerCase(Locale.ROOT);
+    }
+
     /**
-     * 진행 블록 payloadJson 구성: {@code { kind:"progress", schemaVersion, executionId, recipeName,
-     * status, steps:[{ index, name, status, summary }] }}. payloadJson이 진실이다.
+     * 레시피 결과 한 줄 요약({@code summary}) 산출. 완료 레시피 접힘 표시("✅ + 결과 한 줄", Case 12)와
+     * 플랜 결과 카드의 레시피별 한 줄(Case 21)에 쓰인다. RESULT_VALUES_JSON의 스칼라 값을 " · "로 이어
+     * 붙이되, 값이 없으면 null(FE가 상태만 표기). label 없이 원본 key를 쓴다(값 위주 한 줄, 표시명은 RESULT payload가 별도 제공).
      */
-    private String buildProgressPayload(Long executionId, String recipeName, String status,
-                                        List<ProgressStep> steps) {
+    private String recipeSummary(ExecutionRecipe recipe) {
+        Map<String, Object> values = asMap(RecipeJsonUtil.toObject(recipe.getResultValuesJson()));
+        if (values.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Object> e : values.entrySet()) {
+            if (!isScalar(e.getValue())) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(" · ");
+            }
+            sb.append(e.getValue());
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /** 레시피 상태 코드가 "완료(진행률/접힘 대상)"인지: success/skipped/failed/stopped/cancelled. */
+    private boolean isRecipeSettled(String recipeStatusCode) {
+        return switch (recipeStatusCode) {
+            case "success", "skipped", "failed", "stopped", "cancelled" -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * 진행 블록 payloadJson 구성(레시피 그룹 구조): {@code { kind:"progress", schemaVersion, executionId,
+     * title, overallStatus, recipeProgress:{ current, total }, recipes:[{ sequence, recipeName, status,
+     * summary, steps:[{ index, name, status, summary }] }] }}. payloadJson이 진실이다.
+     *
+     * <p>{@code recipeProgress}는 레시피 단위 진행률(k/N 레시피 표기용): total = 전체 레시피 수,
+     * current = 종료(settled)된 레시피 + 현재 running 레시피(= "완료+현재"). 디자인 정본 "2/3 레시피"
+     * (1완료 + 현재 진행 중)와 일치한다. 단일 실행(N=1)도 recipes 1개로 통일한다.
+     */
+    private String buildProgressPayload(Long executionId, String title, String overallStatus,
+                                        List<ProgressRecipe> recipes) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("kind", "progress");
         root.put("schemaVersion", PROGRESS_SCHEMA_VERSION);
         root.put("executionId", executionId);
-        root.put("recipeName", recipeName);
-        root.put("status", status);
-        ArrayNode stepsNode = root.putArray("steps");
-        for (ProgressStep step : steps) {
-            ObjectNode s = stepsNode.addObject();
-            s.put("index", step.index());
-            s.put("name", step.name());
-            s.put("status", step.status());
-            if (step.summary() == null) {
-                s.putNull("summary");
+        root.put("title", title);
+        root.put("overallStatus", overallStatus);
+
+        int total = recipes.size();
+        long settled = recipes.stream().filter(r -> isRecipeSettled(r.status())).count();
+        long running = recipes.stream().filter(r -> "running".equals(r.status())).count();
+        int current = (int) Math.min(total, settled + running);
+        ObjectNode progressNode = root.putObject("recipeProgress");
+        progressNode.put("current", current);
+        progressNode.put("total", total);
+
+        ArrayNode recipesNode = root.putArray("recipes");
+        for (ProgressRecipe recipe : recipes) {
+            ObjectNode r = recipesNode.addObject();
+            r.put("sequence", recipe.sequence());
+            if (recipe.recipeName() == null) {
+                r.putNull("recipeName");
             } else {
-                s.put("summary", step.summary());
+                r.put("recipeName", recipe.recipeName());
+            }
+            r.put("status", recipe.status());
+            if (recipe.summary() == null) {
+                r.putNull("summary");
+            } else {
+                r.put("summary", recipe.summary());
+            }
+            ArrayNode stepsNode = r.putArray("steps");
+            for (ProgressStep step : recipe.steps()) {
+                ObjectNode s = stepsNode.addObject();
+                s.put("index", step.index());
+                s.put("name", step.name());
+                s.put("status", step.status());
+                if (step.summary() == null) {
+                    s.putNull("summary");
+                } else {
+                    s.put("summary", step.summary());
+                }
             }
         }
         try {
@@ -899,15 +1244,42 @@ public class ExecutionService {
         }
     }
 
-    /** 진행 요약 content(표시용): "{레시피명} 실행 중 (k/N)". 종료 상태면 상태 접미 포함. */
-    private String progressContent(String recipeName, String status, List<ProgressStep> steps) {
+    /**
+     * 진행 요약 content(표시용). 레시피 수로 단일/플랜을 분기한다(payload는 항상 레시피 그룹 구조):
+     * <ul>
+     *   <li>플랜(N≥2): "{title} 플랜 실행 중 (k/N 레시피)" — 레시피 단위 진행률. 종료 시 "완료/실패 등 (k/N 레시피)".</li>
+     *   <li>단일(N=1): "{레시피명} 실행 중 (k/N)" — 스텝 단위 진행률(기존과 동일한 사용자 관측).</li>
+     * </ul>
+     */
+    private String progressContent(String title, String status, List<ProgressRecipe> recipes) {
+        boolean isPlan = recipes.size() >= 2;
+        if (isPlan) {
+            String name = (title == null || title.isBlank()) ? "플랜" : title;
+            int total = recipes.size();
+            long settled = recipes.stream().filter(r -> isRecipeSettled(r.status())).count();
+            long running = recipes.stream().filter(r -> "running".equals(r.status())).count();
+            long current = Math.min(total, settled + running);
+            String progress = " (" + current + "/" + total + " 레시피)";
+            if ("running".equals(status)) {
+                return name + " 플랜 실행 중" + progress;
+            }
+            return name + " 플랜 " + overallStatusLabel(status) + progress;
+        }
+        // 단일(N=1 또는 0): 스텝 단위 진행률(기존 관측 유지)
+        String recipeName = recipes.isEmpty() ? null : recipes.get(0).recipeName();
         String name = (recipeName == null || recipeName.isBlank()) ? "레시피" : recipeName;
+        List<ProgressStep> steps = recipes.isEmpty() ? List.of() : recipes.get(0).steps();
         int total = steps.size();
         long done = steps.stream().filter(s -> "success".equals(s.status()) || "skipped".equals(s.status())).count();
         if ("running".equals(status)) {
             return name + " 실행 중 (" + done + "/" + total + ")";
         }
-        String label = switch (status) {
+        return name + " " + overallStatusLabel(status) + " (" + done + "/" + total + ")";
+    }
+
+    /** 실행 전체 상태 코드 → 한국어 라벨(종료 상태 표시용). */
+    private String overallStatusLabel(String status) {
+        return switch (status) {
             case "success" -> "완료";
             case "partial" -> "부분 완료";
             case "failed" -> "실패";
@@ -915,29 +1287,43 @@ public class ExecutionService {
             case "cancelled" -> "취소됨";
             default -> status;
         };
-        return name + " " + label + " (" + done + "/" + total + ")";
     }
 
     /**
-     * 결과 블록 payloadJson 구성: {@code { kind:"result", schemaVersion, executionId, recipeName,
-     * resultValues, resultLabels?, template? }}. resultLabels/template은 비면 생략한다. payloadJson이 진실이다.
-     * {@code resultLabels}는 결과키 → 사람말 표시명 맵으로, label이 등록된 key만 담는다(messaging.md).
+     * 결과 블록 payloadJson 구성(레시피별 구조): {@code { kind:"result", schemaVersion, executionId, title,
+     * overallStatus, recipes:[{ sequence, recipeName, status, resultValues, resultLabels?, summary }] }}.
+     * {@code resultLabels}는 결과키 → 사람말 표시명 맵으로, label이 등록된 key만 담는다(비면 생략, messaging.md).
+     * 단일 실행(N=1)도 recipes 1개로 통일한다. payloadJson이 진실이다.
      */
-    private String buildResultPayload(Long executionId, String recipeName,
-                                      Map<String, Object> resultValues,
-                                      Map<String, String> resultLabels, String template) {
+    private String buildResultPayload(Long executionId, String title, String overallStatus,
+                                      List<ResultRecipe> recipes) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("kind", "result");
         root.put("schemaVersion", RESULT_SCHEMA_VERSION);
         root.put("executionId", executionId);
-        root.put("recipeName", recipeName);
-        root.set("resultValues", objectMapper.valueToTree(resultValues == null ? Map.of() : resultValues));
-        // 표시명이 하나라도 있을 때만 필드를 넣는다(없으면 FE가 원본 key로 폴백).
-        if (resultLabels != null && !resultLabels.isEmpty()) {
-            root.set("resultLabels", objectMapper.valueToTree(resultLabels));
-        }
-        if (template != null && !template.isBlank()) {
-            root.put("template", template);
+        root.put("title", title);
+        root.put("overallStatus", overallStatus);
+        ArrayNode recipesNode = root.putArray("recipes");
+        for (ResultRecipe recipe : recipes) {
+            ObjectNode r = recipesNode.addObject();
+            r.put("sequence", recipe.sequence());
+            if (recipe.recipeName() == null) {
+                r.putNull("recipeName");
+            } else {
+                r.put("recipeName", recipe.recipeName());
+            }
+            r.put("status", recipe.status());
+            r.set("resultValues", objectMapper.valueToTree(
+                    recipe.resultValues() == null ? Map.of() : recipe.resultValues()));
+            // 표시명이 하나라도 있을 때만 필드를 넣는다(없으면 FE가 원본 key로 폴백).
+            if (recipe.resultLabels() != null && !recipe.resultLabels().isEmpty()) {
+                r.set("resultLabels", objectMapper.valueToTree(recipe.resultLabels()));
+            }
+            if (recipe.summary() == null) {
+                r.putNull("summary");
+            } else {
+                r.put("summary", recipe.summary());
+            }
         }
         try {
             return objectMapper.writeValueAsString(root);
@@ -948,6 +1334,17 @@ public class ExecutionService {
 
     /** 진행 블록 스텝 뷰(payload 구성용). index/name/status(소문자)/summary. */
     private record ProgressStep(int index, String name, String status, String summary) {
+    }
+
+    /** 진행 블록 레시피 그룹 뷰(payload 구성용). sequence/recipeName/status(소문자)/summary(결과 한 줄)/steps. */
+    private record ProgressRecipe(int sequence, String recipeName, String status, String summary,
+                                  List<ProgressStep> steps) {
+    }
+
+    /** 결과 블록 레시피별 뷰(payload 구성용). sequence/recipeName/status/resultValues/resultLabels/summary. */
+    private record ResultRecipe(int sequence, String recipeName, String status,
+                                Map<String, Object> resultValues, Map<String, String> resultLabels,
+                                String summary) {
     }
 
     /**
@@ -1115,32 +1512,12 @@ public class ExecutionService {
         return sb.toString();
     }
 
-    /**
-     * 산출한 결과값(resultValues)을 첫(단일 실행 기준) EXECUTION_RECIPE 의 RESULT_VALUES_JSON 에 저장한다.
-     * 상세 드릴다운(ExecutionRecipeView.resultValues) 표시용. 없거나 비면 저장을 건너뛴다.
-     */
-    private void persistResultValues(Long executionId, Map<String, Object> resultValues) {
-        if (resultValues == null || resultValues.isEmpty()) {
-            return;
-        }
-        List<ExecutionRecipe> recipes =
-                executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
-        if (recipes.isEmpty()) {
-            return;
-        }
-        ExecutionRecipe first = recipes.get(0);
-        first.setResultValuesJson(RecipeJsonUtil.toJsonString(resultValues));
-        executionRecipeRepository.save(first);
-    }
-
-    /** 실행의 첫(단일 실행 기준) EXECUTION_RECIPE 스냅샷을 Map으로. 없으면 null. */
-    private Map<String, Object> firstRecipeSnapshot(Long executionId) {
-        List<ExecutionRecipe> recipes =
-                executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
-        if (recipes.isEmpty()) {
+    /** EXECUTION_RECIPE의 레시피 전체 스냅샷을 Map으로. 스냅샷이 없거나 Map이 아니면 null. */
+    private Map<String, Object> recipeSnapshot(ExecutionRecipe recipe) {
+        if (recipe == null) {
             return null;
         }
-        Object snapshot = RecipeJsonUtil.toObject(recipes.get(0).getRecipeSnapshotJson());
+        Object snapshot = RecipeJsonUtil.toObject(recipe.getRecipeSnapshotJson());
         return snapshot instanceof Map<?, ?> ? asMap(snapshot) : null;
     }
 
@@ -1495,12 +1872,56 @@ public class ExecutionService {
         if (recipes.isEmpty()) {
             return null;
         }
-        Object snapshot = RecipeJsonUtil.toObject(recipes.get(0).getRecipeSnapshotJson());
+        return snapshotVariablesJsonOf(recipes.get(0));
+    }
+
+    /**
+     * 현재 RUNNING인 EXECUTION_RECIPE의 스냅샷 variablesJson을 꺼낸다(respondActionPicker 재검증 기준).
+     * 대화방 락으로 RUNNING 레시피가 하나로 고정되므로, 지금 입력 대기 중인 바로 그 레시피의 변수 정의를 쓴다.
+     * RUNNING이 없으면(방어적) 첫 레시피 스냅샷으로 폴백한다.
+     */
+    private String runningRecipeVariablesJson(Long executionId) {
+        List<ExecutionRecipe> running = executionRecipeRepository
+                .findByExecutionIdAndStatusOrderBySequenceAsc(executionId, ExecutionRecipeStatus.RUNNING);
+        if (!running.isEmpty()) {
+            return snapshotVariablesJsonOf(running.get(0));
+        }
+        return snapshotVariablesJson(executionId);
+    }
+
+    /** EXECUTION_RECIPE 스냅샷에서 variablesJson(JSON 문자열)을 꺼낸다. 없으면 null. */
+    private String snapshotVariablesJsonOf(ExecutionRecipe executionRecipe) {
+        Object snapshot = RecipeJsonUtil.toObject(executionRecipe.getRecipeSnapshotJson());
         if (snapshot instanceof Map<?, ?> snapshotMap) {
             Object variablesJson = snapshotMap.get("variablesJson");
             return variablesJson == null ? null : variablesJson.toString();
         }
         return null;
+    }
+
+    /** EXECUTION_RECIPE 스냅샷에서 stepsJson(JSON 문자열)을 꺼낸다. 없으면 null. */
+    private String snapshotStepsJson(ExecutionRecipe executionRecipe) {
+        Object snapshot = RecipeJsonUtil.toObject(executionRecipe.getRecipeSnapshotJson());
+        if (snapshot instanceof Map<?, ?> snapshotMap) {
+            Object stepsJson = snapshotMap.get("stepsJson");
+            return stepsJson == null ? null : stepsJson.toString();
+        }
+        return null;
+    }
+
+    /**
+     * context JSON의 {@code userInput}을 새 시드값으로 교체하고, 나머지 최상위 키(extract 누적값)는 보존한다.
+     * 레시피 전이 시 다음 레시피 기준으로 userInput을 재시드하되, 이전 스텝들이 쌓은 extract 값은 유지하기 위함이다.
+     */
+    @SuppressWarnings("unchecked")
+    private String reseedUserInput(String currentContextJson, Map<String, Object> newUserInput) {
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        Object current = RecipeJsonUtil.toObject(currentContextJson);
+        if (current instanceof Map<?, ?> currentMap) {
+            context.putAll((Map<String, Object>) currentMap);
+        }
+        context.put("userInput", newUserInput == null ? Map.of() : newUserInput);
+        return RecipeJsonUtil.toJsonString(context);
     }
 
     /**
