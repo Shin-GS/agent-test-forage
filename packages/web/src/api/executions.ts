@@ -89,15 +89,34 @@ export function respondActionPicker(payload: ActionPickerRespondPayload): Promis
   });
 }
 
-/** 현재 세션 사용자 실행 히스토리 (커서 페이지). 최근순. userId 는 세션에서 도출 */
-export function history(
-  params?: { status?: string; keyword?: string; cursor?: string; size?: number }
-): Promise<import("./types").CursorPage<import("./types").ExecutionSummaryView>> {
+/**
+ * 현재 세션 사용자 실행 히스토리 (커서 페이지). 최근순. userId 는 세션에서 도출.
+ * 다중 필터(apiSpecId/status)는 배열로 넘기면 client 가 반복 쿼리 파라미터로 직렬화한다
+ * (예: apiSpecId=1&apiSpecId=2). 빈 배열/undefined 는 생략(=전체).
+ * from/to 는 YYYY-MM-DD (서버가 당일 포함 경계 처리).
+ */
+export function history(params?: {
+  /** 레시피명 검색어 */
+  keyword?: string;
+  /** 서비스(apiSpecId) 다중 필터 */
+  apiSpecId?: number[];
+  /** 상태(ExecutionStatus) 다중 필터: SUCCESS/FAILED/STOPPED/CANCELLED */
+  status?: string[];
+  /** 시작일 (YYYY-MM-DD) */
+  from?: string;
+  /** 종료일 (YYYY-MM-DD) */
+  to?: string;
+  cursor?: string;
+  size?: number;
+}): Promise<import("./types").CursorPage<import("./types").ExecutionSummaryView>> {
   return request(`/executions`, {
     method: "GET",
     query: {
-      status: params?.status,
       keyword: params?.keyword,
+      apiSpecId: params?.apiSpecId,
+      status: params?.status,
+      from: params?.from,
+      to: params?.to,
       cursor: params?.cursor,
       size: params?.size,
     },

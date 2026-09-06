@@ -16,6 +16,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { RecipeListPage } from "./pages/RecipeListPage";
 import { RecipeEditPage } from "./pages/RecipeEditPage";
+import { HistoryPage } from "./pages/HistoryPage";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="/recipes" element={<RecipeListPage />} />
           <Route path="/recipes/new" element={<RecipeEditPage />} />
           <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
+          <Route path="/history" element={<HistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

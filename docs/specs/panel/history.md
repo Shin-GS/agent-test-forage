@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-08
+last-updated: 2026-09-15
 ---
 
 # 작업 히스토리
@@ -36,3 +36,12 @@ last-updated: 2026-09-08
 ## 별도 페이지 (전체 히스토리)
 
 상세: [pages/history-full.md](../pages/history-full.md)
+
+- 홈/히스토리 탭의 [전체 →]로 전체 히스토리 페이지(`/history`)로 이동한다.
+
+### 패널 vs 전체 페이지 (뷰 분리)
+
+패널 히스토리 탭과 전체 히스토리 페이지는 **같은 조회 API(`GET /api/v1/executions`)와 동일 데이터 훅을 공유**하고, **뷰만 분리**한다.
+
+- 공유: 본인 실행만(USER_ID 기준) · 커서 무한스크롤 · 필터 계약([recipe/execution.md 히스토리 조회 API 계약](../recipe/execution.md#히스토리-조회-api-계약-get-executions)).
+- 차이: 패널 = 좁은 폭 **목록 뷰**(최근 미리보기 + 무한스크롤), 전체 페이지 = **테이블 뷰** + 다중 필터/검색/URL 동기화([pages/history-full.md](../pages/history-full.md#검색--필터)).

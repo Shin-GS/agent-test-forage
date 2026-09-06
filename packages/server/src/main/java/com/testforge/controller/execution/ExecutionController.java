@@ -11,6 +11,7 @@ import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.entity.execution.enums.ExecutionStatus;
 import com.testforge.security.CurrentUser;
 import com.testforge.service.execution.ExecutionService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +21,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 레시피 실행 시작/종료/조회 API. 실제 스텝 실행은 FE 브라우저가 수행하고, 이 API는 실행의
@@ -66,17 +70,29 @@ public class ExecutionController {
     }
 
     /**
-     * 실행 히스토리 목록 (커서 기반 무한 스크롤). userId 필수, status/keyword 옵션 필터.
+     * 실행 히스토리 목록 (커서 기반 무한 스크롤). userId는 세션에서 도출(본인 것만).
+     * 필터는 모두 옵션이며 "빈 선택 = 전체"다(execution.md 히스토리 조회 API 계약):
+     * <ul>
+     *   <li>{@code status}: 상태 다중 필터(SUCCESS/FAILED/STOPPED/CANCELLED 등). 빈=전체.</li>
+     *   <li>{@code apiSpecId}: 서비스 다중 필터(실행 참조 API_SPEC_ID). 빈=전체, 지정 시 NULL 실행 제외.</li>
+     *   <li>{@code keyword}: 레시피명(title) 부분일치.</li>
+     *   <li>{@code from}/{@code to}: 날짜 범위(YYYY-MM-DD). 서버가 from 00:00:00 ~ to 23:59:59.999(당일 포함)로 확장.</li>
+     * </ul>
      * cursor는 이전 응답의 nextCursor를 그대로 전달(없으면 첫 페이지). size 기본 20, 최대 50.
      * 응답은 경량 요약 목록 + nextCursor/hasNext.
      */
     @GetMapping("/executions")
-    public CursorPage<ExecutionSummaryView> history(@RequestParam(required = false) ExecutionStatus status,
+    public CursorPage<ExecutionSummaryView> history(@RequestParam(required = false) List<ExecutionStatus> status,
+                                                    @RequestParam(required = false) List<Long> apiSpecId,
                                                     @RequestParam(required = false) String keyword,
+                                                    @RequestParam(required = false)
+                                                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                                                    @RequestParam(required = false)
+                                                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                                     @RequestParam(required = false) String cursor,
                                                     @RequestParam(required = false) Integer size) {
         // 본인 히스토리만 조회 (userId는 세션에서 도출)
-        return executionService.history(CurrentUser.id(), status, keyword, cursor, size);
+        return executionService.history(CurrentUser.id(), status, apiSpecId, keyword, from, to, cursor, size);
     }
 
     /** 실행 상세 조회 (진행 상태 블록/히스토리 상세용). 없으면 404. */

@@ -5,7 +5,7 @@
 // resultValues 는 첫 레시피 기준(단일 레시피 실행 가정). 플랜(다중)이면 레시피별로 순회 렌더.
 
 import { useMemo } from "react";
-import type { ExecutionRecipeView, ExecutionResponse } from "../../../api/types";
+import type { ExecutionRecipeView, ExecutionResponse, ExecutionStepView } from "../../../api/types";
 import {
   formatDuration,
   formatTime,
@@ -19,6 +19,48 @@ import { useExecutionDetail } from "./useExecutionDetail";
 interface Props {
   executionId: number;
   onBack: () => void;
+  /**
+   * true 면 각 스텝을 펼쳐 원본 응답/입력 JSON 을 확인할 수 있게 한다(히스토리 상세 페이지용).
+   * 사이드 패널에서는 기본 false(요약만 노출).
+   */
+  showStepJson?: boolean;
+  /**
+   * true 면 헤더 subtitle 에 실행 모드(mode.description)를 함께 표기한다(히스토리 상세 페이지용).
+   * 사이드 패널에서는 기본 false(회귀 방지). mode 가 없으면 옵션과 무관하게 생략.
+   */
+  showMode?: boolean;
+}
+
+/** JSON 값을 보기 좋게 직렬화. 실패 시 String 폴백 */
+function prettyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/** 스텝 원본 JSON 펼침 블록 (응답/사용자 입력). details/summary 로 키보드 접근 가능 */
+function StepJson({ step }: { step: ExecutionStepView }) {
+  const hasResponse = step.response != null;
+  const hasInput = step.userInput != null;
+  if (!hasResponse && !hasInput) return null;
+  return (
+    <div className="exec-detail__step-json-wrap">
+      {hasInput && (
+        <details className="exec-detail__json">
+          <summary className="exec-detail__json-summary">사용자 입력값</summary>
+          <pre className="exec-detail__json-body">{prettyJson(step.userInput)}</pre>
+        </details>
+      )}
+      {hasResponse && (
+        <details className="exec-detail__json">
+          <summary className="exec-detail__json-summary">원본 응답</summary>
+          <pre className="exec-detail__json-body">{prettyJson(step.response)}</pre>
+        </details>
+      )}
+    </div>
+  );
 }
 
 function ResultValues({
@@ -46,7 +88,7 @@ function ResultValues({
   );
 }
 
-function RecipeSteps({ recipe }: { recipe: ExecutionRecipeView }) {
+function RecipeSteps({ recipe, showStepJson }: { recipe: ExecutionRecipeView; showStepJson: boolean }) {
   return (
     <div className="exec-detail__section">
       <div className="exec-detail__section-title">실행 단계</div>
@@ -55,21 +97,24 @@ function RecipeSteps({ recipe }: { recipe: ExecutionRecipeView }) {
           const failed = step.errorMessage || (step.status.code ?? "").toUpperCase() === "FAILED";
           return (
             <li key={step.id} className="exec-detail__step">
-              <span className="exec-detail__step-icon" aria-hidden>
-                {statusIcon(step.status.code)}
-              </span>
-              <div className="exec-detail__step-main">
-                <span className="exec-detail__step-name">
-                  {step.stepIndex + 1}. {step.stepName}
+              <div className="exec-detail__step-row">
+                <span className="exec-detail__step-icon" aria-hidden>
+                  {statusIcon(step.status.code)}
                 </span>
-                {step.summary && (
-                  <span className="exec-detail__step-summary">{step.summary}</span>
-                )}
-                {failed && step.errorMessage && (
-                  <span className="exec-detail__step-error">{step.errorMessage}</span>
-                )}
+                <div className="exec-detail__step-main">
+                  <span className="exec-detail__step-name">
+                    {step.stepIndex + 1}. {step.stepName}
+                  </span>
+                  {step.summary && (
+                    <span className="exec-detail__step-summary">{step.summary}</span>
+                  )}
+                  {failed && step.errorMessage && (
+                    <span className="exec-detail__step-error">{step.errorMessage}</span>
+                  )}
+                </div>
+                <span className="exec-detail__step-status">{step.status.description}</span>
               </div>
-              <span className="exec-detail__step-status">{step.status.description}</span>
+              {showStepJson && <StepJson step={step} />}
             </li>
           );
         })}
@@ -78,7 +123,7 @@ function RecipeSteps({ recipe }: { recipe: ExecutionRecipeView }) {
   );
 }
 
-function DetailBody({ data }: { data: ExecutionResponse }) {
+function DetailBody({ data, showStepJson }: { data: ExecutionResponse; showStepJson: boolean }) {
   const recipes = data.recipes ?? [];
   return (
     <>
@@ -88,7 +133,7 @@ function DetailBody({ data }: { data: ExecutionResponse }) {
             <div className="exec-detail__recipe-title">{recipe.recipeName}</div>
           )}
           <ResultValues values={recipe.resultValues} labels={recipe.resultLabels} />
-          {recipe.steps.length > 0 && <RecipeSteps recipe={recipe} />}
+          {recipe.steps.length > 0 && <RecipeSteps recipe={recipe} showStepJson={showStepJson} />}
         </div>
       ))}
       {recipes.length === 0 && (
@@ -98,15 +143,22 @@ function DetailBody({ data }: { data: ExecutionResponse }) {
   );
 }
 
-export function ExecutionDetailView({ executionId, onBack }: Props) {
+export function ExecutionDetailView({
+  executionId,
+  onBack,
+  showStepJson = false,
+  showMode = false,
+}: Props) {
   const { data, isLoading, isError } = useExecutionDetail(executionId);
 
   const subtitle = useMemo(() => {
     if (!data) return null;
     const rel = relativeTime(data.startedAt) ?? formatTime(data.startedAt);
     const dur = formatDuration(data.durationMs);
-    return [rel, dur].filter(Boolean).join(" · ");
-  }, [data]);
+    // showMode 일 때만 mode.description 을 포함(없으면 생략). 사이드 패널(showMode=false)은 기존 그대로.
+    const mode = showMode ? data.mode?.description : null;
+    return [rel, dur, mode].filter(Boolean).join(" · ");
+  }, [data, showMode]);
 
   return (
     <div className="side-panel__view" role="tabpanel" aria-label="실행 결과 상세">
@@ -136,7 +188,7 @@ export function ExecutionDetailView({ executionId, onBack }: Props) {
         ) : isError || !data ? (
           <div className="side-panel__empty">결과를 불러오지 못했어요. 잠시 후 다시 시도해주세요.</div>
         ) : (
-          <DetailBody data={data} />
+          <DetailBody data={data} showStepJson={showStepJson} />
         )}
       </div>
     </div>

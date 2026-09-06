@@ -187,6 +187,15 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
           <span className="sidebar-nav__label">레시피 관리</span>
         </NavLink>
         <NavLink
+          to="/history"
+          aria-label="히스토리"
+          title="히스토리"
+          className={({ isActive }) => `sidebar-nav__item${isActive ? " active" : ""}`}
+        >
+          <span className="sidebar-nav__icon" aria-hidden>📊</span>
+          <span className="sidebar-nav__label">히스토리</span>
+        </NavLink>
+        <NavLink
           to="/settings"
           aria-label="설정"
           title="설정"

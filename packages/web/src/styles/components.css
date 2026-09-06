@@ -1267,12 +1267,19 @@ select.input {
 
 .exec-detail__step {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+}
+
+/* 스텝 상단 행(아이콘 + 이름/요약 + 상태). 아래로 원본 JSON 펼침이 붙을 수 있다. */
+.exec-detail__step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
 .exec-detail__step-icon {
@@ -2911,4 +2918,191 @@ select.input {
     width: 100%;
     min-width: 0;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   전체 히스토리 페이지 (docs/design/web/history.html)
+   ─ 재사용: .recipe-page / .page-header / .page-body / .list-toolbar
+     / .filter-* / .data-table / .empty-state / .modal 은 위에서 정의됨.
+   ─ 아래는 히스토리 전용 추가 스타일(토큰만 사용, 하드코딩 금지).
+   ═══════════════════════════════════════════════════════════ */
+
+/* 날짜 범위 필터 */
+.date-range {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.date-range__label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+.date-range .input {
+  max-width: 150px;
+}
+
+/* 테이블 셀(시각/상태/소요 + 레시피 결과요약) */
+.data-table .time-cell {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.data-table .duration-cell {
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+.recipe-cell__summary {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+/* 히스토리 목록 행 클릭 가능 + 실패/중지 강조 (배지-행 색 언어 일치) */
+.data-table tbody tr {
+  cursor: pointer;
+}
+.data-table tbody tr:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+.data-table tr.row--error td {
+  background: var(--color-error-subtle);
+}
+.data-table tr.row--error:hover td {
+  background: var(--color-error-subtle);
+}
+.data-table tr.row--stopped td {
+  background: var(--color-bg-hover);
+}
+.data-table tr.row--stopped:hover td {
+  background: var(--color-bg-hover);
+}
+
+/* 무한 스크롤 하단 로딩 / 종료 표시 */
+.infinite-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+.infinite-end {
+  text-align: center;
+  padding: var(--space-4);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* 카드 폴백 (Tablet 이하) */
+.exec-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.exec-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  cursor: pointer;
+}
+.exec-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.exec-card--error {
+  border-color: var(--color-error-border);
+  background: var(--color-error-subtle);
+}
+.exec-card--stopped {
+  border-color: var(--color-border);
+  background: var(--color-bg-hover);
+}
+.exec-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.exec-card__name {
+  flex: 1;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+.exec-card__summary {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin: var(--space-1) 0;
+}
+.exec-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* 히스토리 상세 모달: ExecutionDetailView 를 모달 안에서 스크롤 */
+.history-detail-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  overflow: hidden;
+  padding: 0;
+}
+.history-detail-modal .side-panel__view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.history-detail-modal .side-panel__body {
+  overflow-y: auto;
+}
+
+/* 스텝별 원본 JSON 펼침 (히스토리 상세, showStepJson) */
+.exec-detail__step-json-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: calc(var(--space-4) + var(--space-1));
+}
+.exec-detail__json {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+}
+.exec-detail__json-summary {
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.exec-detail__json-summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.exec-detail__json-body {
+  margin: 0;
+  padding: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 200px;
 }

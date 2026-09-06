@@ -462,4 +462,77 @@ class ExecutionIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_EXECUTING"));
     }
+
+    // ── 히스토리 필터 회귀 테스트 ──
+
+    /**
+     * 히스토리 필터 테스트용 종료 실행 하나를 직접 저장한다(실행 시작 API를 거치지 않고 리포지토리에 저장).
+     * 상태/서비스(apiSpecId)/제목/시작시각을 케이스별로 지정한다. apiSpecId가 null이면 NULL 실행(플랜 등)이다.
+     */
+    private Long saveHistory(String title, ExecutionStatus status, Long apiSpecId,
+                             java.time.LocalDateTime startedAt) {
+        Execution e = new Execution(USER_ID, com.testforge.entity.execution.enums.ExecutionType.SINGLE,
+                com.testforge.entity.execution.enums.ExecutionMode.AUTO);
+        e.setTitle(title);
+        e.setStatus(status);
+        e.setApiSpecId(apiSpecId);
+        e.setStartedAt(startedAt);
+        return executionRepository.save(e).getId();
+    }
+
+    // 상태 다중 필터: 지정한 상태들만 반환 (빈=전체는 기존 계약)
+    @Test
+    void history_filtersByMultipleStatuses() throws Exception {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        saveHistory("성공건", ExecutionStatus.SUCCESS, 10L, now);
+        saveHistory("실패건", ExecutionStatus.FAILED, 10L, now);
+        saveHistory("취소건", ExecutionStatus.CANCELLED, 10L, now);
+
+        // SUCCESS + FAILED 만 요청 → 2건 (취소 제외)
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
+                        .param("status", "SUCCESS", "FAILED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[*].title",
+                        org.hamcrest.Matchers.containsInAnyOrder("성공건", "실패건")));
+    }
+
+    // 서비스(apiSpecId) 필터: 지정 시 NULL 실행 제외, 미지정(전체) 시 NULL 포함
+    @Test
+    void history_filtersByApiSpecId_excludingNullWhenSpecified() throws Exception {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        saveHistory("스펙10건", ExecutionStatus.SUCCESS, 10L, now);
+        saveHistory("스펙20건", ExecutionStatus.SUCCESS, 20L, now);
+        saveHistory("NULL스펙건", ExecutionStatus.SUCCESS, null, now);
+
+        // apiSpecId=10 지정 → 스펙10건만 (NULL/20 제외)
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
+                        .param("apiSpecId", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].title").value("스펙10건"));
+
+        // 미지정(전체) → NULL 실행 포함 3건
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(3));
+    }
+
+    // 기간 필터: to 당일 포함(23:59:59.999까지), 범위 밖 제외
+    @Test
+    void history_filtersByDateRange_inclusiveOfToDay() throws Exception {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        // 오늘 늦은 시각(당일 포함 경계 검증) + 어제 + 내일
+        saveHistory("오늘건", ExecutionStatus.SUCCESS, 10L, today.atTime(23, 30));
+        saveHistory("어제건", ExecutionStatus.SUCCESS, 10L, today.minusDays(1).atTime(12, 0));
+        saveHistory("내일건", ExecutionStatus.SUCCESS, 10L, today.plusDays(1).atTime(1, 0));
+
+        // from=to=오늘 → 오늘건만 (어제/내일 제외, 당일 23:30도 포함)
+        mockMvc.perform(get("/api/v1/executions").with(testAuth.as(USER_ID))
+                        .param("from", today.toString())
+                        .param("to", today.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].title").value("오늘건"));
+    }
 }

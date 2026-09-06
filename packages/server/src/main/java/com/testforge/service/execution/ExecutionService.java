@@ -53,7 +53,9 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -362,29 +364,52 @@ public class ExecutionService {
     private static final int MAX_PAGE_SIZE = 50;
 
     /**
-     * 사용자 실행 히스토리의 커서 페이지 조회 (최신순 무한 스크롤). 상태/키워드는 옵션 필터다.
-     * 경량 요약({@link ExecutionSummaryView})만 담아 목록 부하를 줄인다(상세는 detail로 별도 조회).
+     * 사용자 실행 히스토리의 커서 페이지 조회 (최신순 무한 스크롤). 상태(다중)/서비스(다중)/키워드/기간은
+     * 모두 옵션 필터다("빈 선택 = 전체"). 경량 요약({@link ExecutionSummaryView})만 담아 목록 부하를
+     * 줄인다(상세는 detail로 별도 조회). 커서/필터가 함께 적용되어도 정합을 유지한다(커서 이어받기 시 필터 유지).
+     *
+     * <p><b>apiSpecId NULL 처리</b>: {@code apiSpecIds}가 지정되면 {@code API_SPEC_ID=NULL} 실행은 제외하고,
+     * 미지정(전체)일 때만 NULL 실행도 포함한다(execution.md 계약). <b>기간</b>: {@code from}은 해당일
+     * 00:00:00, {@code to}는 해당일 23:59:59.999(당일 포함)로 서버에서 경계를 확장해 {@code STARTED_AT}
+     * 범위를 조회한다. 타임존은 서버 애플리케이션 기본 타임존({@link LocalDateTime} 기준).
      *
      * @param userId 필수. 없으면 400
-     * @param status 옵션 상태 필터 (null이면 전체)
+     * @param statuses 옵션 상태 다중 필터 (null/빈이면 전체)
+     * @param apiSpecIds 옵션 서비스(apiSpecId) 다중 필터 (null/빈이면 전체, 지정 시 NULL 실행 제외)
      * @param keyword 옵션 제목 키워드 (null/빈이면 전체)
+     * @param from 옵션 시작일(YYYY-MM-DD). null이면 하한 무제한
+     * @param to 옵션 종료일(YYYY-MM-DD, 당일 포함). null이면 상한 무제한
      * @param cursor 옵션 커서 (null이면 첫 페이지). 이전 응답의 nextCursor를 그대로 전달
      * @param size 페이지 크기 (기본 20, 최대 50)
      */
     @Transactional(readOnly = true)
-    public CursorPage<ExecutionSummaryView> history(Long userId, ExecutionStatus status,
-                                                    String keyword, String cursor, Integer size) {
+    public CursorPage<ExecutionSummaryView> history(Long userId, List<ExecutionStatus> statuses,
+                                                    List<Long> apiSpecIds, String keyword,
+                                                    LocalDate from, LocalDate to,
+                                                    String cursor, Integer size) {
         if (userId == null) {
             throw ApiException.invalidRequest("userId is required");
         }
         int limit = normalizeSize(size);
         String normalizedKeyword = escapeLike((keyword == null || keyword.isBlank()) ? null : keyword.trim());
         Long cursorId = decodeCursor(cursor);
+        // 빈 리스트는 "전체"이므로 null로 넘겨 IN 조건을 무시한다 (빈 IN 절 회피)
+        List<ExecutionStatus> statusFilter = nullIfEmpty(statuses);
+        List<Long> apiSpecFilter = nullIfEmpty(apiSpecIds);
+        // 날짜 경계 확장: from → 00:00:00, to → 23:59:59.999 (당일 포함). 서버 애플리케이션 타임존 기준.
+        LocalDateTime fromAt = from == null ? null : from.atStartOfDay();
+        LocalDateTime toAt = to == null ? null : to.atTime(LocalTime.MAX);
 
         // hasNext 판정을 위해 limit+1건 조회 (정렬은 쿼리에 포함, Pageable은 limit 용도)
         List<Execution> rows = executionRepository.findHistoryByCursor(
-                userId, status, normalizedKeyword, cursorId, PageRequest.of(0, limit + 1));
+                userId, statusFilter, apiSpecFilter, normalizedKeyword, fromAt, toAt, cursorId,
+                PageRequest.of(0, limit + 1));
         return toCursorPage(rows, limit);
+    }
+
+    /** 리스트가 null이거나 비면 null(=필터 미적용), 아니면 그대로. IN 절에 빈 리스트가 들어가는 것을 막는다. */
+    private <T> List<T> nullIfEmpty(List<T> list) {
+        return (list == null || list.isEmpty()) ? null : list;
     }
 
     /**

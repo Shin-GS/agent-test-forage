@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-05
+last-updated: 2026-09-16
 ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel/history.md, docs/specs/pages/history-full.md, docs/specs/common/messaging.md
 ---
 
@@ -42,7 +42,7 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 | `TYPE` | VARCHAR(20) | SINGLE(단일 레시피) / PLAN(복합) |
 | `TITLE` | VARCHAR(200) | 표시명 (예: "회원가입 × 5", "플랜: 입사지원") |
 | `MODE` | VARCHAR(20) | AUTO(자동) / MANUAL(직접 입력). 플랜(TYPE=PLAN)은 항상 AUTO (plan.md: 승인 후 자동 진행) |
-| `STATUS` | VARCHAR(20) | RUNNING / SUCCESS / PARTIAL / FAILED / STOPPED |
+| `STATUS` | VARCHAR(20) | RUNNING / SUCCESS / PARTIAL / FAILED / STOPPED / CANCELLED |
 | `CONTEXT_JSON` | LONGTEXT | 실행 전역 context (extract 변수 누적). 이어서 실행에 사용 |
 | `RESULT_SUMMARY` | TEXT | 결과 요약 (히스토리 표시용) |
 | `STARTED_AT` | DATETIME | 시작 |

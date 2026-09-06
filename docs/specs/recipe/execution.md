@@ -1,6 +1,6 @@
 ---
 status: confirmed
-last-updated: 2026-09-12
+last-updated: 2026-09-16
 ---
 
 # 레시피 실행 플로우
@@ -230,6 +230,29 @@ session_status: idle + 히스토리 refresh
 
 여러 레시피를 조합한 실행 계획(플랜)의 경우, 각 레시피가 순차 자동 실행됨.
 상세: [플랜](plan.md)
+
+## 히스토리 조회 API 계약 (GET /executions)
+
+사이드 패널 히스토리 탭과 [전체 히스토리 페이지](../pages/history-full.md)가 공유하는 조회 계약이다.
+
+- `GET /api/v1/executions` — **본인 실행만** 반환(USER_ID 기준, 대화 삭제와 무관). 커서 기반 무한스크롤(`{ items, nextCursor, hasNext }`), 정렬 최신순(`startedAt DESC`, 내부적으로 `ID DESC`).
+
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 설명 |
+|----------|------|------|
+| `keyword` | string | 레시피명 검색(`EXECUTION_RECIPE.RECIPE_NAME` 대상). 빈 값=전체 |
+| `apiSpecId` | Long 다중 | **서비스 필터**(실행이 참조한 `EXECUTION.API_SPEC_ID` 기준). 다중 선택, 빈 선택=전체 |
+| `status` | enum 다중 | **상태 필터**(`SUCCESS`/`FAILED`/`STOPPED`/`CANCELLED`). 다중 선택, 빈 선택=전체 |
+| `from` | date(`YYYY-MM-DD`) | 시작일. 서버에서 `from 00:00:00`(서버 애플리케이션 타임존 기준)로 해석 |
+| `to` | date(`YYYY-MM-DD`) | 종료일. 서버에서 `to 23:59:59`(**당일 포함**, 서버 애플리케이션 타임존 기준)로 해석 |
+| `cursor` | string(불투명) | 직전 페이지의 `nextCursor`. 필터 변경 시 리셋 |
+| `size` | int | 페이지 크기 |
+
+- **URL 쿼리키 ↔ API 파라미터 매핑**: 전체 히스토리 페이지는 URL 쿼리(`q`/`spec`/`status`/`from`/`to`)를 API 파라미터로 매핑해 호출한다 — `q`→`keyword`, `spec`→`apiSpecId`, 나머지(`status`/`from`/`to`)는 동일명. URL 동기화 규칙: [history-full.md URL 쿼리 동기화](../pages/history-full.md#url-쿼리-동기화).
+- **다중 필터는 "빈 선택 = 전체"** — 해당 축으로 거르지 않는다.
+- **날짜 경계 계약**: FE는 날짜만 선택하고, 시각 경계 확장(00:00:00 ~ 23:59:59)은 **서버가 수행**한다. 타임존은 **서버 애플리케이션 타임존 기준**(프로토타입 단일 서버, KST 가정)이다. 멀티 타임존 대응은 추후. `STARTED_AT`(`IDX_EXECUTION_STARTED`) 기준 범위 조회.
+- `status` 옵션은 완료 이력 4종만 노출(진행중 `RUNNING`·부분성공 `PARTIAL`은 필터 옵션 제외 — 완료 이력 조회용). enum 전체 정의: [db/execution.md 상태](../../db/execution.md#상태-status).
 
 ## 예외 시나리오
 

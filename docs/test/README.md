@@ -42,7 +42,7 @@ docs/test/
     ├── login.js           ← 로그인/인증 (8개 케이스)
     ├── spec.js            ← 스펙 등록/관리 (12개 케이스)
     ├── settings.js        ← 설정 (7개 케이스)
-    ├── history.js         ← 전체 히스토리 페이지 (6개 케이스)
+    ├── history.js         ← 전체 히스토리 페이지 (16개 케이스)
     └── admin.js           ← 관리자 페이지 (8개 케이스)
 ```
 
@@ -56,9 +56,9 @@ docs/test/
 | 로그인/인증 | high | 8 | LOGIN-xxx |
 | 스펙 등록/관리 | high | 12 | SPEC-xxx |
 | 설정 | medium | 7 | SETTINGS-xxx |
-| 전체 히스토리 페이지 | medium | 6 | HISTORY-xxx |
+| 전체 히스토리 페이지 | medium | 16 | HISTORY-xxx |
 | 관리자 페이지 | medium | 8 | ADMIN-xxx |
-| **합계** | | **119** | |
+| **합계** | | **129** | |
 
 ## 새 테스트 추가 방법
 
