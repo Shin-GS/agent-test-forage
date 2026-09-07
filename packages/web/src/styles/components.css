@@ -776,6 +776,71 @@ select.input {
   font-size: var(--font-size-xs);
   color: var(--color-error);
 }
+/* 헤더 카운터 (전체 N단계 중 M단계 실행) */
+.plan-counter {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+/* 최소 1개 선택 가드 안내 */
+.plan-card__guard {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning, var(--color-error));
+}
+/* ↑/↓ 이동 버튼 묶음 */
+.plan-recipe__move {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 1px;
+}
+.plan-recipe__move-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 14px;
+  padding: 0;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.plan-recipe__move-btn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+}
+.plan-recipe__move-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+/* 실행 포함 체크박스 */
+.plan-recipe__check {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.plan-recipe__check:disabled {
+  cursor: not-allowed;
+}
+/* 순서번호 미부여(스킵) 자리 — 레이아웃 유지용 빈 슬롯 */
+.plan-recipe__order--empty {
+  background: transparent;
+}
+/* (제외됨) 라벨 */
+.plan-recipe__excluded {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+/* 스킵된 레시피 행: 흐리게 */
+.plan-recipe--skipped {
+  opacity: 0.55;
+}
+.plan-recipe--skipped .plan-recipe__name {
+  text-decoration: line-through;
+  color: var(--color-text-tertiary);
+}
 
 /* --- Side Panel (독립 미니 페이지: 홈/레시피/히스토리 3탭)
        docs/design/web/chat.html .side-panel__* 이식 --- */

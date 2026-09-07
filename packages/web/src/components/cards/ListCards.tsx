@@ -101,8 +101,20 @@ function conversationLockMessage(status: ConversationRuntimeStatus): string {
 }
 
 /**
- * 플랜 제안 카드 (읽기 전용 미리보기, 1단계 — 편집 UI 없음).
- * - 💡 rationale + 레시피 순서 목록(이름 + 서비스 뱃지 + 기본값 미리보기, 나머지는 "실행 중 결정").
+ * 편집 상태의 플랜 항목 한 줄 (로컬 상태). item 은 카드 payload 원본, included 는 실행 포함 여부.
+ * uid 는 React key 전용 안정 식별자 — recipeId 가 null(삭제 레시피)이어도 순서변경 시 DOM 재사용이
+ * 꼬이지 않도록 초기화 시점에 1회 부여한다(배열 인덱스를 key 로 쓰지 않기 위함).
+ */
+interface PlanEditRow {
+  uid: string;
+  item: PlanRecipeItem;
+  included: boolean;
+}
+
+/**
+ * 플랜 제안 카드 (2단계 — 스킵 + 순서변경 편집 가능, plan.md "제안 카드 편집").
+ * - 💡 rationale + 편집 가능한 레시피 목록(↑/↓ 이동 · 체크박스 스킵 · 순서번호 재매김 · 값 미리보기).
+ * - 조정은 카드 로컬 상태로만 관리(payload 불변). [자동 실행] 시 체크된 항목만 화면 순서대로 recipeIds 구성.
  * - [취소] → 대화방 cancel API (FE 단독 해제 금지). [자동 실행] → plan-executions 시작 → 러너 구동.
  * - 🔗 이전 결과 예측 표시 금지(실행 전 확정 불가). 값 미리보기는 기본값(📌)만.
  */
@@ -118,10 +130,65 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
   const [cancelled, setCancelled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const recipes = card.recipes ?? [];
-  const recipeIds = card.recipeIds ?? [];
-  const total = recipes.length || recipeIds.length;
-  const disabled = running || started || conversationId == null || recipeIds.length === 0;
+  // 편집 상태: 카드 payload(recipes) 원본 순서로 초기화, 전부 included=true.
+  // recipeId 가 null(삭제된 레시피)이면 실행 불가 → 처음부터 스킵(체크 불가)으로 둔다.
+  const [rows, setRows] = useState<PlanEditRow[]>(() =>
+    (card.recipes ?? []).map((item, i) => ({
+      uid: `plan-row-${i}`,
+      item,
+      included: item.recipeId != null,
+    }))
+  );
+  // 순서변경/스킵 결과를 스크린리더에 알리는 문구 (aria-live)
+  const [announce, setAnnounce] = useState("");
+
+  const total = rows.length;
+  const includedCount = rows.filter((r) => r.included).length;
+  // 편집 잠금: 실행/취소 후에는 체크박스/이동 버튼을 잠근다.
+  const locked = running || started;
+  const disabled = locked || conversationId == null || includedCount === 0;
+
+  const rowName = (item: PlanRecipeItem, order: number): string =>
+    item.recipeName ?? (item.recipeId != null ? `레시피 #${item.recipeId}` : `레시피 ${order}`);
+
+  /** 체크박스 토글 (스킵/포함). recipeId null 은 토글 불가 */
+  const toggleIncluded = (index: number) => {
+    if (locked) return;
+    setRows((prev) =>
+      prev.map((row, i) =>
+        i === index && row.item.recipeId != null ? { ...row, included: !row.included } : row
+      )
+    );
+  };
+
+  /** ↑/↓ 이동 (배열 내 위치 swap). 전체 배열 기준 경계 */
+  const move = (index: number, dir: -1 | 1) => {
+    if (locked) return;
+    setRows((prev) => {
+      const target = index + dir;
+      // 최신 상태 기준으로 경계를 재확인(연속 클릭에도 안전)
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      // announce 는 화면에 보이는 "실행 순서번호"(included 항목만 재매김)를 말한다.
+      // 배열 물리 위치(target+1)를 쓰면 앞에 스킵 행이 있을 때 화면 번호와 어긋나므로,
+      // 이동한 행 앞의 included 개수 +1 로 계산한다. 스킵 행 자체는 순서번호가 없다.
+      const movedRow = next[target];
+      if (movedRow.included) {
+        const orderNo = next.slice(0, target).filter((r) => r.included).length + 1;
+        setAnnounce(`${rowName(movedRow.item, target + 1)}을 ${orderNo}번째로 이동했습니다`);
+      } else {
+        setAnnounce(`${rowName(movedRow.item, target + 1)}을 이동했습니다 (실행에서 제외된 항목)`);
+      }
+      return next;
+    });
+  };
+
+  // 실행에 사용할 recipeIds: 체크된 항목만, 현재 배열 순서대로. recipeId null 은 제외.
+  const buildRecipeIds = (): number[] =>
+    rows
+      .filter((r) => r.included && r.item.recipeId != null)
+      .map((r) => r.item.recipeId as number);
 
   const handleCancel = async () => {
     if (running || started || conversationId == null) return;
@@ -147,6 +214,9 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
       return;
     }
     const convId = conversationId!;
+    // 체크된 항목만, 화면 순서대로 recipeIds 구성 (스킵/순서변경 반영). plan.md "BE 변경 없음".
+    const recipeIds = buildRecipeIds();
+    if (recipeIds.length === 0) return;
     setRunning(true);
     setError(null);
     try {
@@ -185,9 +255,17 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
     }
   };
 
+  // included 항목에만 1,2,3… 순서번호 재매김 (스킵 행은 번호 미부여)
+  let orderCounter = 0;
+
   return (
     <div className="plan-card" role="group" aria-label="실행 계획 제안">
-      <div className="plan-card__title">📋 실행 계획 ({total}단계)</div>
+      {/* 순서변경/스킵 결과를 스크린리더에 알리는 영역 */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {announce}
+      </div>
+
+      <div className="plan-card__title">📋 실행 계획</div>
 
       {card.rationale && (
         <div className="plan-rationale">
@@ -198,12 +276,39 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
         </div>
       )}
 
-      <div className="plan-card__recipes">
-        {recipes.map((recipe, idx) => (
-          <PlanRecipeRow key={recipe.recipeId ?? idx} recipe={recipe} order={idx + 1} />
-        ))}
-        {recipes.length === 0 && <span style={descStyle}>플랜 항목이 없습니다</span>}
+      {/* 헤더 카운터: 스킵이 있으면 "전체 N단계 중 M단계 실행", 없으면 간결히 "(N단계)" */}
+      <div className="plan-counter">
+        {includedCount === total
+          ? `전체 ${total}단계`
+          : `전체 ${total}단계 중 ${includedCount}단계 실행`}
       </div>
+
+      <div className="plan-card__recipes">
+        {rows.map((row, idx) => {
+          const order = row.included ? ++orderCounter : null;
+          return (
+            <PlanRecipeRow
+              key={row.uid}
+              recipe={row.item}
+              included={row.included}
+              order={order}
+              name={rowName(row.item, idx + 1)}
+              canToggle={row.item.recipeId != null && !locked}
+              canMoveUp={idx > 0 && !locked}
+              canMoveDown={idx < rows.length - 1 && !locked}
+              onToggle={() => toggleIncluded(idx)}
+              onMoveUp={() => move(idx, -1)}
+              onMoveDown={() => move(idx, 1)}
+            />
+          );
+        })}
+        {rows.length === 0 && <span style={descStyle}>플랜 항목이 없습니다</span>}
+      </div>
+
+      {/* 최소 1개 선택 가드 안내 */}
+      {includedCount === 0 && total > 0 && (
+        <div className="plan-card__guard">최소 1개 선택해야 실행할 수 있어요.</div>
+      )}
 
       <div className="plan-card__actions">
         <button
@@ -236,35 +341,98 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
   );
 }
 
-/** 플랜 제안 레시피 한 줄 (읽기 전용): 순서 배지 + 이름 + 서비스 뱃지 + 값 미리보기 */
-function PlanRecipeRow({ recipe, order }: { recipe: PlanRecipeItem; order: number }) {
-  const name = recipe.recipeName ?? (recipe.recipeId != null ? `레시피 #${recipe.recipeId}` : `레시피 ${order}`);
+interface PlanRecipeRowProps {
+  recipe: PlanRecipeItem;
+  /** 실행 포함 여부 (스킵이면 false) */
+  included: boolean;
+  /** 재매김된 순서번호 (스킵이면 null → 번호 미부여) */
+  order: number | null;
+  /** 표시명 (aria-label/이름용, 상위에서 계산) */
+  name: string;
+  canToggle: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onToggle: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}
+
+/**
+ * 플랜 제안 레시피 한 줄 (편집 가능): ↑/↓ 이동 + 체크박스 + 순서번호 + 이름 + 서비스 뱃지 + 값 미리보기.
+ * 스킵 행은 plan-recipe--skipped + "(제외됨)" + 순서번호 미부여.
+ */
+function PlanRecipeRow({
+  recipe,
+  included,
+  order,
+  name,
+  canToggle,
+  canMoveUp,
+  canMoveDown,
+  onToggle,
+  onMoveUp,
+  onMoveDown,
+}: PlanRecipeRowProps) {
   const preview = recipe.inputPreview ?? [];
 
   return (
-    <div className="plan-recipe">
+    <div className={`plan-recipe${included ? "" : " plan-recipe--skipped"}`}>
       <div className="plan-recipe__head">
-        <span className="plan-recipe__order" aria-hidden>
-          {order}
+        <span className="plan-recipe__move">
+          <button
+            type="button"
+            className="plan-recipe__move-btn"
+            aria-label={`${name} 위로 이동`}
+            disabled={!canMoveUp}
+            onClick={onMoveUp}
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            className="plan-recipe__move-btn"
+            aria-label={`${name} 아래로 이동`}
+            disabled={!canMoveDown}
+            onClick={onMoveDown}
+          >
+            ▼
+          </button>
         </span>
+        <input
+          type="checkbox"
+          className="plan-recipe__check"
+          aria-label={`${name} 실행 포함`}
+          checked={included}
+          disabled={!canToggle}
+          onChange={onToggle}
+        />
+        {order != null ? (
+          <span className="plan-recipe__order">{order}</span>
+        ) : (
+          <span className="plan-recipe__order plan-recipe__order--empty" aria-hidden />
+        )}
         <span className="plan-recipe__name">{name}</span>
+        {!included && <span className="plan-recipe__excluded">(제외됨)</span>}
         {recipe.serviceName && (
           <span className="badge badge--neutral" style={{ marginLeft: "auto" }}>
             {recipe.serviceName}
           </span>
         )}
       </div>
-      <div className="plan-recipe__values">
-        {preview.map((p, i) => (
-          <span key={p.key ?? i}>
-            {i > 0 && " · "}
-            {p.label}: {String(p.value)} <span className="badge badge--neutral">📌 기본값</span>
-          </span>
-        ))}
-        {preview.length > 0 && " · "}
-        {/* 나머지 값은 실행 전 확정 불가 → "실행 중 결정" (🔗 예측 표시 금지) */}
-        <span className="plan-value--pending">그 외 값은 실행 중 결정</span>
-      </div>
+      {/* 스킵 행은 값 미리보기 숨김 (디자인 Case 11: 제외 행은 head 만) */}
+      {included && (
+        <div className="plan-recipe__values">
+          {preview.map((p, i) => (
+            <span key={p.key ?? i}>
+              {i > 0 && " · "}
+              {p.label}: {String(p.value)} <span className="badge badge--neutral">📌 기본값</span>
+            </span>
+          ))}
+          {preview.length > 0 && " · "}
+          {/* 나머지 값은 실행 전 확정 불가 → "실행 중 결정" (🔗 예측 표시 금지) */}
+          <span className="plan-value--pending">그 외 값은 실행 중 결정</span>
+        </div>
+      )}
     </div>
   );
 }
