@@ -302,6 +302,19 @@
   gap: var(--space-1);
 }
 
+/* [이어서 실행] 재개 버튼 영역 (partial/stopped 진행 블록 하단) */
+.progress-steps__resume {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  flex-wrap: wrap;
+}
+.progress-steps__resume-caption {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
 /* 레시피 전이 announce 영역 (시각적으로 숨김, 스크린리더 전용) */
 .sr-only {
   position: absolute;

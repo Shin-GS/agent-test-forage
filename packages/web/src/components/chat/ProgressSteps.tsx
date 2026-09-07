@@ -14,7 +14,12 @@
 //   바뀌는 시점에만 텍스트를 주입한다(정적 렌더로는 announce 미발생 — 스크린리더 정합).
 
 import { useEffect, useRef, useState } from "react";
+import { ApiError, executionsApi } from "../../api";
 import type { ProgressPayload, ProgressRecipePayload, ProgressStepPayload } from "../../api/types";
+import { runExecution } from "../../services/executionRunner";
+import { applyRunResult } from "../../services/executionResult";
+import { useChatStore } from "../../store/chatStore";
+import { useToastStore } from "../../store/toastStore";
 
 interface Props {
   payload: ProgressPayload;
@@ -58,6 +63,14 @@ function recipeView(status: string): { icon: string; mod: string } {
 /** overallStatus 종료 여부 (running 이 아니면 종료) */
 function isFinished(status: string): boolean {
   return status !== "running";
+}
+
+/**
+ * 재개 가능 상태인지 (BE resume 계약: PARTIAL/STOPPED 만 허용).
+ * success/failed(단일 완전실패)/cancelled/running 은 재개 불가. 플랜 실패는 partial 로 온다.
+ */
+function isResumable(status: string): boolean {
+  return status === "partial" || status === "stopped";
 }
 
 /** overallStatus → 종료 라벨 */
@@ -104,6 +117,9 @@ function SingleProgress({ payload }: Props) {
       {steps.map((step) => (
         <StepRow key={step.index} step={step} />
       ))}
+      {finished && isResumable(payload.overallStatus) && (
+        <ResumeButton executionId={payload.executionId} />
+      )}
     </div>
   );
 }
@@ -131,6 +147,9 @@ function PlanProgress({ payload }: Props) {
       {recipes.map((recipe) => (
         <RecipeGroup key={recipe.sequence} recipe={recipe} />
       ))}
+      {finished && isResumable(payload.overallStatus) && (
+        <ResumeButton executionId={payload.executionId} />
+      )}
     </div>
   );
 }
@@ -189,6 +208,84 @@ function RecipeGroup({ recipe }: { recipe: ProgressRecipePayload }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 재개 액션 훅. PlanCard.handleRun 과 동일 패턴 재사용:
+ * resume → pendingInputs 있으면 액션 피커 / 없으면 러너 구동(runExecution → applyRunResult).
+ * 중복 클릭 방지(started), 409/기타 에러 토스트, 재개 중 상태(running)를 제공한다.
+ */
+function useResume(executionId: number): { running: boolean; started: boolean; onResume: () => void } {
+  const showToast = useToastStore((state) => state.show);
+  const [running, setRunning] = useState(false);
+  // 재개 성공 후엔 SSE 로 새 PROGRESS 가 오므로 이 블록은 종료 상태로 남는다. 중복 재개만 막는다.
+  const [started, setStarted] = useState(false);
+
+  const onResume = async () => {
+    if (running || started) return;
+    setRunning(true);
+    try {
+      const execution = await executionsApi.resume(executionId);
+
+      // 재개 직후 다음 레시피 pre-run 필수 입력 미충족이면 BE 가 pendingInputs 를 준다 → 액션 피커.
+      if ((execution.pendingInputs?.length ?? 0) > 0) {
+        useChatStore.getState().setActionPicker({
+          conversationId: execution.conversationId,
+          executionId: execution.id,
+          stepIndex: -1,
+          variables: execution.pendingInputs ?? [],
+          mode: "AUTO",
+        });
+        setStarted(true);
+        return;
+      }
+
+      // 러너 구동. 진행/완료는 SSE 로 스토어가 갱신. 결과 후처리(AUTH/INPUT/STALLED)는 applyRunResult.
+      const result = await runExecution(execution, { mode: "AUTO" });
+      await applyRunResult(execution, result, "AUTO");
+      setStarted(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        showToast("현재 대화방에 진행 중인 작업이 있어요. 완료 후 다시 시도해주세요.", "warning");
+      } else if (err instanceof ApiError && err.status === 400) {
+        // 재개 불가 상태(이미 재개돼 진행 중이거나 완료됨 등). 예전 실패 블록의 버튼을 새로고침 후
+        // 다시 눌렀을 때가 대표적이다 — BE가 상태검증으로 막으므로 안전하며, 여기선 안내만 한다.
+        showToast("이미 진행되었거나 완료된 실행이에요. 새로고침하면 최신 상태를 볼 수 있어요.", "warning");
+        setStarted(true); // 재클릭 방지(이 블록은 더 이상 재개 대상이 아님)
+      } else {
+        showToast(err instanceof Error ? err.message : "이어서 실행에 실패했습니다.", "error");
+      }
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return { running, started, onResume: () => void onResume() };
+}
+
+/**
+ * [이어서 실행] 버튼. 재개 가능(partial/stopped) 진행 블록 하단에만 노출된다.
+ * 실패·중단된 레시피는 처음부터 재시도된다(BE 계약).
+ */
+function ResumeButton({ executionId }: { executionId: number }) {
+  const { running, started, onResume } = useResume(executionId);
+  return (
+    <div className="progress-steps__resume">
+      <button
+        type="button"
+        className="btn btn--secondary btn--sm"
+        onClick={onResume}
+        disabled={running || started}
+        aria-label="이어서 실행"
+        title="실패·중단된 레시피는 처음부터 재시도됩니다"
+      >
+        {running ? "재개 중..." : "이어서 실행 ▶"}
+      </button>
+      <span className="progress-steps__resume-caption">
+        실패·중단된 레시피는 처음부터 재시도됩니다
+      </span>
     </div>
   );
 }

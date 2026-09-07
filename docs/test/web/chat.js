@@ -957,6 +957,167 @@ const CHAT_TESTS = {
         "스킵된 레시피의 비활성 토글은 포커스/조작에서 제외되거나 disabled로 인지되는지 확인"
       ],
       expected: "마우스 없이 키보드만으로 아코디언 토글과 폼 입력이 가능하고, aria-expanded로 펼침/접힘 상태가 노출됨"
+    },
+
+    // === 플랜 이어서 실행 (PARTIAL 재개) ===
+    {
+      id: "CHAT-081",
+      title: "실패(PARTIAL) 카드에 [이어서 실행] + [플랜 중단] 버튼 노출",
+      precondition: "실제 AI 모드(OpenAI 호환), 3개 레시피 플랜 실행 중 2번째 레시피 스텝이 실패(FAILED)하여 PARTIAL로 종료된 상태",
+      steps: [
+        "레시피 2에서 스텝 실패로 전체 중단된 진행 카드 확인 (❌ 표시)",
+        "실패 카드 하단에 [이어서 실행] 버튼과 [플랜 중단] 버튼이 함께 노출되는지 확인",
+        "안내 문구 '레시피 N에서 실패했습니다. 레시피 1~(N-1)은 이미 완료되었습니다.'가 표시되는지 확인",
+        "완료(SUCCESS) 레시피는 접힘 + 결과 한 줄, 실패 레시피는 ❌, 미실행 레시피는 ⬜(PENDING)로 표시되는지 확인"
+      ],
+      expected: "PARTIAL 실패 카드에 [이어서 실행]과 [플랜 중단] 버튼이 함께 노출되고, 완료/실패/미실행 상태가 각각 구분 표시됨"
+    },
+    {
+      id: "CHAT-082",
+      title: "중단(STOPPED) 카드에도 [이어서 실행] 노출",
+      precondition: "실제 AI 모드(OpenAI 호환), 플랜 실행 중 사용자가 [중단]을 눌러 확인 모달 승인 후 PARTIAL/STOPPED로 종료된 상태",
+      steps: [
+        "실행 중 [중단] → 확인 모달 승인으로 중단된 진행 카드 확인 (⏹️ 표시)",
+        "중단 카드 하단에도 [이어서 실행] + [플랜 중단] 버튼이 노출되는지 확인 (실패와 동일 메커니즘)",
+        "중단된 레시피는 ⏹️, 미실행 레시피는 ⬜(PENDING)로 표시되는지 확인"
+      ],
+      expected: "STOPPED(사용자 중단)로 종료된 카드에도 실패와 동일하게 [이어서 실행] 버튼이 노출됨"
+    },
+    {
+      id: "CHAT-083",
+      title: "[이어서 실행] → 첫 미완료 레시피부터 재개 (완료 앞 레시피 재실행 안 함)",
+      precondition: "실제 AI 모드(OpenAI 호환), 레시피 1(SUCCESS)/레시피 2(FAILED)/레시피 3(PENDING)로 PARTIAL 종료된 실행",
+      steps: [
+        "[이어서 실행] 클릭",
+        "재개가 레시피 2(첫 번째 비-SUCCESS = 첫 미완료)의 처음부터 시작되는지 확인",
+        "완료된 레시피 1(SUCCESS)은 재실행되지 않고 결과가 그대로 유지되는지 확인",
+        "레시피 2 완료 후 레시피 3(PENDING)으로 일반 순차 전이되는지 확인",
+        "dbCheck: EXECUTION_RECIPE 중 sequence 순으로 첫 비-SUCCESS 레시피부터 스텝이 재생성되었는지, SUCCESS 레시피의 결과는 변경되지 않았는지 확인"
+      ],
+      expected: "첫 번째 미완료(FAILED/PENDING) 레시피부터 재개되고, 이미 완료(SUCCESS)된 앞 레시피는 재실행되지 않음"
+    },
+    {
+      id: "CHAT-084",
+      title: "재개 시 완료 레시피의 CONTEXT(이전 결과)를 이어받아 데이터 매핑",
+      precondition: "실제 AI 모드(OpenAI 호환), 레시피 1(SUCCESS, 결과가 CONTEXT에 누적)/레시피 2(FAILED)로 PARTIAL 종료. 레시피 2가 레시피 1 결과와 같은 key를 입력으로 사용",
+      steps: [
+        "[이어서 실행] 클릭",
+        "레시피 2 재개 시 레시피 1의 CONTEXT(🔗 이전 결과)가 이어져 같은 key 입력이 자동 채움되는지 확인",
+        "required가 CONTEXT로 충족되면 pre-run 액션 피커 없이 통과하는지 확인",
+        "매핑되는 값이 🔗 이전 결과 뱃지로 표시되는지 확인",
+        "dbCheck: 재개 후에도 기존 EXECUTION의 CONTEXT 최상위 누적값이 보존되어 재개 레시피 시드에 활용되었는지 확인"
+      ],
+      expected: "완료된 앞 레시피가 누적한 CONTEXT를 이어받아 재개 레시피의 같은 key 입력이 🔗 이전 결과로 자동 매핑됨"
+    },
+    {
+      id: "CHAT-085",
+      title: "재개는 레시피 단위 (실패 레시피 전체 재시도, 스텝 단위 아님)",
+      precondition: "실제 AI 모드(OpenAI 호환), 레시피 2가 스텝 3개 중 2개까지 성공 후 3번째 스텝에서 실패하여 PARTIAL 종료",
+      steps: [
+        "[이어서 실행] 클릭",
+        "재개가 실패한 스텝(3번째)부터가 아니라 레시피 2의 처음(1번째 스텝)부터 전체 재시도되는지 확인",
+        "레시피 2의 모든 스텝이 새로 생성되어 순차 실행되는지 확인",
+        "dbCheck: 재개 대상 레시피의 스텝이 처음부터 전부 재생성되었는지 (스텝 단위 부분 재개가 아님) 확인"
+      ],
+      expected: "재개는 레시피 단위로 동작하여 실패 레시피 전체를 처음부터 재시도하며, 실패 스텝부터의 부분 재개는 하지 않음"
+    },
+    {
+      id: "CHAT-086",
+      title: "재개 시 기존 EXECUTION 재사용 + 새 PROGRESS 메시지 발행",
+      precondition: "실제 AI 모드(OpenAI 호환), PARTIAL 종료된 실행의 executionId 확인 가능",
+      steps: [
+        "[이어서 실행] 클릭 (POST /api/v1/executions/{executionId}/resume 호출)",
+        "새 EXECUTION이 생성되지 않고 기존 EXECUTION이 RUNNING으로 되돌려지는지 확인",
+        "재개 진행을 표시하는 새 PROGRESS 메시지가 기존 PROGRESS와 별개로 발행되는지 확인",
+        "session_status가 executing으로 재전이되는지 확인",
+        "dbCheck: EXECUTION의 id가 동일(신규 생성 아님)하고 상태가 PARTIAL→RUNNING으로 전이되었는지, 새 PROGRESS 메시지 레코드가 추가되었는지 확인"
+      ],
+      expected: "기존 EXECUTION을 재사용(신규 생성 없음)하며 RUNNING으로 전이하고, 재개 진행용 새 PROGRESS 메시지가 별도로 발행됨"
+    },
+    {
+      id: "CHAT-087",
+      title: "재개 중 대화방 락 — 이미 처리 중이면 재개 불가(409)",
+      precondition: "실제 AI 모드(OpenAI 호환), 같은 대화방에서 다른 요청이 처리 중(락 보유)인 상태",
+      steps: [
+        "처리 중인 대화방에서 PARTIAL 실행의 [이어서 실행] 클릭",
+        "resume가 대화방 락을 획득하지 못해 409로 거부되는지 확인",
+        "'이미 처리 중입니다' 유형의 재개 불가 안내가 노출되는지 확인",
+        "락 해제 후 다시 [이어서 실행]하면 정상 재개되는지 확인"
+      ],
+      expected: "대화방이 처리 중(락 보유)이면 resume가 409로 거부되고 재개 불가 안내가 노출되며, 락 해제 후 재개 가능"
+    },
+    {
+      id: "CHAT-088",
+      title: "SUCCESS/CANCELLED/RUNNING 실행은 재개 불가",
+      precondition: "실제 AI 모드(OpenAI 호환), 정상 완료(SUCCESS)/사용자 취소(CANCELLED)/실행 중(RUNNING) 상태의 실행 각각",
+      steps: [
+        "SUCCESS로 완료된 실행 카드에 [이어서 실행] 버튼이 없는지 확인",
+        "CANCELLED(제안 시점 취소)된 실행에 [이어서 실행] 버튼이 없는지 확인",
+        "RUNNING(진행 중) 실행에 재개 버튼이 없는지 확인",
+        "해당 executionId로 resume API를 강제 호출하면 400으로 거부되는지 확인"
+      ],
+      expected: "SUCCESS/CANCELLED/RUNNING 실행은 [이어서 실행] 버튼이 노출되지 않고, resume 강제 호출 시 400으로 거부됨"
+    },
+    {
+      id: "CHAT-089",
+      title: "삭제된 대화의 실행은 재개 불가 (연결 대화 필요)",
+      precondition: "실제 AI 모드(OpenAI 호환), PARTIAL 실행이 있으나 연결된 대화방이 소프트 삭제된 상태. 전체 히스토리 페이지에서 해당 실행 조회 가능",
+      steps: [
+        "히스토리 전체 페이지에서 삭제된 대화의 PARTIAL 실행을 확인 (USER_ID 독립이라 보임)",
+        "해당 실행에 [이어서 실행] 버튼이 노출되지 않는지 확인",
+        "resume 강제 호출 시 거부되고 '재개하려면 대화가 필요합니다' 안내가 표시되는지 확인",
+        "재실행은 새 대화에서 새 발화로 해야 함을 안내하는지 확인"
+      ],
+      expected: "연결 대화방이 소프트 삭제된 실행은 [이어서 실행] 노출 없이 재개가 거부되고, '재개하려면 대화가 필요합니다' 안내가 표시됨"
+    },
+    {
+      id: "CHAT-090",
+      title: "미실행 레시피 PENDING(⬜) 표시 + 재개 후 전체 SUCCESS",
+      precondition: "실제 AI 모드(OpenAI 호환), 레시피 2 실패로 PARTIAL 종료, 레시피 3은 PENDING",
+      steps: [
+        "PARTIAL 종료 카드에서 미실행 레시피 3이 ⬜(PENDING)으로 표시되는지 확인 (FAILED로 덮이지 않음)",
+        "[이어서 실행]으로 레시피 2 재개 → 정상 완료 → 레시피 3 전이 → 정상 완료",
+        "모든 레시피 완료 시 EXECUTION outcome이 SUCCESS로 확정되는지 확인",
+        "PROGRESS 확정 + RESULT 메시지 발행 + session_status idle 전이 확인",
+        "dbCheck: 재개 완료 후 EXECUTION.outcome=SUCCESS, 전체 EXECUTION_RECIPE가 SUCCESS인지 확인"
+      ],
+      expected: "미실행 레시피는 PENDING(⬜)으로 보존되고, 재개 후 모든 레시피가 정상 완료되면 전체 EXECUTION이 SUCCESS로 확정됨"
+    },
+    {
+      id: "CHAT-091",
+      title: "재개 중 재실패 — 다시 PARTIAL + [이어서 실행] 재노출",
+      precondition: "실제 AI 모드(OpenAI 호환), 레시피 2 재개 후 레시피 2(또는 3)가 다시 실패하는 상황",
+      steps: [
+        "[이어서 실행]으로 재개한 뒤 재개 대상 레시피가 다시 실패하도록 유도",
+        "실행이 다시 PARTIAL로 확정되고 전체 중단되는지 확인",
+        "실패 카드에 [이어서 실행] + [플랜 중단]이 다시 노출되어 반복 재개가 가능한지 확인",
+        "이미 완료된 앞 레시피는 여전히 재실행되지 않는지 확인",
+        "dbCheck: 재실패 후 EXECUTION이 다시 PARTIAL, 완료 레시피는 SUCCESS 유지, 실패 레시피는 FAILED인지 확인"
+      ],
+      expected: "재개 중 재실패하면 다시 PARTIAL로 종료되고 [이어서 실행]이 재노출되어 반복 재개 가능하며, 완료된 앞 레시피는 재실행되지 않음"
+    },
+    {
+      id: "CHAT-092",
+      title: "중복 외부 생성 주의 안내 (레시피 단위 재시도)",
+      precondition: "실제 AI 모드(OpenAI 호환), 실패 레시피가 스텝 여러 개 중 일부까지 외부 서버에 데이터를 생성한 뒤 죽은 상태",
+      steps: [
+        "[이어서 실행] 클릭 시 재개 확인 안내에 '이미 호출된 스텝이 중복 생성될 수 있음'(멱등하지 않은 API) 안내 문구가 노출되는지 확인",
+        "재개 시 재개 시작 레시피 전체가 다시 실행되어 이미 호출된 스텝이 다시 호출되는지 확인",
+        "완료된 앞 레시피(SUCCESS)는 재실행되지 않아 중복되지 않는지 확인 (중복 위험은 재개 시작 레시피 1개 내부로 한정)"
+      ],
+      expected: "[이어서 실행] 시 재개 시작 레시피 내부의 스텝 중복 생성 가능성이 안내되고, 완료된 앞 레시피는 재실행되지 않아 중복되지 않음"
+    },
+    {
+      id: "CHAT-093",
+      title: "접근성 — [이어서 실행] 버튼 키보드/aria-label",
+      precondition: "실제 AI 모드(OpenAI 호환), PARTIAL 종료된 실패/중단 카드 노출, 마우스 미사용",
+      steps: [
+        "Tab 키로 [이어서 실행] / [플랜 중단] 버튼에 포커스 이동 가능한지 확인",
+        "Enter/Space로 [이어서 실행]이 실행되는지 확인",
+        "[이어서 실행] 버튼에 목적을 설명하는 aria-label이 부여되어 스크린 리더가 인지 가능한지 확인",
+        "재개 진행 전이가 aria-live로 announce되는지 확인 (예: '재개를 시작합니다')"
+      ],
+      expected: "마우스 없이 키보드만으로 [이어서 실행]/[플랜 중단] 버튼을 조작할 수 있고, aria-label과 aria-live로 스크린 리더 접근성이 보장됨"
     }
   ]
 };

@@ -382,6 +382,20 @@ investigate 답변(`TEXT`)의 `payloadJson`에 담기는 출처 인용 payload. 
 - 실행 종료 사유(성공/중지/취소/실패)는 PROGRESS `status`(+ EXECUTION 계층의 종료 기록)로 표현한다. FE는 PROGRESS `status`와 RESULT 유무로 후속 액션 버튼을 결정한다.
 - 새로고침 복원: 대화 메시지를 로드하면 PROGRESS/RESULT 메시지가 그대로 딸려와 진행/결과 블록이 복원된다(FE 메모리 의존 없음). 촉발 메시지·실행 연결은 [execution.md 새로고침 복원](../recipe/execution.md#브라우저-새로고침--탭-닫기).
 
+#### 실행 재개(resume) SSE 흐름
+
+PARTIAL(실패/중단) 종료된 실행을 [이어서 실행]으로 재개할 때. `POST /api/v1/executions/{executionId}/resume`가 트리거이며, **기존 EXECUTION을 RUNNING으로 되돌려** 첫 미완료 레시피부터 재시도한다(상세: [plan.md 이어서 실행 (PARTIAL 재개)](../recipe/plan.md#이어서-실행-partial-재개)).
+
+| 시점 | 이벤트 | 대상 |
+|------|--------|------|
+| 재개 요청 접수 | (REST 응답) | 대화방 락 재획득. 이미 처리 중이면 `409`. 재개 불가 상태(SUCCESS/CANCELLED)면 거부 |
+| 재개 시작 | `session_status` | `executing`로 재전이 (모든 탭 입력 잠금) |
+| 재개 시작 | `message_new` | **새 PROGRESS 메시지** 발행 (재개 진행 표시 — 기존 PROGRESS와 별개 메시지) |
+| 이후 진행/완료 | `message_update` / `message_new` | 일반 [실행 SSE 흐름](#실행-sse-흐름-message_new--message_update)과 동일 (reportStep 기반 스텝 갱신 → 완료 시 PROGRESS 확정 + RESULT) |
+
+- 재개는 새 EXECUTION을 만들지 않으므로 `EXECUTION.MESSAGE_ID`(촉발 위치)는 유지되고, 재개 진행은 새로 발행한 PROGRESS 메시지로 표시된다.
+- 대화방 락은 실행 중과 동일 규칙(동시 요청 불가)을 따른다([execution.md 실행 중 입력 제한](../recipe/execution.md#실행-중-입력-제한)).
+
 #### 실행 종료 사유 (outcome)
 
 `success`/`failed` 이분법으로는 "사용자 취소 vs 중지 vs 서버 오류"를 구분할 수 없어, 종료 사유를 명시한다. 이 값은 EXECUTION 계층에 기록되며, FE는 PROGRESS 상태와 함께 이 값으로 **후속 액션 버튼**을 결정한다.
@@ -389,13 +403,14 @@ investigate 답변(`TEXT`)의 `payloadJson`에 담기는 출처 인용 payload. 
 | outcome | 의미 | 유발 주체 | FE 액션 |
 |---------|------|----------|---------|
 | `SUCCESS` | 정상 완료 | 서버 | 완료 카드 ([결과 보기]) |
-| `STOPPED` | 사용자 중지 | 사용자([중지]) | 중단 카드. 현재까지 진행분은 히스토리에 보존 |
-| `CANCELLED` | 사용자 취소 | 사용자([취소]) | "취소되었습니다" 안내. 히스토리에 기록으로 남음 |
-| `FAILED` | 실행 오류 | 시스템(스텝 실패/타임아웃 등) | 에러 카드 + `retriable`이면 [다시 실행] |
+| `STOPPED` | 사용자 중지 | 사용자([중지]) | 중단 카드 + [이어서 실행](중단 지점부터 재개). 현재까지 진행분은 히스토리에 보존 |
+| `CANCELLED` | 사용자 취소 | 사용자([취소]) | "취소되었습니다" 안내. 히스토리에 기록으로 남음 (재개 대상 아님) |
+| `FAILED` | 실행 오류 | 시스템(스텝 실패/타임아웃 등) | 에러 카드 + [이어서 실행](실패 지점부터 재개). 단일 스텝 재시도는 `retriable`이면 [다시 실행] |
 
-- **중지(STOPPED)와 취소(CANCELLED)는 상태로 구분해 기록한다.** 히스토리는 "무슨 일이 있었나"의 기록이므로 [중지]와 [취소]를 다른 사건으로 남긴다(사용자가 히스토리에서 구분해 봄 + 필터/집계 가능). 중단 시 실행의 `RESULT_SUMMARY`에 사유 + 완료 스텝 수를 자동 기록한다(예: "취소됨 · 1/3 스텝 완료"). 재개(이어서 실행) 로직의 세분은 그 기능 도입 시 다룬다.
+- **중지(STOPPED)와 취소(CANCELLED)는 상태로 구분해 기록한다.** 히스토리는 "무슨 일이 있었나"의 기록이므로 [중지]와 [취소]를 다른 사건으로 남긴다(사용자가 히스토리에서 구분해 봄 + 필터/집계 가능). 중단 시 실행의 `RESULT_SUMMARY`에 사유 + 완료 스텝 수를 자동 기록한다(예: "취소됨 · 1/3 스텝 완료").
+- **이어서 실행(PARTIAL 재개)**: PARTIAL 종료된 실행(실패 또는 STOPPED)은 [이어서 실행]으로 재개할 수 있다 — 기존 EXECUTION을 RUNNING으로 되돌려 첫 미완료(FAILED/PENDING) 레시피부터 재시도한다(레시피 단위, CONTEXT 이어받음). CANCELLED는 재개하지 않는다. 트리거·오케스트레이션: [plan.md 이어서 실행 (PARTIAL 재개)](../recipe/plan.md#이어서-실행-partial-재개) · resume SSE 흐름은 아래 [실행 재개(resume) SSE 흐름](#실행-재개resume-sse-흐름).
 - `retriable` (FAILED에만 의미): Transient 오류(타임아웃, 5xx 등)면 `true` → [다시 실행] 노출. 구조적 오류(스크립트 버그, 잘못된 레시피 정의)면 `false` → 재실행 버튼 숨김. 분류 기준: [error-handling.md](error-handling.md)
-- `failedStepIndex` (FAILED/STOPPED): 실패/중단된 스텝 위치. 재개 지점(재개 기능은 추후). PROGRESS `steps[]`에서 실패/중단 스텝의 `index`와 일치.
+- `failedStepIndex` (FAILED/STOPPED): 실패/중단된 스텝 위치. PROGRESS `steps[]`에서 실패/중단 스텝의 `index`와 일치. 단, [이어서 실행](PARTIAL 재개)은 **레시피 단위 재시도**라 이 스텝 위치가 아니라 첫 미완료 레시피의 처음부터 재개한다(스텝 단위 부분 재개는 백로그).
 
 ### 대화방 처리 상태 (session_status.status)
 

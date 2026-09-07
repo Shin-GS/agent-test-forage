@@ -75,8 +75,9 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 > **중지(STOPPED)와 취소(CANCELLED)는 상태로 구분해 기록한다.** 히스토리는 "무슨 일이 있었나"의
 > 기록이므로, [중지]와 [취소]를 다른 사건으로 남겨 사용자가 히스토리에서 구분해 볼 수 있게 한다
 > (필터/집계도 가능). 중단 시 `RESULT_SUMMARY`에 사유 + 완료 스텝 수를 자동 기록한다
-> (예: "취소됨 · 1/3 스텝 완료"). 재개(이어서 실행) 로직의 세분은 그 기능 도입 시 다룬다 —
-> 지금은 두 상태 모두 "처음부터 다시"만 제공한다.
+> (예: "취소됨 · 1/3 스텝 완료"). **STOPPED/FAILED(PARTIAL)는 [이어서 실행]으로 재개 가능**하다
+> (첫 미완료 레시피부터 레시피 단위 재시도, 기존 EXECUTION 재사용 — plan.md "이어서 실행").
+> CANCELLED는 재개하지 않는다(사용자가 물렀음).
 
 ---
 
@@ -145,11 +146,12 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 
 - 민감 데이터(토큰/비번/개인정보) 마스킹은 추후 (error-handling.md 참조)
 
-### 이어서 실행
+### 이어서 실행 (PARTIAL 재개)
 
-- STOPPED/FAILED 실행에서 마지막 SUCCESS 스텝 다음부터 재개
-- CONTEXT_JSON에 누적된 변수로 이어서 실행 (서버가 내려줌)
-- 프로토타입: "처음부터 다시"만 제공, 이어서 실행은 스키마는 준비하되 구현 추후 가능
+- **STOPPED/FAILED(PARTIAL) 실행에서 첫 미완료 레시피부터 재개**한다(레시피 단위 재시도). 실패한 레시피는 스텝 중간에 죽었어도 그 레시피 전체를 다시 실행한다(스텝 단위 부분 재개는 백로그).
+- 재개 시작 지점 판별을 위해 **미실행 레시피는 EXECUTION_RECIPE.STATUS=PENDING으로 보존**한다(실행 종료 시 FAILED로 덮지 않음). 완료=SUCCESS / 실패=FAILED / 미실행=PENDING으로 구분된다.
+- 완료된 앞 레시피의 결과는 `CONTEXT_JSON` 누적값으로 보존되어 재개 시 이어받는다. 새 EXECUTION을 만들지 않고 **기존 EXECUTION을 RUNNING으로 되돌린다**.
+- 트리거: `POST /executions/{id}/resume` (실패/중단 카드의 [이어서 실행] 버튼). 상세: [plan.md 이어서 실행](../specs/recipe/plan.md).
 
 ---
 

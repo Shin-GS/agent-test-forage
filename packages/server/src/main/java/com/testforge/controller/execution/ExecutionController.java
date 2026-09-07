@@ -145,4 +145,17 @@ public class ExecutionController {
     public ExecutionResponse respondActionPicker(@RequestBody ActionPickerRespondRequest request) {
         return executionService.respondActionPicker(CurrentUser.id(), request);
     }
+
+    /**
+     * 이어서 실행 (PARTIAL 재개, plan.md). 실패(PARTIAL)/사용자 중단(STOPPED)으로 종료된 실행을 첫 번째
+     * 미완료 레시피의 처음부터 다시 실행한다. 실패/중단 카드의 [이어서 실행] 버튼이 트리거다. 기존 EXECUTION을
+     * 재사용(새 리소스 생성 아님)하므로 200 OK로 응답한다.
+     *
+     * <p>재개 대상이 아닌 실행(SUCCESS/CANCELLED/RUNNING/FAILED)이거나 연결된 대화방이 없거나 삭제됐으면
+     * 400, 대화방이 이미 처리 중이면 409, 실행 없으면 404.
+     */
+    @PostMapping("/executions/{executionId}/resume")
+    public ExecutionResponse resume(@PathVariable Long executionId) {
+        return executionService.resume(executionId, CurrentUser.id());
+    }
 }

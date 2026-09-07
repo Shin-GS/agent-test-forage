@@ -87,6 +87,20 @@ export function getExecution(executionId: number): Promise<ExecutionResponse> {
   });
 }
 
+/**
+ * 실패(PARTIAL)/중단(STOPPED) 실행을 이어서 재개한다. 요청 바디 없음.
+ * 응답은 재개된 실행(status.code="RUNNING"):
+ * - pendingInputs 있음: 다음 레시피 pre-run 필수 입력 미충족 → 액션 피커
+ * - pendingInputs 없음: 러너 구동(runExecution)
+ * BE 는 SSE 로 session_status:executing + 새 PROGRESS 를 발행한다.
+ * 에러: 400(재개 불가 상태/대화방 없음), 409(대화방 사용 중), 404(실행 없음).
+ */
+export function resume(executionId: number): Promise<ExecutionResponse> {
+  return request<ExecutionResponse>(`/executions/${executionId}/resume`, {
+    method: "POST",
+  });
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export interface ActionPickerRespondPayload {
   executionId: number;

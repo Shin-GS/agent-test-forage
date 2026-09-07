@@ -270,9 +270,9 @@ class PlanExecutionIntegrationTest {
         List<ExecutionRecipe> recipes = executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
         assertThat(recipes.get(0).getStatus()).isEqualTo(ExecutionRecipeStatus.SUCCESS);
         assertThat(recipes.get(1).getStatus()).isEqualTo(ExecutionRecipeStatus.FAILED);
-        // r3는 전이되지 않아 스텝이 없고, finalize에 의해 FAILED로 정합 처리됨
+        // r3는 전이되지 않아 스텝이 없고, 미실행이므로 PENDING으로 보존된다(재개 시작 지점 판별용, plan.md 이어서 실행)
         assertThat(executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(recipes.get(2).getId())).isEmpty();
-        assertThat(recipes.get(2).getStatus()).isEqualTo(ExecutionRecipeStatus.FAILED);
+        assertThat(recipes.get(2).getStatus()).isEqualTo(ExecutionRecipeStatus.PENDING);
         assertThat(conversationLock.isLocked(conversationId)).isFalse();
     }
 
@@ -642,5 +642,152 @@ class PlanExecutionIntegrationTest {
 
         Long executionId = executionRepository.findAll().get(0).getId();
         assertThat(userInputValue(executionId, "career")).isEqualTo("3년");
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 이어서 실행 (PARTIAL 재개) — plan.md "이어서 실행"
+    // ─────────────────────────────────────────────────────────────
+
+    /** 현재 RUNNING 레시피의 첫 스텝을 FAILED 보고 (중간 실패 유발) */
+    private void reportRunningRecipeStepFailed(Long executionId) throws Exception {
+        ExecutionRecipe running = executionRecipeRepository
+                .findByExecutionIdAndStatusOrderBySequenceAsc(executionId, ExecutionRecipeStatus.RUNNING)
+                .get(0);
+        ExecutionStep step = executionStepRepository
+                .findByExecutionRecipeIdOrderByStepIndexAsc(running.getId()).get(0);
+        mockMvc.perform(post("/api/v1/executions/{eid}/steps/{sid}", executionId, step.getId()).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"FAILED\",\"errorMessage\":\"boom\"}"))
+                .andExpect(status().isOk());
+    }
+
+    // ── PENDING 보존: PARTIAL 종료 후 미실행 레시피는 PENDING(FAILED 아님)으로 남는다 ──
+    @Test
+    void resume_partialPreservesPendingRecipe() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipe("이력서 작성", specId);
+        Long r2 = newRecipe("포지션 탐색", specId);
+        Long r3 = newRecipe("입사지원", specId);
+        Long conversationId = newConversation(specId);
+        startPlan(conversationId, "[" + r1 + "," + r2 + "," + r3 + "]");
+        Long executionId = executionRepository.findAll().get(0).getId();
+
+        reportRunningRecipeStep(executionId);       // r1 SUCCESS → r2 전이
+        reportRunningRecipeStepFailed(executionId); // r2 FAILED → PARTIAL 확정
+
+        assertThat(executionRepository.findById(executionId).orElseThrow().getStatus())
+                .isEqualTo(ExecutionStatus.PARTIAL);
+        List<ExecutionRecipe> recipes = executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
+        assertThat(recipes.get(0).getStatus()).isEqualTo(ExecutionRecipeStatus.SUCCESS);
+        assertThat(recipes.get(1).getStatus()).isEqualTo(ExecutionRecipeStatus.FAILED);
+        // r3는 미실행 → PENDING 보존 (재개 시작 지점 판별용)
+        assertThat(recipes.get(2).getStatus()).isEqualTo(ExecutionRecipeStatus.PENDING);
+    }
+
+    // ── 재개: PARTIAL 실행 resume → 첫 미완료(FAILED) 레시피부터 RUNNING 복귀 + 스텝 재생성, 앞 SUCCESS 유지 ──
+    @Test
+    void resume_restartsFromFirstIncompleteRecipe() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipe("이력서 작성", specId);
+        Long r2 = newRecipe("포지션 탐색", specId);
+        Long r3 = newRecipe("입사지원", specId);
+        Long conversationId = newConversation(specId);
+        startPlan(conversationId, "[" + r1 + "," + r2 + "," + r3 + "]");
+        Long executionId = executionRepository.findAll().get(0).getId();
+
+        reportRunningRecipeStep(executionId);       // r1 SUCCESS → r2 전이
+        reportRunningRecipeStepFailed(executionId); // r2 FAILED → PARTIAL
+
+        // 재개 호출
+        mockMvc.perform(post("/api/v1/executions/{eid}/resume", executionId).with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status.code").value("RUNNING"));
+
+        // EXECUTION RUNNING 복귀 + finishedAt 초기화
+        Execution execution = executionRepository.findById(executionId).orElseThrow();
+        assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.RUNNING);
+        assertThat(execution.getFinishedAt()).isNull();
+
+        List<ExecutionRecipe> recipes = executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
+        // r1은 SUCCESS 그대로 유지 (앞 완료 레시피 재실행 안 함)
+        assertThat(recipes.get(0).getStatus()).isEqualTo(ExecutionRecipeStatus.SUCCESS);
+        // r2가 재개 시작 지점 → RUNNING + 스텝 재생성
+        assertThat(recipes.get(1).getStatus()).isEqualTo(ExecutionRecipeStatus.RUNNING);
+        assertThat(executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(recipes.get(1).getId())).hasSize(1);
+        // r3는 아직 PENDING
+        assertThat(recipes.get(2).getStatus()).isEqualTo(ExecutionRecipeStatus.PENDING);
+        // 대화방 EXECUTING + 락 유지
+        assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.EXECUTING);
+        assertThat(conversationLock.isLocked(conversationId)).isTrue();
+    }
+
+    // ── 재개 후 완주: resume 후 남은 스텝 SUCCESS 보고 → 전체 SUCCESS ──
+    @Test
+    void resume_thenCompletesRemaining_endsSuccess() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipe("이력서 작성", specId);
+        Long r2 = newRecipe("포지션 탐색", specId);
+        Long conversationId = newConversation(specId);
+        startPlan(conversationId, "[" + r1 + "," + r2 + "]");
+        Long executionId = executionRepository.findAll().get(0).getId();
+
+        reportRunningRecipeStep(executionId);       // r1 SUCCESS → r2 전이
+        reportRunningRecipeStepFailed(executionId); // r2 FAILED → PARTIAL
+
+        mockMvc.perform(post("/api/v1/executions/{eid}/resume", executionId).with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk());
+
+        // 재개된 r2 스텝 SUCCESS 보고 → 남은 레시피 없음 → 자동완료(SUCCESS)
+        reportRunningRecipeStep(executionId);
+
+        Execution execution = executionRepository.findById(executionId).orElseThrow();
+        assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.SUCCESS);
+        assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.IDLE);
+        assertThat(conversationLock.isLocked(conversationId)).isFalse();
+        List<ExecutionRecipe> recipes = executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
+        assertThat(recipes).allMatch(r -> r.getStatus() == ExecutionRecipeStatus.SUCCESS);
+    }
+
+    // ── 거부: SUCCESS 실행 resume → 400 ──
+    @Test
+    void resume_successExecution_returns400() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipe("가입", specId);
+        Long conversationId = newConversation(specId);
+        startPlan(conversationId, "[" + r1 + "]");
+        Long executionId = executionRepository.findAll().get(0).getId();
+
+        reportRunningRecipeStep(executionId); // 자동완료(SUCCESS)
+        assertThat(executionRepository.findById(executionId).orElseThrow().getStatus())
+                .isEqualTo(ExecutionStatus.SUCCESS);
+
+        mockMvc.perform(post("/api/v1/executions/{eid}/resume", executionId).with(testAuth.as(USER_ID)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+    }
+
+    // ── 락: 재개 대상 대화방이 이미 처리 중(락 점유)이면 409 ──
+    @Test
+    void resume_conversationBusy_returns409() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipe("이력서 작성", specId);
+        Long r2 = newRecipe("포지션 탐색", specId);
+        Long conversationId = newConversation(specId);
+        startPlan(conversationId, "[" + r1 + "," + r2 + "]");
+        Long executionId = executionRepository.findAll().get(0).getId();
+
+        reportRunningRecipeStep(executionId);       // r1 SUCCESS → r2 전이
+        reportRunningRecipeStepFailed(executionId); // r2 FAILED → PARTIAL (락 해제됨)
+
+        // 대화방을 외부에서 선점(다른 처리 중 상황 시뮬레이션)
+        assertThat(conversationLock.tryLock(conversationId)).isTrue();
+
+        mockMvc.perform(post("/api/v1/executions/{eid}/resume", executionId).with(testAuth.as(USER_ID)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("CONVERSATION_BUSY"));
+
+        conversationLock.unlock(conversationId);
     }
 }

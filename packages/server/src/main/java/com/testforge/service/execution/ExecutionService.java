@@ -955,6 +955,131 @@ public class ExecutionService {
         return toResponse(execution);
     }
 
+    /**
+     * 이어서 실행 (PARTIAL 재개, plan.md "이어서 실행"). 실패(PARTIAL) 또는 사용자 중단(STOPPED)으로
+     * 종료된 실행을 <b>첫 번째 미완료(FAILED/PENDING) 레시피의 처음부터</b> 다시 실행한다. 완료된 앞
+     * 레시피(SUCCESS)와 그 결과(CONTEXT 누적값)는 그대로 이어받고, 새 EXECUTION을 만들지 않고 기존
+     * EXECUTION을 RUNNING으로 되돌린다.
+     *
+     * <p>재개 절차:
+     * <ol>
+     *   <li>상태 검증: PARTIAL/STOPPED만 허용(SUCCESS/CANCELLED/RUNNING/FAILED는 400).</li>
+     *   <li>대화방 검증: 연결된 대화방이 없거나 소프트 삭제됐으면 400("재개하려면 대화가 필요합니다").</li>
+     *   <li>대화방 락 재획득(이미 처리 중이면 409).</li>
+     *   <li>첫 번째 비-SUCCESS 레시피를 찾아 스텝 삭제 후 PENDING으로 되돌리고 RUNNING 전이(스텝 재생성 +
+     *       userInput 재시드). CONTEXT 누적값은 보존되므로 initialContext는 null.</li>
+     *   <li>EXECUTION을 RUNNING으로 되돌리고 finishedAt/durationMs 초기화.</li>
+     *   <li>재개 레시피에 pre-run 액션 피커가 필요하면 WAITING_INPUT, 아니면 EXECUTING + 새 PROGRESS 메시지.</li>
+     * </ol>
+     *
+     * <p>실행 없으면 404, 소유자 아니면 404. 정상 재개면 락 유지(실행 종료 시 해제), 예외면 해제.
+     */
+    @Transactional
+    public ExecutionResponse resume(Long executionId, Long requesterId) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> ApiException.executionNotFound(executionId));
+        requireOwner(execution, executionId, requesterId);
+
+        // 상태 검증: PARTIAL(스텝 실패) / STOPPED(사용자 중단)만 재개 대상.
+        ExecutionStatus status = execution.getStatus();
+        if (status != ExecutionStatus.PARTIAL && status != ExecutionStatus.STOPPED) {
+            throw ApiException.invalidRequest(
+                    "execution is not resumable: " + executionId + " (status=" + status + ")");
+        }
+
+        // 대화방 검증: 재개는 대화방 락/PROGRESS 발행이 전제 → 연결 대화방이 없거나 삭제됐으면 재개 불가.
+        Long conversationId = execution.getConversationId();
+        Conversation conversation = conversationId == null ? null
+                : conversationRepository.findByIdAndDeletedAtIsNull(conversationId).orElse(null);
+        if (conversation == null) {
+            throw ApiException.invalidRequest("재개하려면 대화가 필요합니다");
+        }
+
+        // 대화방 선점: idle에서 시작하므로 락을 먼저 잡는다. 이미 처리 중이면 409.
+        if (!conversationLock.tryLock(conversationId)) {
+            throw ApiException.conversationBusy(conversationId);
+        }
+        boolean resumed = false;
+        try {
+            // 재개 시작 지점 = sequence 순 첫 번째 비-SUCCESS(FAILED/PENDING) 레시피.
+            List<ExecutionRecipe> recipes =
+                    executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(execution.getId());
+            ExecutionRecipe target = null;
+            for (ExecutionRecipe recipe : recipes) {
+                if (recipe.getStatus() != ExecutionRecipeStatus.SUCCESS) {
+                    target = recipe;
+                    break;
+                }
+            }
+            if (target == null) {
+                // 전부 SUCCESS인데 PARTIAL/STOPPED로 종료된 이상 케이스 — 재개할 미완료 레시피 없음.
+                throw ApiException.invalidRequest("no incomplete recipe to resume: " + executionId);
+            }
+
+            // 재개 대상 레시피를 "처음부터" 재시도: 기존 스텝 삭제 후 PENDING으로 되돌린 뒤 RUNNING 전이.
+            // 삭제를 즉시 flush해 이어지는 스텝 재생성(transitionRecipeToRunning)과의 순서를 보장한다
+            // — 옛 스텝과 새 스텝이 같은 트랜잭션 내에서 잠시 공존(중간 상태)하는 것을 방지.
+            // (EXECUTION_STEP의 (RECIPE_ID, STEP_INDEX)는 일반 인덱스라 유니크 충돌은 없지만, 순서를 명확히 한다.)
+            executionStepRepository.deleteAll(
+                    executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(target.getId()));
+            executionStepRepository.flush();
+            target.setStatus(ExecutionRecipeStatus.PENDING);
+            target.setStartedAt(null);
+            target.setFinishedAt(null);
+            executionRecipeRepository.save(target);
+
+            // 원본 레시피(usageCount/스텝 스냅샷 소스). 삭제됐으면 null 허용. CONTEXT 누적값은 보존하므로
+            // initialContext는 null(발화값은 최초 실행 전용). 스텝 재생성 + userInput 재시드가 여기서 일어난다.
+            Recipe originRecipe = target.getRecipeId() == null ? null
+                    : recipeRepository.findByIdAndDeletedAtIsNull(target.getRecipeId()).orElse(null);
+            transitionRecipeToRunning(execution, target, originRecipe, null);
+
+            // 기존 EXECUTION 재사용: RUNNING으로 되돌리고 종료 표식 초기화.
+            // resultSummary도 비운다 — 재개 전 종료 요약("중지됨 · 1/3 스텝 완료" 등)이 RUNNING 상태에
+            // 잔존해 히스토리에서 혼란을 주지 않도록. 최종 요약은 재완료 시 publishResult가 다시 채운다.
+            execution.setStatus(ExecutionStatus.RUNNING);
+            execution.setFinishedAt(null);
+            execution.setDurationMs(null);
+            execution.setResultSummary(null);
+            executionRepository.save(execution);
+
+            // 재개 레시피 pre-run 액션 피커: 미충족 필수(AUTO) 또는 MANUAL이면 WAITING_INPUT.
+            Long ownerId = conversation.getUserId();
+            Map<String, Object> userInput = currentUserInput(execution.getContextJson());
+            List<Map<String, Object>> pendingInputs =
+                    resolvePendingInputs(snapshotVariablesJsonOf(target), userInput, execution.getMode());
+
+            if (!pendingInputs.isEmpty()) {
+                // 입력 대기: WAITING_INPUT 전이 + session_status만 발행 (락 유지 → respond/cancel에서 해제).
+                conversation.setStatus(ConversationStatus.WAITING_INPUT);
+                conversationRepository.save(conversation);
+                publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                        com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.WAITING_INPUT));
+                resumed = true; // 락 유지
+                log.info("Execution resumed, waiting for action-picker input: executionId={}, conversationId={}, targetSequence={}, pending={}",
+                        executionId, conversationId, target.getSequence(), pendingInputs.size());
+                return toResponse(execution, pendingInputs);
+            }
+
+            // 대화방 EXECUTING 전이 (락 유지 → 종료 시 해제) + 새 PROGRESS 메시지(기존과 별개) 발행.
+            conversation.setStatus(ConversationStatus.EXECUTING);
+            conversationRepository.save(conversation);
+            beginProgressMessage(execution, conversationId);
+            publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
+                    com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.EXECUTING));
+
+            resumed = true;
+            log.info("Execution resumed: executionId={}, conversationId={}, targetSequence={}",
+                    executionId, conversationId, target.getSequence());
+            return toResponse(execution);
+        } finally {
+            // 정상 재개면 락 유지(종료 시 해제), 예외로 미재개면 즉시 해제.
+            if (!resumed) {
+                conversationLock.unlock(conversationId);
+            }
+        }
+    }
+
     // ── 결과 요약 (execution.md 실행 완료 / 결과 요약) ──
 
     /**
@@ -1609,7 +1734,12 @@ public class ExecutionService {
     /**
      * 실행 종료 시 아직 진행 중(RUNNING)인 하위 EXECUTION_RECIPE를 실행 최종 상태에 대응하는 종료
      * 상태로 맞춘다. Execution만 종료되고 ExecutionRecipe가 RUNNING으로 남아 계층 상태가 어긋나는
-     * 것을 막는다. (스텝(EXECUTION_STEP) 레벨의 세밀한 롤업은 플랜/재개 조각에서 다룬다.)
+     * 것을 막는다.
+     *
+     * <p><b>미실행(PENDING) 레시피는 PENDING으로 보존한다</b>(FAILED/STOPPED 등으로 덮지 않음, plan.md
+     * "이어서 실행"). 그래야 PARTIAL/STOPPED 종료 후 "완료(SUCCESS)/실패(FAILED)/미실행(PENDING)"을
+     * 구분해 재개 시작 지점(첫 번째 비-SUCCESS 레시피)을 찾을 수 있다. RUNNING이던 레시피만 실행 최종
+     * 상태로 확정한다(완료 SUCCESS·실패 FAILED는 이미 확정돼 건드리지 않음).
      */
     private void finalizeRunningRecipes(Long executionId, ExecutionStatus executionStatus,
                                         LocalDateTime finishedAt) {
@@ -1617,8 +1747,8 @@ public class ExecutionService {
         List<ExecutionRecipe> recipes =
                 executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId);
         for (ExecutionRecipe recipe : recipes) {
-            if (recipe.getStatus() == ExecutionRecipeStatus.RUNNING
-                    || recipe.getStatus() == ExecutionRecipeStatus.PENDING) {
+            // RUNNING이던 레시피만 종료 상태로 확정. PENDING(미실행)은 재개 시작 지점 판별을 위해 보존.
+            if (recipe.getStatus() == ExecutionRecipeStatus.RUNNING) {
                 recipe.setStatus(recipeStatus);
                 if (recipe.getFinishedAt() == null) {
                     recipe.setFinishedAt(finishedAt);
