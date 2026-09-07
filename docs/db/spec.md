@@ -19,7 +19,7 @@ ref: docs/specs/spec/registration.md
 | `API_ENDPOINT` | 스펙에 속한 개별 API (method+path). 레시피가 참조 |
 | `AUTH_PROFILE` | 스펙의 인증 프로필 (name + loginPageUrl) |
 
-- 서비스 메타(description/domain/capabilities/notes), Jira projectKey는 `API_SPEC`에 저장
+- 서비스 메타(description/domain/capabilities/notes), Confluence spaceKey는 `API_SPEC`에 저장
 - 원본 JSON은 조회 성능을 위해 `API_SPEC_DOCUMENT`로 분리, API는 `API_ENDPOINT`로 정규화 분해
 - 등록 계약/클라이언트 정보(`SCHEMA_VERSION`/`CLIENT_LANG`/`CLIENT_VERSION`)는 진단용으로 보관 (여러 언어·버전 라이브러리 추적)
 
@@ -49,7 +49,7 @@ ref: docs/specs/spec/registration.md
 | `SERVICE_DOMAIN` | VARCHAR(100) | 도메인 영역 |
 | `SERVICE_CAPABILITIES` | TEXT | 기능 키워드 배열 (JSON 문자열로 저장, H2/MySQL 호환) |
 | `SERVICE_NOTES` | VARCHAR(500) | 주의사항 |
-| `JIRA_PROJECT_KEY` | VARCHAR(50) | 정보 조회용 Jira 프로젝트 키 |
+| `CONFLUENCE_SPACE_KEY` | VARCHAR(50) | 정보 조회용 Confluence 스페이스 키 |
 | `CLIENT_LANG` | VARCHAR(20) | 등록한 라이브러리 언어 (진단용, 예: java) |
 | `CLIENT_VERSION` | VARCHAR(20) | 등록한 라이브러리 버전 (진단용, 예: 0.0.1) |
 | `SCHEMA_VERSION` | VARCHAR(10) | 마지막 등록에 사용된 계약 버전 (진단용) |
@@ -186,7 +186,7 @@ ref: docs/specs/spec/registration.md
     "capabilities": ["회원가입", "상품등록", "주문"],
     "notes": "스테이징"
   },
-  "jira": { "projectKey": "SHOP" },
+  "confluence": { "spaceKey": "BT" },
   "authProfiles": [
     { "name": "일반", "loginPageUrl": "https://.../login" }
   ]
@@ -223,7 +223,7 @@ ref: docs/specs/spec/registration.md
 
 - OpenAPI JSON을 **정규화(키 정렬, 공백 제거) 후** SHA-256
 - 서버 재빌드 시 필드 순서/포맷만 바뀌어도 해시가 달라지는 것 방지
-- **serviceInfo/jira/authProfiles는 해시 미포함** (스펙 본문만). 메타 변경은 `YML_META_HASH`로 별도 감지
+- **serviceInfo/confluence/authProfiles는 해시 미포함** (스펙 본문만). 메타 변경은 `YML_META_HASH`로 별도 감지
 
 ---
 

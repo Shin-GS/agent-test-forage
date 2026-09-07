@@ -30,7 +30,7 @@ public record IntentResult(
         List<RecipeCandidate> candidates,
         // execute_recipe: 발화에서 추출한 초기 입력값 (그 외 빈 맵)
         Map<String, Object> extractedValues,
-        // investigate: 조회 소스 식별자 (예: "api_spec", "jira"). 그 외 null
+        // investigate: 조회 소스 식별자 (예: "api_spec", "confluence"). 그 외 null
         String investigateSource,
         // investigate: 조회 키워드/질문. 그 외 null
         String investigateQuery) {

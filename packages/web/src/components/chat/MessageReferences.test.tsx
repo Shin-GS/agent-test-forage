@@ -15,7 +15,7 @@ vi.mock("../../api", () => ({
   specsApi: { getSpec: (...args: unknown[]) => getSpecMock(...args) },
 }));
 
-import { MessageReferences, parseSpecEndpointUrl } from "./MessageReferences";
+import { MessageReferences, parseSpecEndpointUrl, isExternalUrl } from "./MessageReferences";
 import { useAuthStore } from "../../store/authStore";
 import type { ReferencesPayload, SpecDetail } from "../../api/types";
 
@@ -80,7 +80,7 @@ describe("parseSpecEndpointUrl", () => {
   });
 
   it("외부 URL 이면 null", () => {
-    expect(parseSpecEndpointUrl("https://jira.example.com/T-1")).toBeNull();
+    expect(parseSpecEndpointUrl("https://demo.atlassian.net/wiki/spaces/BT/pages/1")).toBeNull();
   });
 
   it("형식 불일치(꼬리 세그먼트)면 null", () => {
@@ -99,14 +99,48 @@ describe("MessageReferences 정적 폴백", () => {
     expect(getSpecMock).not.toHaveBeenCalled();
   });
 
-  it("외부 URL 이면 정적 칩으로 폴백한다", () => {
-    renderRefs(payloadWith("https://figma.com/file/x"));
-    expect(screen.queryByRole("button")).toBeNull();
-  });
-
   it("references 가 비면 아무것도 렌더하지 않는다", () => {
     const { container } = renderRefs({ kind: "references", schemaVersion: 1, references: [] });
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("isExternalUrl", () => {
+  it("http/https URL 이면 true", () => {
+    expect(isExternalUrl("https://demo.atlassian.net/wiki/spaces/BT/pages/42")).toBe(true);
+    expect(isExternalUrl("http://x.test")).toBe(true);
+  });
+
+  it("내부 경로/null 이면 false", () => {
+    expect(isExternalUrl("/specs/42/endpoints/7")).toBe(false);
+    expect(isExternalUrl(null)).toBe(false);
+  });
+});
+
+describe("MessageReferences 외부 링크 분기", () => {
+  it("외부 https URL 이면 새 탭 링크(a[target=_blank])로 렌더한다", () => {
+    renderRefs(payloadWith("https://demo.atlassian.net/wiki/spaces/BT/pages/42"));
+    // 인라인 확장 button 이 아니라 <a> 링크
+    expect(screen.queryByRole("button")).toBeNull();
+    const link = screen.getByRole("link");
+    expect(link.getAttribute("href")).toBe("https://demo.atlassian.net/wiki/spaces/BT/pages/42");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.getAttribute("aria-label")).toContain("새 탭에서 열림");
+    expect(getSpecMock).not.toHaveBeenCalled();
+  });
+
+  it("/specs 패턴은 외부 링크가 아니라 인라인 button 으로 남는다", () => {
+    renderRefs(payloadWith("/specs/42/endpoints/7"));
+    expect(screen.getByRole("button")).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("null 이면 정적 칩(링크/버튼 아님)으로 폴백한다", () => {
+    renderRefs(payloadWith(null));
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText("POST /api/v1/users")).toBeTruthy();
   });
 });
 

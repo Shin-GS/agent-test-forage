@@ -33,8 +33,8 @@ ai-test-forge:
     domain: "커머스"
     capabilities: ["회원가입", "상품등록", "주문"]
     notes: "스테이징 환경"
-  jira:
-    project-key: "SHOP"                         # 정보 조회용 Jira 프로젝트 (선택)
+  confluence:
+    space-key: "BT"                             # 정보 조회용 Confluence 스페이스 (선택)
   auth:
     profiles:
       - name: "일반"

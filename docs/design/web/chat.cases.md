@@ -41,7 +41,7 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 | 13 | 중단 상태 | 중지 후 상태 + [처음부터 다시 실행] (1단계는 이어서 실행 없음) |
 | 14 | 인증 요구 카드 | 로그인 필요 시 인증 카드 + progress 대기 |
 | 15 | 서비스 선택 | 서비스 미지정 시 서비스 선택 버튼 |
-| 16 | 정보 조회 중 | investigate 진행 상태 (API 스펙 → Jira 조회) |
+| 16 | 정보 조회 중 | investigate 진행 상태 (API 스펙 → Confluence 조회) |
 | 16b | 조회 실패/타임아웃 | 종료 상태 확정 실렌더 (running 잔존 없음, 폴백 안내) |
 | 17 | 참고 자료 | 조회 완료 답변 + 출처 버튼 리스트 |
 | 18 | 레시피 사이 입력 | 플랜 실행 중 다음 레시피 pre-run 액션 피커 (값 출처 뱃지) |
@@ -155,8 +155,8 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 - 헤더 "🔍 정보 조회 중"
 - 소스별 조회 단계 리스트: 상태 아이콘 텍스트 병기 (✅ 완료 / 🔄 진행 중 / ⬜ 대기 / ⏭️ 스킵)
   - 예: "✅ API 스펙 확인 — 회원가입 스키마", "🔄 API 스펙 조회 중 — '약관 동의 필드'"
-  - **1단계는 `api_spec` 커넥터만 노출** (jira는 [2단계 백로그](../../specs/chat/scenarios/investigation.md#2단계-백로그))
-  - ⏭️ 스킵: 미지원 source(jira 등) 또는 중복 `(source, query)` 캐시 재사용 — 카운터 소비
+  - **1단계는 `api_spec` 커넥터만 노출** (confluence는 [2단계](../../specs/chat/scenarios/investigation.md#confluence-커넥터-조회-정의-2단계))
+  - ⏭️ 스킵: 미지원 source 또는 중복 `(source, query)` 캐시 재사용 — 카운터 소비
 - 단계 전이 announce: `role="status" aria-live="polite"`(sr-only)
   - **FE 구현 필수**: aria-live announce 노드는 초기 빈 상태로 렌더하고 조회 단계 전이 시점에 텍스트를 주입한다 (정적 렌더로는 announce 미발생, Case 12 패턴 동일). **디자인 HTML의 예시 텍스트는 데모용이며 정적 렌더 금지** — 실제 구현/디자인 노드 모두 빈 상태로 시작
 - `message_update`로 같은 INVESTIGATE_PROGRESS 메시지 갱신 (새 메시지 안 쌓음)
@@ -174,7 +174,7 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
   - **1단계는 `api_spec` 소스만** → 칩 [📋 method + path ▸], **클릭 시 그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼침** (`aria-expanded` 토글, 각 칩 독립 — 여러 개 동시 펼침 가능). 확장 인디케이터 ▸ 접힘 / ▾ 펼침
   - 펼친 상세: 서비스명 + method/path + summary + description. 펼침 시점에 DEPRECATED/INACTIVE면 `badge--warning`("지원 종료") 표시(상세는 유지). 하단 "전체 스펙 보기 →" 링크는 **관리자만 렌더**(일반 사용자 미렌더)
   - `url`(`/specs/{apiSpecId}/endpoints/{endpointId}`) 파싱 실패 시 비인터랙션 정적 칩으로 폴백. 로딩/실패/엔드포인트 없음 상태 안내는 [investigation.md](../../specs/chat/scenarios/investigation.md#인라인-확장-동작-1단계-api_spec-칩)
-  - 🎫 Jira 칩은 [2단계](../../specs/chat/scenarios/investigation.md#2단계-백로그) — 1단계 미노출
+  - 📄 Confluence 칩은 [2단계](../../specs/chat/scenarios/investigation.md#confluence-커넥터-조회-정의-2단계) — 1단계 미노출
 - 조회한 소스가 없으면 참고 자료 섹션 미표시 (순수 TEXT)
 - references payload는 답변 TEXT 메시지에 저장 → 새로고침 복원 ([messaging.md references](../../specs/common/messaging.md#references-정보-조회-참고-자료))
 

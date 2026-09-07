@@ -73,7 +73,7 @@ public final class ToolSchemas {
         return Map.of("type", "string", "description", description);
     }
 
-    /** enum 값이 고정된 string 파라미터 스키마 (예: source: ["api_spec","jira"]) */
+    /** enum 값이 고정된 string 파라미터 스키마 (예: source: ["api_spec","confluence"]) */
     private static Map<String, Object> enumStringProp(String description, List<String> values) {
         return Map.of("type", "string", "description", description, "enum", values);
     }
@@ -139,16 +139,18 @@ public final class ToolSchemas {
     /**
      * investigate: 정책/기능 질문에 답하기 위해 정보 소스를 조회한다(읽기 전용, agentic loop).
      * 조회 결과가 부족하면 다른 source/query로 반복 호출한다(intent-classification.md investigate).
-     * 1단계 유효 source는 {@code api_spec}뿐이며, {@code jira}는 반환 시 BE가 미지원으로 스킵한다.
+     * 유효 source는 {@code api_spec}(등록 스펙)과 {@code confluence}(위키 문서) 둘 다이며, 소스 선택
+     * 기준은 investigation.md 소스 판단 경계를 따른다(API·필드→api_spec, 요구사항·설계·정책 문서→confluence).
      */
     private static OpenAiDtos.Tool investigate() {
         return fn(ToolName.INVESTIGATE,
                 "정책/기능 질문에 답하기 위해 정보 소스를 조회한다. 더 필요하면 반복 호출.",
                 object(Map.of(
                         "source", enumStringProp(
-                                "조회할 정보 소스. api_spec=등록된 스펙(요청/응답 스키마·설명). "
-                                        + "jira는 아직 지원하지 않는다.",
-                                List.of("api_spec", "jira")),
+                                "조회할 정보 소스. api_spec=등록된 스펙(요청/응답 스키마·설명, API·필드 질문). "
+                                        + "confluence=연결된 Confluence 스페이스의 위키 문서(요구사항·설계·정책 맥락). "
+                                        + "애매하면 api_spec을 먼저 시도한다.",
+                                List.of("api_spec", "confluence")),
                         "query", stringProp("조회 키워드 또는 질문(예: '회원가입', '약관 동의 필드')")),
                         List.of("source", "query")));
     }

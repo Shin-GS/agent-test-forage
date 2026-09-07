@@ -28,7 +28,7 @@ DB 저장 → 레시피 작성 시 API 목록으로 활용
 
 - 클라이언트 라이브러리를 외부 서버에 의존성 추가
 - 앱 기동 시 자동으로 `/v3/api-docs`에서 OpenAPI JSON 수집
-- 메인 서버에 POST (name, baseUrl, specJson, specHash, authProfiles, **serviceInfo**, jira)
+- 메인 서버에 POST (name, baseUrl, specJson, specHash, authProfiles, **serviceInfo**, confluence)
 - **등록은 앱 기동 시 1회만 수행한다.** 주기적 heartbeat는 두지 않는다(초기 버전).
 - 스펙이 바뀌면 코드 변경 → 재배포 → 재기동이 수반되므로, **재기동 시 다시 1회 등록**되어 자연히 최신 스펙으로 갱신된다. "기동 없이 스펙만 바뀜"은 사실상 없어 무시한다.
 - 재등록은 `baseUrl`로 기존 스펙을 upsert한다(엔드포인트 PK 유지 → 레시피 참조 보존, 아래 재등록 정합성 참조).
@@ -126,7 +126,7 @@ public void deleteUser(...) { ... }
 - 스펙 등록 시 함께 전송/저장
 - 레시피 실행 중 401/403 발생 시 해당 URL을 사용자에게 제공
 
-> 표기 규칙: **yml 설정 키는 kebab-case**(`login-page-url`, `project-key`, `server-url`), Spring이 relaxed binding으로 프로퍼티에 매핑한다. 등록 **요청 body의 JSON 필드**는 camelCase(`loginPageUrl`, `serviceInfo`, `authProfiles`) — 서로 다른 레이어다.
+> 표기 규칙: **yml 설정 키는 kebab-case**(`login-page-url`, `space-key`, `server-url`), Spring이 relaxed binding으로 프로퍼티에 매핑한다. 등록 **요청 body의 JSON 필드**는 camelCase(`loginPageUrl`, `serviceInfo`, `authProfiles`) — 서로 다른 레이어다.
 
 ```yaml
 # 외부 서버 application.yml
@@ -167,26 +167,27 @@ FE가 쿠키 인증으로 API를 호출하려면 아래 조건이 필요하다. 
 - 위 조건 미충족 시 401 로그인 플로우가 동작하지 않음
 - 로컬 개발 환경은 https 또는 예외 처리 별도 안내
 
-## Jira 연결 (정보 조회용) — 2단계
+## Confluence 연결 (정보 조회용)
 
-> **Jira 커넥터는 investigate 2단계 항목이다.** 1단계는 `api_spec` 커넥터만 구현한다([investigation.md 커넥터 스코프](../chat/scenarios/investigation.md#커넥터-스코프-단계별)). 아래 연결 설정은 2단계 도입 시 유효하며, 1단계에서는 수집만 하고 조회에는 쓰이지 않는다.
+> **Confluence 커넥터는 investigate 2단계 구현(확정)이다.** `investigate`의 `confluence` source가 유효하며, 아래 연결 설정으로 조회 space를 서비스에 한정한다([investigation.md confluence 커넥터 조회 정의](../chat/scenarios/investigation.md#confluence-커넥터-조회-정의-2단계)).
 
-`investigate` 툴의 Jira 커넥터가 조회할 프로젝트를 서비스에 연결한다. 상세: [정보 조회 루프](../chat/scenarios/investigation.md)
+`investigate` 툴의 Confluence 커넥터가 조회할 스페이스를 서비스에 연결한다. 상세: [정보 조회 루프](../chat/scenarios/investigation.md)
 
 ```yaml
 # 외부 서버 application.yml
 ai-test-forge:
-  jira:
-    project-key: "SHOP"   # 이 서비스와 연관된 Jira 프로젝트 키
+  confluence:
+    space-key: "BT"   # 이 서비스와 연관된 Confluence 스페이스 키
 ```
 
 | 항목 | 위치 | 이유 |
 |------|------|------|
-| Jira 프로젝트 키 (`project-key`) | 서비스별 (yml / 관리자 수정) | 서비스마다 다름 |
-| Jira 인스턴스 baseUrl + API 토큰 | **ai-test-forge 서버 환경변수 (시크릿)** | 민감정보. 조직당 보통 1개 인스턴스 |
+| Confluence 스페이스 키 (`space-key`) | 서비스별 (yml / 관리자 수정) | 서비스마다 다름. 조회 시 CQL `space = "{KEY}"`로 범위 한정 (오조회/SSRF 방지) |
+| Confluence 인스턴스 baseUrl + email + API 토큰 (`CONFLUENCE_BASE_URL` / `CONFLUENCE_EMAIL` / `CONFLUENCE_API_TOKEN`) | **ai-test-forge 서버 환경변수 (시크릿)** | 민감정보. 조직당 보통 1개 인스턴스. 인증은 Basic auth `base64({CONFLUENCE_EMAIL}:{CONFLUENCE_API_TOKEN})` (Atlassian Cloud REST 규격) |
 
 - **호출 주체는 ai-test-forge 서버(BE)**. FE가 아님 (토큰이 시크릿이므로)
-- projectKey도 서비스 설명과 동일하게 관리자 우선 정책 적용
+- spaceKey도 서비스 설명과 동일하게 관리자 우선 정책 적용
+- `space-key`가 없는 서비스는 confluence 조회를 시도하지 않고 "연결된 Confluence 스페이스 없음"으로 안내한다([investigation.md 조회 범위 제한](../chat/scenarios/investigation.md#조회-범위-제한-오조회ssrf-방지))
 
 ## 스펙 상태
 
@@ -243,7 +244,7 @@ heartbeat(주기 감시)를 없앤 대신, "그 서버가 지금 되는가"는 *
 
 | 대상 | 재등록 처리 |
 |------|------------|
-| 서비스 메타 (설명/Jira) | 관리자 수정본 우선 보존, yml 변경은 감지만 |
+| 서비스 메타 (설명/Confluence) | 관리자 수정본 우선 보존, yml 변경은 감지만 |
 | API 엔드포인트 | `method + path` 키로 upsert |
 | └ 기존 API | 스키마 갱신 (**내부 ID 유지** → 레시피 참조 보존) |
 | └ 신규 API | 추가 |

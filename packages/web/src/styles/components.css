@@ -3740,3 +3740,143 @@ select.input {
   font-family: var(--font-family);
   list-style: none;
 }
+
+/* references 항목 = 칩(button) + 인라인 아코디언 상세 (api_spec). 각 칩 독립 토글. (chat.html Case 17 정합) */
+.reference-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.reference-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.reference-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* 펼침 상태(aria-expanded=true) 칩 강조 */
+.reference-btn[aria-expanded="true"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.reference-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 확장 인디케이터(▸ 접힘 / ▾ 펼침). aria-hidden. */
+.reference-btn__toggle {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-left: var(--space-1);
+}
+
+.reference-btn[aria-expanded="true"] .reference-btn__toggle {
+  color: var(--color-accent);
+}
+
+/* 인라인 아코디언 상세 (엔드포인트 상세). 접힘 시 hidden 속성으로 비표시. */
+.reference-detail {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* display:flex 가 기본 hidden(display:none)을 덮어쓰지 않게 명시 */
+.reference-detail[hidden] {
+  display: none;
+}
+
+.reference-detail__service {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.reference-detail__endpoint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  flex-wrap: wrap;
+}
+
+.reference-detail__summary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.reference-detail__spec-link {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.reference-detail__spec-link:hover {
+  text-decoration: underline;
+}
+
+/* 로딩/에러 상태 텍스트 */
+.reference-detail__status {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* confluence 외부 링크 칩 (외부 http(s) URL). reference-btn 과 동일 톤이나 button 이 아닌 <a>(새 탭). */
+.reference-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.reference-link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.reference-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 외부 이동(↗) 인디케이터. aria-hidden. */
+.reference-link__external {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-left: var(--space-1);
+}
+
+.reference-link:hover .reference-link__external {
+  color: var(--color-accent);
+}

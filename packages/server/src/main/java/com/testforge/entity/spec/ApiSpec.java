@@ -66,9 +66,9 @@ public class ApiSpec extends BaseEntity {
     @Column(name = "SERVICE_NOTES", length = 500)
     private String serviceNotes;
 
-    /** 정보 조회용 Jira 프로젝트 키 */
-    @Column(name = "JIRA_PROJECT_KEY", length = 50)
-    private String jiraProjectKey;
+    /** 정보 조회용 Confluence 스페이스 키 */
+    @Column(name = "CONFLUENCE_SPACE_KEY", length = 50)
+    private String confluenceSpaceKey;
 
     /** 진단용: 등록한 라이브러리 언어 (예: java) */
     @Column(name = "CLIENT_LANG", length = 20)
@@ -169,12 +169,12 @@ public class ApiSpec extends BaseEntity {
         this.serviceNotes = serviceNotes;
     }
 
-    public String getJiraProjectKey() {
-        return jiraProjectKey;
+    public String getConfluenceSpaceKey() {
+        return confluenceSpaceKey;
     }
 
-    public void setJiraProjectKey(String jiraProjectKey) {
-        this.jiraProjectKey = jiraProjectKey;
+    public void setConfluenceSpaceKey(String confluenceSpaceKey) {
+        this.confluenceSpaceKey = confluenceSpaceKey;
     }
 
     public String getClientLang() {

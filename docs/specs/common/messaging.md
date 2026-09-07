@@ -220,8 +220,8 @@ payload는 **레시피별 구조**다(플랜 결과 카드 = chat.html Case 21 �
 ```
 
 - `status`: 루프 전체 상태. `done`(정상 종료, 최종 답변 별도 발행) / `failed`(전 커넥터 실패 등) / `timeout`(120초 초과). **비정상 종료(예외/타임아웃) 시 반드시 `failed`/`timeout`으로 확정하며 `running` 잔존을 두지 않는다**(finally에서 확정 `message_update` 발행 — 새로고침 시 유령 진행 블록 방지).
-- `steps[]`: 조회 단계. 각 항목은 `source`(1단계는 `api_spec`만 유효) / `query`(조회 질의) / `status`.
-  - `skipped`: 미지원 source(`jira` 등 2단계) 또는 중복 `(source, query)` 캐시 재사용 시. **`skipped`(미지원/캐시 재사용)도 조회 카운터를 소비한다**(카운터 우회 차단 — [investigation.md 루프 카운터 정의](../chat/scenarios/investigation.md#루프-카운터-정의-종료-보장-봉인)).
+- `steps[]`: 조회 단계. 각 항목은 `source`(`api_spec` / `confluence`) / `query`(조회 질의) / `status`.
+  - `skipped`: 조회를 실제 수행하지 못한 경우 — 미등록 커넥터 source, confluence인데 서비스 `confluenceSpaceKey` 미연결, 또는 중복 `(source, query)` 캐시 재사용. **`skipped`도 조회 카운터를 소비한다**(카운터 우회 차단 — [investigation.md 루프 카운터 정의](../chat/scenarios/investigation.md#루프-카운터-정의-종료-보장-봉인)).
 - `content`에는 이 구조에서 파생한 표시용 진행 요약(Markdown, 예: "🔍 API 스펙 조회 중 — 회원가입")을 담는다.
 - **최종 답변은 이 메시지를 갱신하지 않는다.** 완료 시 `status`를 `done`으로 확정하고, 답변은 별도 `TEXT`(references payload) `message_new`로 발행한다.
 - 상세 흐름: [investigation.md 진행 상태 표시](../chat/scenarios/investigation.md#진행-상태-표시-sse).
@@ -240,9 +240,13 @@ investigate 답변(`TEXT`)의 `payloadJson`에 담기는 출처 인용 payload. 
 }
 ```
 
-- `references[]`: 조회한 소스의 원본 링크. `source`(1단계는 `api_spec`) / `label`(버튼 표시명, 예: method+path) / `url`(클릭 대상). **1단계(`api_spec`)의 `url`(`/specs/{apiSpecId}/endpoints/{endpointId}`)은 칩 클릭 시 그 자리(채팅 인라인)에서 엔드포인트 상세 아코디언을 펼치기 위한 식별자다**(외부 URL/내부 라우트 이동 아님). FE는 `url`에서 `apiSpecId`·`endpointId`를 파싱해 `GET /api/v1/specs/{apiSpecId}`로 상세를 조회한다. Jira/Figma(2단계+)는 외부 URL 새 탭.
+- `references[]`: 조회한 소스의 원본 링크. `source`(`api_spec` / `confluence`) / `label`(버튼 표시명) / `url`(클릭 대상).
+- **`url`은 내부/외부 두 형태이며 FE가 형태로 동작을 분기한다:**
+  - **내부(`/specs/{apiSpecId}/endpoints/{endpointId}`, `api_spec`)** → 라우트 이동이 아니라 **그 자리(채팅 인라인)에서 엔드포인트 상세 아코디언을 펼치는 식별자**다. FE는 `url`에서 `apiSpecId`·`endpointId`를 파싱해 `GET /api/v1/specs/{apiSpecId}`로 상세를 조회한다.
+  - **외부(http/https, `confluence`의 `{CONFLUENCE_BASE_URL}/wiki/spaces/{KEY}/pages/{id}`, 추후 figma)** → **새 탭으로 연다**(`target="_blank"` + `rel="noopener noreferrer"`). 인라인 확장 아님.
+- `label`: `api_spec`은 method+path(예: `POST /api/v1/users`), `confluence`는 페이지 제목.
 - 조회한 소스가 없으면 references payload 없이 순수 `TEXT`로 발행한다(참고 자료 섹션 미표시).
-- FE 렌더: 카드 UI [참고 자료형](../chat/card-ui.md#참고-자료형-상세)으로 답변 하단에 칩 리스트 표시. 1단계 `api_spec` 칩은 클릭 시 그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼친다.
+- FE 렌더: 카드 UI [참고 자료형](../chat/card-ui.md#참고-자료형-상세)으로 답변 하단에 칩 리스트 표시. `api_spec` 칩은 인라인 아코디언, `confluence` 칩은 새 탭(위 url 형태 분기).
 
 ### CARD
 
@@ -263,7 +267,7 @@ investigate 답변(`TEXT`)의 `payloadJson`에 담기는 출처 인용 payload. 
 | `auth_required` | 인증 필요 | `loginPageUrl`, `executionId` |
 | `candidates` | 유사 레시피 후보 | `recipes: [{ id, name, description }]` |
 | `service_select` | 서비스 선택 | `services: [{ name, label }]` |
-| `references` | 정보 조회 참고 자료 (investigate 출처 인용) | `references: [{ source, label, url }]` (1단계는 `TEXT` 메시지의 `kind:"references"` payload로 동반 — 위 [references 스키마](#references-정보-조회-참고-자료)) |
+| `references` | 정보 조회 참고 자료 (investigate 출처 인용) | `references: [{ source, label, url }]` (`TEXT` 메시지의 `kind:"references"` payload로 동반 — 위 [references 스키마](#references-정보-조회-참고-자료)) |
 
 ### execution_mode 카드 상세
 

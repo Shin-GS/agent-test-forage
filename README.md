@@ -70,7 +70,7 @@ cd packages/library/java/21
 | 작업 | 호출 주체 |
 |------|----------|
 | 레시피 API 실행 | FE 브라우저 (외부 서버 직접 호출, CORS 자동 허용) |
-| 정보 조회 (investigate) | BE (서버 시크릿 토큰으로 Jira 등 조회) |
+| 정보 조회 (investigate) | BE (서버 시크릿 토큰으로 Confluence 등 조회) |
 
 ## 검증용 데모 서버
 

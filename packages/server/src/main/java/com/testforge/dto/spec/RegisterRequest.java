@@ -24,8 +24,8 @@ public record RegisterRequest(
         String specHash,
         // 서비스 메타 정보 (설명/도메인/기능/주의사항)
         ServiceInfo serviceInfo,
-        // Jira 연동 정보
-        Jira jira,
+        // Confluence 연동 정보
+        Confluence confluence,
         // 인증 프로필 목록
         List<AuthProfileDto> authProfiles
 ) {
@@ -50,10 +50,10 @@ public record RegisterRequest(
     ) {
     }
 
-    /** Jira 연동 정보 */
-    public record Jira(
-            // Jira 프로젝트 키 (예: SHOP)
-            String projectKey) {
+    /** Confluence 연동 정보 */
+    public record Confluence(
+            // Confluence 스페이스 키 (예: BT)
+            String spaceKey) {
     }
 
     /** 인증 프로필 항목 */

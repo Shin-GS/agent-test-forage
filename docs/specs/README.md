@@ -16,7 +16,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 | 작업 | 호출 주체 | 인증 |
 |------|----------|------|
 | 레시피 API 실행 | FE 브라우저 (직접) | 외부 서버 쿠키 세션 (CORS 자동 허용) |
-| 정보 조회 (investigate: api_spec = 1단계 · jira = 2단계) | BE (ai-test-forge 서버) | 내부 DB / (2단계) 서버 시크릿 토큰 |
+| 정보 조회 (investigate: api_spec 1단계 · confluence 2단계, 둘 다 구현) | BE (ai-test-forge 서버) | 내부 DB / 서버 시크릿(Confluence Basic auth: email+토큰) |
 | AI 루프 (OpenAI 호환 API 직접 호출, OpenRouter) | BE | 서버 시크릿 API 키 |
 
 ## 검증용 데모 서버
@@ -107,6 +107,6 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 | 대화를 통한 레시피 생성 기능 | 추후 고도화 시 구현 |
 | 레시피 공유/승인 프로세스 | 추후 고도화 시 구현 |
 | 알림 기능 | 추후 고도화. 현재는 채팅 목록 갱신 정도 |
-| Figma 커넥터 (정보 조회) | 추후. API key 확보 + Jira 커넥터 사용성 검증 완료 후 추가 |
-| 정보 조회 커넥터 확장 (Confluence, Notion 등) | 추후. 커넥터 인터페이스로 조회 소스 확장 |
+| Figma 커넥터 (정보 조회) | 추후. API key 확보 + Confluence 커넥터 사용성 검증 완료 후 추가 |
+| 정보 조회 커넥터 확장 (Notion 등) | 추후. 커넥터 인터페이스로 조회 소스 확장 |
 | 외부 SaaS 레시피 연동 (Slack 등) | 추후 고도화. 커넥터 개념으로 외부 API를 레시피에서 호출 가능하게 확장 |

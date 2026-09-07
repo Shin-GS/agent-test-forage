@@ -68,11 +68,11 @@ OpenRouter는 크레딧/데일리 한도를 넘으면 **HTTP 402(Payment Require
 | 커넥터 | 설명 | 단계 |
 |--------|------|------|
 | `api_spec` | 등록된 스펙 조회 (스키마, 어노테이션 힌트). 내부 DB 조회 | ✅ **1단계 구현** |
-| `jira` | Jira 티켓/이슈 조회. 외부 REST + 서버 시크릿 토큰 필요 | ⏳ **2단계** (인터페이스만) |
+| `confluence` | Confluence 위키 문서 조회. Atlassian Cloud REST(CQL) + 서버 시크릿(Basic auth: email+토큰) | ✅ **2단계 구현 (확정)** |
 | `figma` | Figma 디자인 조회 | ⏳ 추후 (key 확보 + 사용성 검증 후) |
 
-- 1단계는 `api_spec`만 실제 구현한다(외부 의존 없어 실동작 검증 가능). `jira`는 실동작 검증 환경(인스턴스+토큰) 부재로 **2단계**로 미룬다 — 커넥터 인터페이스는 열어두고 구현만 미룬다.
-- `investigate` tool `source` enum(`api_spec`/`jira`)에서 **1단계 유효값은 `api_spec`뿐**이다. AI가 `jira`를 반환하면 BE가 "미지원"으로 스킵하고 AI에게 전달한다.
+- `api_spec`(내부 DB)과 `confluence`(외부 Atlassian Cloud REST) 모두 실제 구현한다. confluence는 `CONFLUENCE_BASE_URL`/`CONFLUENCE_EMAIL`/`CONFLUENCE_API_TOKEN`(서버 시크릿, Basic auth)으로 호출하고, 서비스별 `confluenceSpaceKey`로 조회 space를 한정한다.
+- `investigate` tool `source` enum(`api_spec`/`confluence`)의 **두 값 모두 유효**하다. AI 소스 선택 기준(발화 면 판단)·검색/재주입/references 규칙은 [investigation.md 소스 판단 경계](../chat/scenarios/investigation.md#소스-판단-경계-api_spec-vs-confluence) 및 [confluence 커넥터 조회 정의](../chat/scenarios/investigation.md#confluence-커넥터-조회-정의-2단계) 참조.
 
 ### 루프 제약
 
@@ -80,12 +80,12 @@ OpenRouter는 크레딧/데일리 한도를 넘으면 **HTTP 402(Payment Require
 |------|----|----|
 | 최대 조회 횟수 | 5회 | 무한 조회 방지 |
 | 전체 타임아웃 (루프) | 120초 | 응답 지연 방지 |
-| 커넥터 개별 타임아웃 (`api_spec`) | 5초 (기본값) | 내부 DB 조회라 짧게. 단일 소스가 전체를 잡아먹지 않게 (2층 타임아웃 하위 층) |
+| 커넥터 개별 타임아웃 (`api_spec` / `confluence`) | 5초 (기본값) | 단일 소스가 전체를 잡아먹지 않게 (2층 타임아웃 하위 층). confluence는 외부 REST라 5초 초과 시 그 조회만 실패 처리 |
 | 승인 | 불필요 | 읽기 전용 (외부 데이터 생성 없음) |
 
 - **루프 카운터 = 커넥터 조회 횟수(최대 5회)**로 확정한다(AI 호출 횟수 아님). **5회째 조회 결과를 받은 뒤의 AI 호출은 `investigate` tool을 제거하고 `tool_choice=chat`을 강제**한다(실제 조회 최대 5회, AI 호출 최대 6회). 정상 조회·미지원 source 스킵·중복 캐시 재사용 등 **모든 조회 시도가 카운터를 소비**한다(우회 불가).
   - 의사코드: `조회수>=5 → 다음 AI 호출은 tools에서 investigate 제외 + tool_choice=chat`
-- **커넥터 개별 타임아웃은 미설정 시 기본값**(`api_spec`=5초)을 적용한다. **개별 타임아웃 < 루프 전체 타임아웃(120초)** 원칙을 지켜, 단일 조회가 루프 전체를 소진하지 않게 한다.
+- **커넥터 개별 타임아웃은 미설정 시 기본값**(`api_spec`·`confluence`=5초)을 적용한다. **개별 타임아웃 < 루프 전체 타임아웃(120초)** 원칙을 지켜, 단일 조회가 루프 전체를 소진하지 않게 한다.
 - 상세 종료 보장·폴백 계층은 [investigation.md 루프 안전장치](../chat/scenarios/investigation.md#루프-안전장치-핵심) 참조.
 
 ### 루프 안전장치

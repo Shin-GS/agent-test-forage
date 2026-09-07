@@ -20,7 +20,7 @@ last-updated: 2026-09-19
 | **플랜 재개형** | 실패/중단 안내(레시피별 ✅/❌/⬜) + [이어서 실행] [플랜 중단] | PARTIAL(실패/중단) 종료 플랜을 첫 미완료 레시피부터 재개(레시피 단위) — [plan.md 이어서 실행 (PARTIAL 재개)](../recipe/plan.md#이어서-실행-partial-재개) |
 | **인증 요구형** | [로그인하러 가기] + [로그인 완료] | 새 탭 → 복귀 후 재개 |
 | **후보 선택형** | 유사 레시피 목록 + [없으면 다시 설명할게요] | 클릭 시 해당 레시피 실행 플로우 진입 |
-| **참고 자료형** | 조회한 소스 칩(버튼) 리스트 | 1단계(`api_spec`): 클릭 시 **그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼침**. Jira/Figma(2단계+): 원본 새 탭 |
+| **참고 자료형** | 조회한 소스 칩(버튼) 리스트 | 1단계(`api_spec`): 클릭 시 **그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼침**. Confluence/Figma(2단계+): 원본 새 탭 |
 
 ## 실행 모드형 상세
 
@@ -134,15 +134,15 @@ AI: 회원가입 시 약관 동의는 필수입니다.
   └─────────────────────────────────────┘
 ```
 
-(1단계는 `api_spec` 참고만 노출된다. 🎫 Jira 버튼은 2단계에 추가된다 — 위 예시에는 나타나지 않는다.)
+(위 예시는 `api_spec` 참고 인라인 확장이다. 📄 Confluence 버튼은 외부 URL 새 탭으로 동작한다.)
 
 | 소스 | 버튼 표시 | 클릭 동작 | 단계 |
 |------|----------|----------|------|
 | API 스펙 | 📋 method + path | **그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼침**(사이드 패널/라우트 이동 아님) | ✅ 1단계 |
-| Jira | 🎫 티켓키 + 제목 | Jira 티켓 URL 새 탭 | ⏳ 2단계 |
+| Confluence | 📄 페이지 제목 | Confluence 페이지 URL(`{CONFLUENCE_BASE_URL}/wiki/spaces/{KEY}/pages/{id}`) **새 탭**(`target=_blank rel=noopener noreferrer`) | ✅ 2단계 |
 | Figma | 🎨 프레임명 | Figma URL 새 탭 | ⏳ 추후 |
 
-> 1단계 참고 자료는 `api_spec` 소스만 노출된다(Jira/Figma는 [investigation.md 2단계 백로그](scenarios/investigation.md#2단계-백로그)). 저장·복원은 답변 `TEXT` 메시지의 references payload로 처리 — [messaging.md references 스키마](../common/messaging.md#references-정보-조회-참고-자료).
+> 참고 자료는 `api_spec`(내부 url → 인라인 확장) / `confluence`(외부 url → 새 탭) 소스가 노출된다(url 형태로 FE가 동작 분기 — [messaging.md references 스키마](../common/messaging.md#references-정보-조회-참고-자료)). 저장·복원은 답변 `TEXT` 메시지의 references payload로 처리. 상세: [investigation.md references 표시](scenarios/investigation.md#참고-자료-references-표시).
 
 ### 인라인 확장 (api_spec 칩)
 

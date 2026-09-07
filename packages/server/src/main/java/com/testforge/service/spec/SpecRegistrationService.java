@@ -86,11 +86,11 @@ public class SpecRegistrationService {
         return new RegisterResponse(saved.getId(), saved.getStatus().name());
     }
 
-    /** 식별/진단 필드(name, specHash, jira, client, schemaVersion) 반영 */
+    /** 식별/진단 필드(name, specHash, confluence, client, schemaVersion) 반영 */
     private void applyIdentityAndDiagnostics(ApiSpec spec, NormalizedSpec normalized) {
         spec.setName(normalized.name());
         spec.setSpecHash(normalized.specHash());
-        spec.setJiraProjectKey(normalized.jiraProjectKey());
+        spec.setConfluenceSpaceKey(normalized.confluenceSpaceKey());
         spec.setClientLang(normalized.clientLang());
         spec.setClientVersion(normalized.clientVersion());
         spec.setSchemaVersion(normalized.schemaVersion());

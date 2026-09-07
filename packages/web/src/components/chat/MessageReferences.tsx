@@ -4,7 +4,8 @@
 // 인라인 확장 동작 (investigation.md "인라인 확장 동작", 1단계 api_spec 칩):
 // - references[].url 이 "/specs/{apiSpecId}/endpoints/{endpointId}" 패턴이면 → 클릭 가능한 칩(button).
 //   클릭 시 그 자리에서 아코디언으로 해당 엔드포인트 상세를 펼친다(각 칩 독립 토글, 동시 펼침 가능).
-// - url 이 null 이거나 패턴 불일치(외부 URL 등)면 → 비인터랙션 정적 칩(📋 label)으로 폴백.
+// - url 이 외부 http(s) URL 이면 → 새 탭으로 여는 외부 링크 칩(📄 label ↗). confluence 등 (investigation.md "외부 URL 확장 동작").
+// - url 이 null 이거나 그 외 형식이면 → 비인터랙션 정적 칩(📋 label)으로 폴백.
 // - 펼침 시점(최초 1회) getSpec(apiSpecId) 을 useQuery(['spec', apiSpecId])로 조회(같은 스펙 칩 공유).
 //   조회 중/실패/엔드포인트 없음 3단 안내(role=status). 성공 시 method/path + summary + 서비스명.
 //   펼친 시점에 DEPRECATED/INACTIVE 로 바뀐 엔드포인트는 상세를 그대로 두되 상태 뱃지를 붙인다.
@@ -36,6 +37,11 @@ export function parseSpecEndpointUrl(
   const endpointId = Number(match[2]);
   if (!Number.isSafeInteger(apiSpecId) || !Number.isSafeInteger(endpointId)) return null;
   return { apiSpecId, endpointId };
+}
+
+/** 외부 http(s) URL 여부 (confluence/figma 등 새 탭 링크 대상). 내부 /specs 패턴은 여기서 판별하지 않는다. */
+export function isExternalUrl(url: string | null | undefined): url is string {
+  return !!url && /^https?:\/\//.test(url);
 }
 
 /** 엔드포인트 상태가 확장 시점에 종료(지원 종료)된 상태인지 — 뱃지 표기 대상 */
@@ -73,7 +79,28 @@ function ReferenceItem({ reference }: ReferenceItemProps) {
   const buttonId = useId();
   const [expanded, setExpanded] = useState(false);
 
-  // 패턴 불일치(null/외부 URL) → 기존 정적 칩으로 폴백 (클릭/확장 없음).
+  // 외부 http(s) URL(confluence 등) → 새 탭 링크로 분기 (인라인 확장 아님). 내부 /specs 패턴이 먼저 매칭되므로
+  // target 이 없을 때만 여기 도달한다. aria-label 에 "새 탭에서 열림" 을 명시하고 rel 로 opener 를 차단한다.
+  if (!target && isExternalUrl(reference.url)) {
+    return (
+      <li className="reference-item">
+        <a
+          className="reference-link"
+          href={reference.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${reference.label} (Confluence, 새 탭에서 열림)`}
+        >
+          <span aria-hidden>📄</span> {reference.label}
+          <span className="reference-link__external" aria-hidden>
+            ↗
+          </span>
+        </a>
+      </li>
+    );
+  }
+
+  // 패턴 불일치(null/기타) → 기존 정적 칩으로 폴백 (클릭/확장 없음).
   // 라벨 텍스트(📋 label)가 이미 화면에 노출되므로 별도 aria-label 은 두지 않는다(중복 낭독 방지).
   if (!target) {
     return (

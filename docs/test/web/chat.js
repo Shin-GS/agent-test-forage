@@ -263,7 +263,7 @@ const CHAT_TESTS = {
       precondition: "investigate 후 chat 답변 표시됨",
       steps: [
         "답변 하단에 참고 자료 버튼 리스트 표시 확인",
-        "Jira 출처: 🎫 티켓키+제목 버튼 확인",
+        "Confluence 출처: 📄 페이지 제목 버튼 확인",
         "API 스펙 출처: 📋 method+path 버튼 확인",
         "api_spec 칩 클릭 시 채팅 인라인 아코디언으로 엔드포인트 상세가 펼쳐지는지 확인 (상세: CHAT-094)",
         "조회한 소스가 없으면 참고 자료 섹션이 미표시되는지 확인"
@@ -552,10 +552,10 @@ const CHAT_TESTS = {
       steps: [
         "'🔍 정보 조회 중' 헤더 표시 확인",
         "소스별 조회 단계가 상태 아이콘과 함께 표시되는지 확인 (✅ 완료 / 🔄 진행 / ⬜ 대기)",
-        "조회 소스로 api_spec만 노출되는지 확인 (jira 등 2단계 소스는 미노출)",
+        "조회 소스로 api_spec만 노출되는지 확인 (confluence 등 2단계 소스는 미노출)",
         "각 단계가 message_update로 같은 진행 블록에 갱신되는지 확인 (블록 중복 생성 안 됨)"
       ],
-      expected: "api_spec 조회만 소스별 단계로 표시되고, jira 등 미지원 소스는 노출되지 않음"
+      expected: "api_spec 조회만 소스별 단계로 표시되고, confluence 등 2단계 소스는 노출되지 않음"
     },
     {
       id: "CHAT-048",
@@ -634,7 +634,7 @@ const CHAT_TESTS = {
         "등록 스펙에 근거가 없는 질문 입력",
         "조회 후 '정보를 찾지 못했습니다' 안내가 표시되는지 확인",
         "근거 없는 억지 답변/추측이 생성되지 않는지 확인",
-        "지어낸 출처(필드명/티켓 등)가 references에 포함되지 않는지 확인"
+        "지어낸 출처(필드명/문서 등)가 references에 포함되지 않는지 확인"
       ],
       expected: "근거가 없으면 '정보를 찾지 못했습니다'로 정직하게 안내하고, 억지 답변/지어낸 출처가 없음 (할루시네이션 금지)"
     },
@@ -1272,6 +1272,138 @@ const CHAT_TESTS = {
         "펼침 중 로딩 표시와 에러 안내('스펙 정보를 불러올 수 없습니다'/'해당 엔드포인트를 찾을 수 없습니다')가 aria-live로 스크린 리더에 announce되는지 확인"
       ],
       expected: "마우스 없이 키보드만으로 칩을 토글할 수 있고, aria-expanded로 상태가 노출되며 로딩/에러가 aria-live로 announce됨"
+    },
+    // === 정보 조회 investigate 2단계: Confluence 커넥터 ===
+    {
+      id: "CHAT-107",
+      title: "소스 판단 — 요구사항/설계/정책 문서 발화 → confluence 조회",
+      precondition: "실제 AI 모드(OpenAI 호환), confluenceSpaceKey가 연결된 서비스 지정 대화방",
+      steps: [
+        "'이 기능 관련 문서 있어?' 또는 '회원가입 요구사항이 어떻게 정의돼 있어?' 발화 입력",
+        "AI가 investigate(source: confluence)로 조회하는지 확인 (api_spec 아님)",
+        "'회원가입 요청에 어떤 필드가 필요해?' 발화는 api_spec으로 가는지 대조 확인",
+        "INVESTIGATE_PROGRESS에 Confluence 조회 단계가 표시되는지 확인"
+      ],
+      expected: "요구사항/설계/정책 문서 면 발화는 source=confluence로, API/필드/스키마 면 발화는 source=api_spec으로 분기됨"
+    },
+    {
+      id: "CHAT-108",
+      title: "Confluence 조회 성공 → 답변 + 📄 references 칩",
+      precondition: "실제 AI 모드(OpenAI 호환), confluence 조회로 페이지가 검색된 상태",
+      steps: [
+        "confluence source 발화 후 조회 완료까지 대기",
+        "AI 답변 본문이 문서 맥락(요구사항/정책 근거)을 인용하는지 확인",
+        "답변 하단 참고 자료에 📄 아이콘 Confluence 칩이 표시되는지 확인",
+        "칩 label이 페이지 제목 형식인지 확인"
+      ],
+      expected: "Confluence 조회 성공 시 답변과 함께 📄 Confluence references 칩이 페이지 제목으로 표시됨",
+      dbCheck: "답변 TEXT 메시지 payloadJson의 references에 { source:'confluence', label:'{페이지 제목}', url:'{CONFLUENCE_BASE_URL}/wiki/spaces/{KEY}/pages/{id}' } 저장 확인"
+    },
+    {
+      id: "CHAT-109",
+      title: "Confluence 칩 클릭 → 새 탭으로 페이지 열림 (인라인 확장 아님)",
+      precondition: "실제 AI 모드(OpenAI 호환), 📄 Confluence references 칩 표시됨",
+      steps: [
+        "Confluence 칩을 클릭",
+        "채팅 인라인 아코디언이 펼쳐지지 않는지 확인 (api_spec 칩과 다름)",
+        "새 탭이 열리고 URL이 {CONFLUENCE_BASE_URL}/wiki/spaces/{KEY}/pages/{id} 인지 확인"
+      ],
+      expected: "Confluence 칩 클릭 시 인라인 확장 없이 새 탭({CONFLUENCE_BASE_URL}/wiki/spaces/{KEY}/pages/{id})으로 페이지가 열림"
+    },
+    {
+      id: "CHAT-110",
+      title: "접근성 — Confluence 칩 aria-label + rel 보안 속성",
+      precondition: "실제 AI 모드(OpenAI 호환), 📄 Confluence references 칩 표시됨, 마우스 미사용",
+      steps: [
+        "Tab 키로 Confluence 칩에 포커스 이동 가능한지 확인",
+        "칩에 aria-label 'Confluence, 새 탭에서 열림'(또는 동등한 새 탭 안내)이 부여되는지 확인",
+        "링크/버튼에 rel='noopener noreferrer' 속성이 부여되는지 확인 (target=_blank 보안)",
+        "Enter로 새 탭 열림이 동작하는지 확인"
+      ],
+      expected: "Confluence 칩에 새 탭 열림을 알리는 aria-label과 rel='noopener noreferrer'가 부여되고 키보드로 접근 가능함"
+    },
+    {
+      id: "CHAT-111",
+      title: "spaceKey 없는 서비스 → '연결된 Confluence 스페이스 없음' 안내 (조회 안 함)",
+      precondition: "실제 AI 모드(OpenAI 호환), confluenceSpaceKey가 없는 서비스 지정 대화방",
+      steps: [
+        "confluence source로 유도되는 발화 입력 (예: '이 기능 관련 문서 있어?')",
+        "실제 Confluence REST 조회가 발생하지 않는지 확인 (네트워크 요청 없음)",
+        "'이 서비스에 연결된 Confluence 스페이스가 없습니다' notFound 안내가 재주입/표시되는지 확인",
+        "루프 조회 카운터가 1 소비되는지(우회 차단) 확인"
+      ],
+      expected: "confluenceSpaceKey 미연결 서비스는 Confluence 조회를 시도하지 않고 '연결된 Confluence 스페이스 없음'을 안내하며, 카운터는 소비됨"
+    },
+    {
+      id: "CHAT-112",
+      title: "결과 0건 → '관련 문서 찾지 못함' (조회 실패와 구분)",
+      precondition: "실제 AI 모드(OpenAI 호환), confluence 검색은 정상 응답하나 매칭 페이지 0건",
+      steps: [
+        "매칭되는 페이지가 없는 query로 confluence 조회 유도",
+        "'스페이스 {KEY}에서 관련 문서를 찾지 못했습니다' 취지의 notFound 안내인지 확인",
+        "이 안내가 '조회 실패(일시적 오류)'와 다른 문구로 구분되는지 확인",
+        "카운터가 1 소비되는지 확인"
+      ],
+      expected: "검색 성공·결과 0건은 '관련 문서 찾지 못함' notFound로 안내되며, 조회 실패 문구와 명확히 구분됨"
+    },
+    {
+      id: "CHAT-113",
+      title: "조회 실패(401/네트워크/타임아웃) → 'Confluence 조회 실패' 안내",
+      precondition: "실제 AI 모드(OpenAI 호환), confluence 조회 시 401/네트워크 오류/커넥터 타임아웃(5초) 발생",
+      steps: [
+        "인증 오류(401) 상황에서 confluence 조회 유도 → 'Confluence 조회에 실패했습니다(일시적 오류)' 안내 확인",
+        "네트워크 오류/타임아웃 상황에서도 동일하게 실패 안내되는지 확인",
+        "실패 후 AI가 같은 조회를 반복하지 않고 다른 source(api_spec) 또는 종료로 유도되는지 확인",
+        "전체 루프가 중단되지 않고 해당 조회만 실패 처리되는지 확인"
+      ],
+      expected: "401/네트워크/타임아웃 조회 실패는 'Confluence 조회 실패(일시적 오류)'로 안내되고, 해당 조회만 실패 처리되며 카운터를 소비함"
+    },
+    {
+      id: "CHAT-114",
+      title: "AI 재주입 범위 — title+excerpt만 (본문/첨부 제외)",
+      precondition: "실제 AI 모드(OpenAI 호환), confluence 조회 성공",
+      steps: [
+        "BE가 AI에 재주입하는 tool 결과 내용 확인 (로그/디버그)",
+        "각 페이지가 title, excerpt만 포함하는지 확인",
+        "페이지 본문(body)과 첨부/댓글이 재주입에 포함되지 않는지 확인",
+        "Confluence 검색 요청 CQL이 'type = page AND space = ...', limit=5인지 확인"
+      ],
+      expected: "AI 재주입은 페이지별 title+excerpt만 포함하며, 본문/첨부는 요청·재주입 모두에서 제외됨"
+    },
+    {
+      id: "CHAT-115",
+      title: "excerpt — 하이라이트 마커 제거 후 재주입",
+      precondition: "실제 AI 모드(OpenAI 호환), 검색 하이라이트가 포함된 confluence 페이지 조회 성공",
+      steps: [
+        "AI 재주입 텍스트의 excerpt에 '@@@hl@@@'/'@@@endhl@@@' 마커가 제거됐는지 확인",
+        "excerpt가 개행 접힌 한 줄 텍스트로 정리됐는지 확인",
+        "AI 답변 본문이 excerpt를 근거로 활용하는지 확인"
+      ],
+      expected: "excerpt는 하이라이트 마커가 제거되고 한 줄로 정리된 상태로 재주입되어 답변 근거로 쓰임"
+    },
+    {
+      id: "CHAT-116",
+      title: "혼합 — api_spec(📋 인라인) + confluence(📄 새 탭) 공존",
+      precondition: "실제 AI 모드(OpenAI 호환), 한 답변에 api_spec 근거와 confluence 근거가 함께 인용된 상태",
+      steps: [
+        "api_spec와 confluence를 모두 조회하도록 유도하는 발화 입력 (예: '회원가입 정책이 뭐야?' → api_spec 후 confluence 보강)",
+        "답변 하단에 📋 api_spec 칩과 📄 confluence 칩이 함께 표시되는지 확인",
+        "📋 칩 클릭 → 채팅 인라인 아코디언 확장인지 확인",
+        "📄 칩 클릭 → 새 탭 열림인지 확인 (url 패턴으로 분기)"
+      ],
+      expected: "한 답변에 api_spec(📋 인라인 확장) 칩과 confluence(📄 새 탭) 칩이 공존하며, url 패턴에 따라 각각 다른 동작으로 분기됨"
+    },
+    {
+      id: "CHAT-117",
+      title: "보안 — Confluence 토큰 미노출 (화면/네트워크응답/로그)",
+      precondition: "실제 AI 모드(OpenAI 호환), confluence 조회가 서버 시크릿 Basic 인증(email:토큰)으로 수행됨",
+      steps: [
+        "FE 화면·개발자도구 어디에도 CONFLUENCE_API_TOKEN이 노출되지 않는지 확인",
+        "BE→FE 응답(SSE/JSON) 어디에도 토큰이 포함되지 않는지 확인 (references url은 위키 링크만)",
+        "서버 로그에서 토큰/인코딩값이 마스킹되는지 확인 (평문 미기록)",
+        "Confluence 호출이 항상 HTTPS로 이루어지는지 확인"
+      ],
+      expected: "Confluence 토큰은 화면/네트워크 응답/로그 어디에도 평문 노출되지 않으며, 조회는 항상 HTTPS로 수행됨"
     }
   ]
 };

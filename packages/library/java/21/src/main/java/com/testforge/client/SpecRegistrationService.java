@@ -79,7 +79,7 @@ public class SpecRegistrationService {
         body.put("specJson", specJson);
         body.put("specHash", specHash);
         body.put("serviceInfo", buildServiceInfo());
-        body.put("jira", Map.of("projectKey", nullToEmpty(properties.getJira().getProjectKey())));
+        body.put("confluence", Map.of("spaceKey", nullToEmpty(properties.getConfluence().getSpaceKey())));
         body.put("authProfiles", buildAuthProfiles());
 
         restClient.post()

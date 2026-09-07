@@ -305,7 +305,7 @@ class SpecRegistrationIntegrationTest {
                 "domain", "commerce",
                 "capabilities", List.of("signup", "order"),
                 "notes", "staging"));
-        body.put("jira", Map.of("projectKey", "SHOP"));
+        body.put("confluence", Map.of("spaceKey", "BT"));
         body.put("authProfiles", List.of(
                 Map.of("name", "default", "loginPageUrl", "https://shop-api.example.com/login")));
         return body;

@@ -54,7 +54,7 @@ public class V1SpecRegistrationParser implements SpecRegistrationParser {
         String clientVersion = raw.client() != null ? raw.client().version() : null;
 
         NormalizedSpec.ServiceMeta meta = mapServiceMeta(raw.serviceInfo());
-        String jiraProjectKey = raw.jira() != null ? raw.jira().projectKey() : null;
+        String confluenceSpaceKey = raw.confluence() != null ? raw.confluence().spaceKey() : null;
         List<NormalizedSpec.AuthProfileData> authProfiles = mapAuthProfiles(raw);
         List<NormalizedSpec.EndpointData> endpoints = decomposeEndpoints(raw.specJson());
 
@@ -67,7 +67,7 @@ public class V1SpecRegistrationParser implements SpecRegistrationParser {
                 raw.specJson(),
                 raw.specHash(),
                 meta,
-                jiraProjectKey,
+                confluenceSpaceKey,
                 authProfiles,
                 endpoints
         );

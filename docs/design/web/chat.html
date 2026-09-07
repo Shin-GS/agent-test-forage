@@ -149,6 +149,14 @@
     .reference-detail__spec-link:hover { text-decoration: underline; }
     /* 로딩/에러 상태 텍스트 (정적 HTML엔 주석으로만 명시, 클래스는 실제 구현용) */
     .reference-detail__status { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+    /* confluence 외부 링크 칩 (source=confluence). reference-btn과 동일 톤이나 button이 아닌 <a>(새 탭).
+       클릭 시 인라인 확장이 아니라 CONFLUENCE_BASE_URL/wiki/spaces/{KEY}/pages/{id}로 이동한다. */
+    .reference-link { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-secondary); text-decoration: none; transition: all var(--transition-fast); }
+    .reference-link:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    .reference-link:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+    /* 외부 이동(↗) 인디케이터. aria-hidden. */
+    .reference-link__external { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-left: var(--space-1); }
+    .reference-link:hover .reference-link__external { color: var(--color-accent); }
 
     /* 정보 조회 진행 (INVESTIGATE_PROGRESS 메시지 = investigation.md / messaging.md 정본) */
     .investigate-progress { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); margin: var(--space-2) 0; }
@@ -1288,7 +1296,7 @@
                 <div class="message__body">
                   <span class="message__sender">AI Test Forge</span>
                   <div class="message__content"><p>정책을 확인하기 위해 관련 자료를 조회하고 있습니다.</p></div>
-                  <!-- INVESTIGATE_PROGRESS 메시지: 소스별 조회 단계. 1단계는 api_spec 커넥터만 노출 (jira는 2단계).
+                  <!-- INVESTIGATE_PROGRESS 메시지: 소스별 조회 단계. 1단계는 api_spec 커넥터만 노출 (confluence는 2단계).
                        상태 아이콘 텍스트 병기(✅완료/🔄진행/⬜대기/⏭️스킵). message_update로 같은 메시지 갱신. -->
                   <div class="investigate-progress" role="group" aria-label="정보 조회 진행">
                     <div class="investigate-progress__header">🔍 정보 조회 중</div>
@@ -1419,11 +1427,12 @@
                   <div class="message__content">
                     <p>회원가입 시 약관 동의는 <strong>필수</strong>입니다. <code>POST /api/v1/users</code> 요청 스키마의 <code>agreementYn</code> 필드가 required로 정의되어 있습니다. 필수 약관(이용약관, 개인정보 처리방침)과 선택 약관(마케팅 수신)으로 구분됩니다.</p>
                   </div>
-                  <!-- 참고 자료 카드 (references payload). 1단계는 api_spec 소스만 노출.
-                       각 칩은 클릭 가능한 button이며 aria-expanded로 인라인 아코디언(엔드포인트 상세)을 독립 토글한다.
-                       여러 개 동시 펼침 가능. url(/specs/{apiSpecId}/endpoints/{endpointId}) 파싱 실패 시엔 비인터랙션 정적 칩으로 폴백.
-                       상세 데이터는 GET /api/v1/specs/{apiSpecId}(공용 getSpec) 재사용 → BE 변경 없음.
-                       🎫 Jira 칩은 2단계(investigation.md 2단계 백로그) — 1단계 미노출. -->
+                  <!-- 참고 자료 카드 (references payload). 두 종류의 칩이 공존한다(investigation.md references 표시).
+                       · api_spec 칩(📋): button + aria-expanded로 인라인 아코디언(엔드포인트 상세)을 독립 토글. 여러 개 동시 펼침 가능.
+                         url(/specs/{apiSpecId}/endpoints/{endpointId}) 파싱 실패 시 비인터랙션 정적 칩으로 폴백.
+                         상세 데이터는 GET /api/v1/specs/{apiSpecId}(공용 getSpec) 재사용 → BE 변경 없음.
+                       · confluence 칩(📄): 외부 링크(<a target="_blank" rel="noopener noreferrer">). 클릭 시 CONFLUENCE_BASE_URL/wiki/spaces/{KEY}/pages/{id}를
+                         새 탭으로 연다(인라인 확장 아님, ↗ 외부 이동 표시). label은 페이지 제목. -->
                   <!-- 로딩/에러 상태(정적 HTML로 표현 생략, 실제 구현 시 .reference-detail 내부에 렌더):
                        · 조회 중       → "불러오는 중..."
                        · 스펙 조회 실패 → "스펙 정보를 불러올 수 없습니다"
@@ -1474,6 +1483,16 @@
                           <a class="reference-detail__spec-link" href="/admin/specs/42">전체 스펙 보기 →</a>
                         </div>
                       </div>
+                      <!-- confluence 칩 1: 외부 링크(새 탭). label = 페이지 제목. url = CONFLUENCE_BASE_URL/wiki/spaces/{KEY}/pages/{id} -->
+                      <a class="reference-link" href="https://example.atlassian.net/wiki/spaces/BT/pages/608141425" target="_blank" rel="noopener noreferrer" aria-label="회원가입 약관 동의 정책 (Confluence, 새 탭에서 열림)">
+                        <span aria-hidden="true">📄</span> 회원가입 약관 동의 정책
+                        <span class="reference-link__external" aria-hidden="true">↗</span>
+                      </a>
+                      <!-- confluence 칩 2: 외부 링크(새 탭) -->
+                      <a class="reference-link" href="https://example.atlassian.net/wiki/spaces/BT/pages/608141500" target="_blank" rel="noopener noreferrer" aria-label="마케팅 수신 동의 선택 처리 (Confluence, 새 탭에서 열림)">
+                        <span aria-hidden="true">📄</span> 마케팅 수신 동의 선택 처리
+                        <span class="reference-link__external" aria-hidden="true">↗</span>
+                      </a>
                     </div>
                   </div>
                 </div>

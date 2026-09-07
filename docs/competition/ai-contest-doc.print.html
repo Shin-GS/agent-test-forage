@@ -207,7 +207,7 @@
     <tr><td><strong>플랜</strong></td><td>AI가 여러 레시피를 조합해 만든 <strong>1회성 실행 계획</strong>. 저장하지 않습니다. 하나의 요청에 여러 작업이 필요할 때 AI가 그때그때 구성합니다.</td></tr>
     <tr><td><strong>스펙</strong></td><td>외부 서버가 제공하는 API 목록의 원천(OpenAPI 스펙). 레시피가 호출할 수 있는 API가 여기서 나옵니다.</td></tr>
     <tr><td><strong>라이브러리</strong></td><td>각 서버에 붙이는 작은 연동 모듈. 그 서버의 API 목록을 자동으로 수집해 테스트메이트에 등록합니다.</td></tr>
-    <tr><td><strong>정보 조회</strong></td><td>정책·기능 질문에 답하기 위해 AI가 API 설명과 Jira 문서를 스스로 찾아보는 과정.</td></tr>
+    <tr><td><strong>정보 조회</strong></td><td>정책·기능 질문에 답하기 위해 AI가 API 설명과 Confluence 문서를 스스로 찾아보는 과정.</td></tr>
   </table>
 
   <div class="page-num">2 / 6</div>
@@ -279,7 +279,7 @@
 
   <h2>신뢰성과 안전장치</h2>
   <ul>
-    <li><strong>지어내지 않습니다.</strong> 실제로 등록된 API 목록과 Jira 문서를 근거로만 답하고 실행합니다. 근거가 없으면 되묻거나 “없다”고 답합니다.</li>
+    <li><strong>지어내지 않습니다.</strong> 실제로 등록된 API 목록과 Confluence 문서를 근거로만 답하고 실행합니다. 근거가 없으면 되묻거나 “없다”고 답합니다.</li>
     <li><strong>위험한 작업은 확인을 받습니다.</strong> 결제처럼 되돌릴 수 없는 API는 라이브러리 표시(<code>@TestForgeConfirm</code>)로 실행 전에 사용자 확인을 거칩니다. 내부·관리용 API는 아예 노출되지 않게(<code>@TestForgeExclude</code>) 막을 수 있습니다.</li>
     <li><strong>운영 환경에 영향을 주지 않습니다.</strong> API 목록은 개발·스테이징 환경에서만 전송하도록 설정하며, 라이브러리를 설정 파일로 켜야만 동작합니다.</li>
   </ul>

@@ -46,9 +46,11 @@ ai-test-forge:
   # FE(브라우저)에서의 채팅/실행 API 호출 허용 origin. credentials 허용을 위해 명시적 목록 사용.
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
-  jira:
-    base-url: ${JIRA_BASE_URL:}
-    api-token: ${JIRA_API_TOKEN:}   # 시크릿. .env / 환경변수로 주입
+  confluence:
+    base-url: ${CONFLUENCE_BASE_URL:}
+    # Atlassian Cloud REST는 Basic 인증(email:api-token). base-url/email/api-token 셋 다 있어야 조회 활성.
+    email: ${CONFLUENCE_EMAIL:}
+    api-token: ${CONFLUENCE_API_TOKEN:}   # 시크릿. .env / 환경변수로 주입
   # ── AI 설정 (OpenAI 호환: OpenAI / OpenRouter 등) ──
   # api-key가 비어 있으면 실제 AI 대신 규칙 기반 목(RuleBasedIntentResolver)이 동작한다.
   # provider/model의 런타임 변경(설정 페이지)은 추후 — 지금은 프로퍼티(.env)로 주입.

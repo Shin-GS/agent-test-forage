@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
  *   <li>조회 → 재호출 → chat 종료 (references payload 저장)</li>
  *   <li>5회 조회 후 chat 강제 (tool_choice 강제 호출)</li>
  *   <li>못 찾음/AI 실패 → FE 고정 안내 폴백 + 진행 블록 failed</li>
- *   <li>jira(미지원) 스킵도 카운터 소비</li>
+ *   <li>미지원 source(figma 등) 스킵도 카운터 소비</li>
  *   <li>종결 보장: 어떤 경로든 completeAssistantTurn 호출(idle 복귀)</li>
  * </ul>
  * 서비스 지정(apiSpecId != null) 컨텍스트만 다룬다(미지정 hard guard는 ChatProcessor 책임).
@@ -148,23 +148,23 @@ class InvestigateLoopTest {
         verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
     }
 
-    // ── jira(미지원 source) 스킵도 카운터 소비 ──
+    // ── 미지원 source(예: figma) 스킵도 카운터 소비 ──
 
     @Test
     void unsupportedSource_skippedButCountsTowardLimit() {
-        // AI가 매번 jira를 반환 → 커넥터 없음(스킵). 5회 스킵 후 강제 chat으로 수렴해야 한다.
+        // AI가 매번 figma(미등록 커넥터)를 반환 → 스킵. 5회 스킵 후 강제 chat으로 수렴해야 한다.
         for (int i = 0; i < 6; i++) {
-            client.enqueueToolCall("investigate", "{\"source\":\"jira\",\"query\":\"티켓" + i + "\"}");
+            client.enqueueToolCall("investigate", "{\"source\":\"figma\",\"query\":\"문서" + i + "\"}");
         }
         client.enqueueToolCall("chat", "{\"message\":\"정보를 찾지 못했습니다.\"}");
 
-        // api_spec 커넥터만 등록(jira 없음). jira는 findConnector null → 스킵.
+        // api_spec 커넥터만 등록(figma 없음). figma는 findConnector null → 스킵.
         FakeConnector apiSpec = (FakeConnector) fakeConnector("api_spec",
                 ConnectorResult.found("data", List.of()));
 
-        loop(apiSpec).run(ctx("jira 티켓 알려줘"));
+        loop(apiSpec).run(ctx("figma 문서 알려줘"));
 
-        // jira는 실제 조회되지 않음(카운터는 소비되지만 커넥터 query는 호출 안 됨).
+        // figma는 실제 조회되지 않음(카운터는 소비되지만 커넥터 query는 호출 안 됨).
         assertThat(apiSpec.queryCount).isZero();
         // 무진전 반복도 5회로 수렴 후 강제 chat 종결.
         assertThat(client.forcedChatCalls).isGreaterThanOrEqualTo(1);

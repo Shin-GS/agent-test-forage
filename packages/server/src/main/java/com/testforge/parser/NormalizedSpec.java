@@ -19,7 +19,7 @@ public record NormalizedSpec(
         String specJson,
         String specHash,
         ServiceMeta serviceMeta,
-        String jiraProjectKey,
+        String confluenceSpaceKey,
         List<AuthProfileData> authProfiles,
         List<EndpointData> endpoints
 ) {

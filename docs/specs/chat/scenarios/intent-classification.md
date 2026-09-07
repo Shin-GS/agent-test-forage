@@ -147,9 +147,9 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 ```json
 {
   "name": "investigate",
-  "description": "질문에 답하기 위해 정보 소스를 조회합니다. API 스펙, Jira 등을 조회해 정책/기능을 파악할 때 사용. 정보가 더 필요하면 반복 호출하세요.",
+  "description": "질문에 답하기 위해 정보 소스를 조회합니다. API 스펙(엔드포인트/필드), Confluence(요구사항/설계/정책 문서)를 조회해 정책/기능을 파악할 때 사용. 정보가 더 필요하면 반복 호출하세요.",
   "parameters": {
-    "source": { "type": "string", "enum": ["api_spec", "jira"], "description": "조회할 정보 소스" },
+    "source": { "type": "string", "enum": ["api_spec", "confluence"], "description": "조회할 정보 소스. api_spec=API/엔드포인트/필드 면, confluence=요구사항/설계/정책 문서 면. 애매하면 api_spec 우선" },
     "query": { "type": "string", "description": "조회 키워드 또는 질문" }
   }
 }
@@ -165,10 +165,10 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 | source | 설명 | 단계 |
 |--------|------|------|
 | `api_spec` | 등록된 스펙 상세 (요청/응답 스키마, 어노테이션 힌트) | ✅ **1단계 구현** |
-| `jira` | Jira 티켓/이슈 내용 조회 | ⏳ **2단계** (인터페이스만) |
+| `confluence` | Confluence 위키 문서 조회 (Atlassian Cloud REST(CQL), 서비스별 spaceKey 범위) | ✅ **2단계 구현** |
 | `figma` | Figma 디자인/플로우 조회 | ⏳ 추후 (key 확보 후) |
 
-> **1단계 유효 source = `api_spec`만.** tool 스키마의 `source` enum에는 `jira`가 남아 있으나, 1단계에서는 `api_spec`만 실제 조회된다. AI가 `jira`를 반환하면 BE가 "미지원"으로 스킵하고 AI에게 전달한다(다른 소스 시도 또는 답변 유도). 단계별 커넥터 스코프: [investigation.md 커넥터 스코프](investigation.md#커넥터-스코프-단계별).
+> **`api_spec`·`confluence` 두 source 모두 유효**하다. AI는 발화 면으로 소스를 고른다 — API/엔드포인트/필드 면이면 `api_spec`, 요구사항/설계/정책 문서 면이면 `confluence`, 애매하면 `api_spec` 우선. 소스 판단·검색 규칙: [investigation.md 소스 판단 경계](investigation.md#소스-판단-경계-api_spec-vs-confluence).
 
 ---
 
@@ -206,6 +206,7 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 - 레시피 요청이 아닌 일반 대화/질문이면 chat을 호출하세요.
 - 서비스가 미지정인데 서비스 특정이 필요한 요청이면 select_service를 호출하세요.
 - 정책/기능에 대한 질문("이 회원가입 정책이 뭐야?")이면 investigate로 정보를 조회한 뒤 답하세요. 정보가 부족하면 investigate를 반복 호출하고, 충분하면 chat으로 답하세요.
+  - source 선택: API/엔드포인트/필드 면이면 api_spec, 요구사항/설계/정책 문서 면이면 confluence, 애매하면 api_spec을 먼저 시도하세요.
 - message는 한국어로, 간결하게 작성하세요.
 
 ## 금지 사항

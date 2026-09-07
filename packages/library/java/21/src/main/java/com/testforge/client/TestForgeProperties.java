@@ -21,8 +21,8 @@ import java.util.List;
  *     domain: "커머스"
  *     capabilities: ["회원가입", "상품등록"]
  *     notes: "스테이징"
- *   jira:
- *     project-key: "SHOP"
+ *   confluence:
+ *     space-key: "BT"
  *   auth:
  *     profiles:
  *       - name: "일반"
@@ -59,7 +59,7 @@ public class TestForgeProperties {
     private String docsUrl = "/v3/api-docs";
 
     private Service service = new Service();
-    private Jira jira = new Jira();
+    private Confluence confluence = new Confluence();
     private Auth auth = new Auth();
 
     public boolean isEnabled() { return enabled; }
@@ -78,8 +78,8 @@ public class TestForgeProperties {
     public void setDocsUrl(String docsUrl) { this.docsUrl = docsUrl; }
     public Service getService() { return service; }
     public void setService(Service service) { this.service = service; }
-    public Jira getJira() { return jira; }
-    public void setJira(Jira jira) { this.jira = jira; }
+    public Confluence getConfluence() { return confluence; }
+    public void setConfluence(Confluence confluence) { this.confluence = confluence; }
     public Auth getAuth() { return auth; }
     public void setAuth(Auth auth) { this.auth = auth; }
 
@@ -100,12 +100,12 @@ public class TestForgeProperties {
         public void setNotes(String notes) { this.notes = notes; }
     }
 
-    /** 정보 조회용 Jira 프로젝트 연결 (프로젝트 키만. 토큰은 ai-test-forge 서버 관리) */
-    public static class Jira {
-        private String projectKey;
+    /** 정보 조회용 Confluence 스페이스 연결 (스페이스 키만. 토큰은 ai-test-forge 서버 관리) */
+    public static class Confluence {
+        private String spaceKey;
 
-        public String getProjectKey() { return projectKey; }
-        public void setProjectKey(String projectKey) { this.projectKey = projectKey; }
+        public String getSpaceKey() { return spaceKey; }
+        public void setSpaceKey(String spaceKey) { this.spaceKey = spaceKey; }
     }
 
     /** 인증 프로필 목록 (401/403 시 안내할 로그인 URL) */
