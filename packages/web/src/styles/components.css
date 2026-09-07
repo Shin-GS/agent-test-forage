@@ -841,6 +841,47 @@ select.input {
   text-decoration: line-through;
   color: var(--color-text-tertiary);
 }
+/* [값 지정] 아코디언 토글 버튼 */
+.plan-recipe__edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.plan-recipe__edit-toggle:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+}
+.plan-recipe__edit-toggle:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+/* 캐럿: 펼치면 90도 회전 */
+.plan-recipe__edit-caret {
+  display: inline-block;
+  transition: transform var(--transition-fast, 0.15s) ease;
+}
+.plan-recipe__edit-caret--open {
+  transform: rotate(90deg);
+}
+/* 펼친 변수 입력 폼 */
+.plan-recipe__edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  padding-left: calc(20px + var(--space-2));
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
 
 /* --- Side Panel (독립 미니 페이지: 홈/레시피/히스토리 3탭)
        docs/design/web/chat.html .side-panel__* 이식 --- */

@@ -285,6 +285,11 @@ export interface PlanRecipeItem {
   serviceName?: string | null;
   /** 값 미리보기 (기본값만). 없으면 빈 배열/미포함 */
   inputPreview?: PlanRecipePreview[];
+  /**
+   * 값 사전 편집용 변수 정의 (레시피 사용자 입력 변수). 액션 피커와 동일 스키마.
+   * 없거나 빈 배열이면 [값 지정] 편집 폼을 노출하지 않는다.
+   */
+  variables?: ActionPickerVariable[];
 }
 
 export interface PlanCard {

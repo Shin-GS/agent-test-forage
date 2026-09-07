@@ -14,6 +14,11 @@ export interface StartExecutionPayload {
 export interface StartPlanPayload {
   /** 실행할 레시피 ID 순서 (= 실행 순서). recipeIds 1개면 BE 가 단일(SINGLE)로 수렴한다 */
   recipeIds: number[];
+  /**
+   * 레시피별 값 사전 편집 맵 (플랜 카드에서 편집한 값). recipeIds 와 인덱스 1:1.
+   * recipeInputs[i] 는 recipeIds[i] 의 편집값 맵이며, 미편집이면 {}. 배열 길이는 recipeIds 와 일치.
+   */
+  recipeInputs?: Array<Record<string, unknown>>;
   /** 실행 모드 코드 (플랜은 항상 AUTO). 미지정 시 BE 기본값 */
   mode?: string;
   /** 첫 레시피에 시드할 초기값 (AI 추출값 등). 없으면 생략 */

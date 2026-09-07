@@ -149,7 +149,7 @@
     .investigate-progress__notice { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px dashed var(--color-border); font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 
     /* ─── Plan (멀티 레시피) 2단계 카드 ─── */
-    /* 플랜 제안 카드: 인터랙티브 편집 (스킵 체크박스 + ↑/↓ 순서변경). action-picker 컨테이너 재사용.
+    /* 플랜 제안 카드: 인터랙티브 편집 (스킵 체크박스 + ↑/↓ 순서변경 + [값 지정] 아코디언). action-picker 컨테이너 재사용.
        스킵/순서변경 상호작용 자체는 chat.js 담당 — 여기선 편집 상태의 정적 표현만 제공. */
     .plan-rationale { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-accent-subtle); border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-secondary); line-height: var(--line-height-normal); }
     .plan-rationale__icon { flex-shrink: 0; }
@@ -173,6 +173,16 @@
     /* "(제외됨)" 표기 */
     .plan-recipe__excluded { font-size: var(--font-size-xs); color: var(--color-text-tertiary); font-style: italic; }
     .plan-recipe__values { padding-left: calc(20px + 20px + var(--space-2) * 2); font-size: var(--font-size-xs); color: var(--color-text-secondary); line-height: var(--line-height-relaxed); }
+
+    /* [값 지정] 아코디언 토글 (기본 접힘). 값 편집 시 헤더에 "값 지정됨" 뱃지 표기. */
+    .plan-recipe__edit-toggle { flex-shrink: 0; display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); font-size: var(--font-size-2xs); color: var(--color-text-secondary); background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer; }
+    .plan-recipe__edit-toggle:hover:not(:disabled) { color: var(--color-text-primary); background: var(--color-bg-secondary); }
+    .plan-recipe__edit-toggle:disabled { opacity: 0.35; cursor: not-allowed; }
+    /* 펼침 표시(▸ → ▾): aria-expanded 상태에 연동 */
+    .plan-recipe__edit-toggle[aria-expanded="true"] .plan-recipe__edit-caret { transform: rotate(90deg); }
+    .plan-recipe__edit-caret { display: inline-block; transition: transform var(--transition-fast); }
+    /* 펼친 변수 입력 폼 (액션 피커 form-group 필드 재사용) */
+    .plan-recipe__edit-form { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); padding: var(--space-3); background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
     /* 스킵된 행: 전체 흐리게 (dimmed) */
     .plan-recipe--skipped { opacity: 0.5; }
     .plan-recipe--skipped .plan-recipe__name { font-weight: var(--font-weight-normal); }
@@ -918,10 +928,13 @@
               <div class="message message--user"><div class="avatar avatar--user message__avatar">U</div><div class="message__body"><span class="message__sender">나</span><div class="message__content"><p>이력서 작성하고 포지션 찾아서 입사지원까지 해줘</p></div></div></div>
               <div class="message"><div class="avatar avatar--ai message__avatar">⚡</div><div class="message__body"><span class="message__sender">AI Test Forge</span><div class="message__content"><p>요청하신 내용을 3개 레시피로 구성한 실행 계획을 준비했습니다. 확인 후 실행해주세요.</p></div></div></div>
             </div>
-            <!-- 플랜 제안 카드: 2단계 인터랙티브 편집 (스킵 체크박스 + ↑/↓ 순서변경).
+            <!-- 플랜 제안 카드: 2단계 인터랙티브 편집 (스킵 체크박스 + ↑/↓ 순서변경 + [값 지정] 아코디언).
                  rationale 💡 노출 / 헤더 카운터(스킵 반영) / 값 미리보기(확정값+출처, 미확정은 "실행 중 결정") / 🔗예측 표시 금지.
+                 값 사전 편집: 각 행 우측 [값 지정 ▸] 토글로 그 레시피의 변수 입력 폼을 펼침(기본 접힘, form-group 필드 재사용).
+                 편집한 행에는 "값 지정됨" 뱃지, 스킵된 행은 토글 비활성(disabled).
                  대표 예시: 2번째("포지션 탐색")를 스킵 → 흐리게 + "(제외됨)", 나머지 2개가 순서번호 1,2로 재매김.
-                 스킵/순서변경/카운터 갱신/최소 1개 가드 로직은 chat.js 담당 — 여기선 편집 상태의 정적 표현. -->
+                 1번째("이력서 작성")는 [값 지정] 펼친 상태 + "값 지정됨" 뱃지.
+                 스킵/순서변경/카운터 갱신/최소 1개 가드/아코디언 토글 로직은 chat.js 담당 — 여기선 편집 상태의 정적 표현. -->
             <div class="action-picker-area">
               <div class="action-picker" role="group" aria-label="실행 계획 제안">
                 <!-- 순서변경/스킵 결과를 스크린리더에 알리는 영역 (chat.js가 텍스트 주입) -->
@@ -943,9 +956,25 @@
                       <input class="plan-recipe__check" type="checkbox" aria-label="이력서 작성 실행 포함" checked>
                       <span class="plan-recipe__order">1</span>
                       <span class="plan-recipe__name">이력서 작성</span>
+                      <!-- 값 편집한 행: "값 지정됨" 뱃지 -->
+                      <span class="badge badge--info">값 지정됨</span>
                       <span class="badge badge--neutral" style="margin-left: auto;">사람인</span>
+                      <!-- [값 지정] 아코디언 토글 (펼친 상태: aria-expanded="true") -->
+                      <button class="plan-recipe__edit-toggle" type="button" aria-expanded="true" aria-controls="plan-edit-resume">값 지정 <span class="plan-recipe__edit-caret" aria-hidden="true">▸</span></button>
                     </div>
                     <div class="plan-recipe__values">경력: 3년 <span class="badge badge--neutral">📌 기본값</span> · <span class="plan-value--pending">이름: 실행 중 결정</span></div>
+                    <!-- 펼친 변수 입력 폼: 그 레시피의 입력 변수 전부. form-group 필드 재사용. -->
+                    <div class="plan-recipe__edit-form" id="plan-edit-resume" role="group" aria-label="이력서 작성 변수 입력">
+                      <div class="form-group"><label class="form-label" for="plan-edit-resume-name">이름</label><input class="input" id="plan-edit-resume-name" type="text" placeholder="지원자 이름"></div>
+                      <div class="form-group"><label class="form-label" for="plan-edit-resume-career">경력 (년)</label><input class="input" id="plan-edit-resume-career" type="number" value="3"></div>
+                      <div class="form-group"><label class="form-label" for="plan-edit-resume-level">지원 직급</label>
+                        <select class="input" id="plan-edit-resume-level">
+                          <option>사원</option>
+                          <option selected>대리</option>
+                          <option>과장</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                   <!-- 2행: 스킵됨 (흐리게 + "(제외됨)" + 순서번호 미부여) -->
                   <div class="plan-recipe plan-recipe--skipped">
@@ -958,6 +987,8 @@
                       <span class="plan-recipe__order plan-recipe__order--empty" aria-hidden="true"></span>
                       <span class="plan-recipe__name">포지션 탐색</span>
                       <span class="plan-recipe__excluded">(제외됨)</span>
+                      <!-- 스킵된 행: [값 지정] 토글 비활성 (실행 대상 아님) -->
+                      <button class="plan-recipe__edit-toggle" type="button" style="margin-left: auto;" aria-expanded="false" disabled>값 지정 <span class="plan-recipe__edit-caret" aria-hidden="true">▸</span></button>
                     </div>
                   </div>
                   <!-- 3행: 체크됨, 순서 2로 재매김 -->
@@ -971,6 +1002,8 @@
                       <span class="plan-recipe__order">2</span>
                       <span class="plan-recipe__name">입사지원</span>
                       <span class="badge badge--neutral" style="margin-left: auto;">사람인</span>
+                      <!-- [값 지정] 아코디언 토글 (접힌 상태: aria-expanded="false") -->
+                      <button class="plan-recipe__edit-toggle" type="button" aria-expanded="false">값 지정 <span class="plan-recipe__edit-caret" aria-hidden="true">▸</span></button>
                     </div>
                     <div class="plan-recipe__values"><span class="plan-value--pending">지원 메모: 실행 중 결정</span></div>
                   </div>

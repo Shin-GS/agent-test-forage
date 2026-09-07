@@ -421,6 +421,9 @@ public class ChatProcessor {
                 item.put("serviceName", resolveServiceName(recipe.getApiSpecId()));
                 // 값 미리보기: 기본값이 있는 변수만 (📌 default). 발화값은 담지 않는다.
                 item.put("inputPreview", buildDefaultPreview(recipe.getVariablesJson()));
+                // 값 사전 편집(plan.md): 편집 폼을 그리기 위한 전체 변수 정의(name/label/type/required/default/options 등).
+                // FE가 액션 피커 필드 컴포넌트를 재사용하므로 별도 API 조회 없이 카드 payload로 자족한다.
+                item.put("variables", buildVariableSchema(recipe.getVariablesJson()));
             }
             recipeItems.add(item);
         }
@@ -469,6 +472,16 @@ public class ChatProcessor {
             items.add(item);
         }
         return items;
+    }
+
+    /**
+     * plan 카드 값 사전 편집용 변수 스키마. 레시피 변수 정의(variablesJson)를 파싱해 그대로 싣는다
+     * (name/label/type/required/default/options 등). FE는 이 스키마로 액션 피커 필드 컴포넌트를 재사용해
+     * 편집 폼을 그린다 — 실행 중 액션 피커(resolvePendingInputs)가 넘기는 변수 정의와 동일한 형태라 일관적이다.
+     * 변수 정의가 없으면 빈 배열.
+     */
+    private List<Map<String, Object>> buildVariableSchema(String variablesJson) {
+        return RecipeJsonUtil.parseSteps(variablesJson);
     }
 
     /** service_select 카드: 서비스 선택 버튼 (messaging.md: services:[{name,label}]) */

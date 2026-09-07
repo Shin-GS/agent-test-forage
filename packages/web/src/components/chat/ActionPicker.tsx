@@ -9,18 +9,11 @@
 
 import { useMemo, useState } from "react";
 import { conversationsApi, executionsApi } from "../../api";
-import type { ActionPickerVariable, ExecutionResponse } from "../../api/types";
+import type { ExecutionResponse } from "../../api/types";
 import { runExecution } from "../../services/executionRunner";
 import { applyRunResult } from "../../services/executionResult";
 import { useChatStore } from "../../store/chatStore";
-
-/** 변수 초기값: default 우선, 없으면 타입별 빈값 */
-function initialValue(v: ActionPickerVariable): unknown {
-  if (v.default != null) return v.default;
-  if (v.type === "number") return "";
-  if (v.type === "checkbox") return false;
-  return "";
-}
+import { FieldInput, initialValue } from "./FieldInput";
 
 export function ActionPicker() {
   const actionPicker = useChatStore((state) => state.actionPicker);
@@ -133,94 +126,4 @@ export function ActionPicker() {
       </div>
     </div>
   );
-}
-
-/** 변수 타입별 입력 렌더 */
-function FieldInput({
-  variable,
-  value,
-  onChange,
-}: {
-  variable: ActionPickerVariable;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  const id = `ap-${variable.key}`;
-  const common = { id, className: "input" };
-
-  switch (variable.type) {
-    case "textarea":
-      return (
-        <textarea
-          {...common}
-          rows={3}
-          placeholder={variable.placeholder}
-          value={String(value ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case "number":
-      return (
-        <input
-          {...common}
-          type="number"
-          placeholder={variable.placeholder}
-          min={variable.min}
-          max={variable.max}
-          value={value == null ? "" : String(value)}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case "date":
-      return (
-        <input {...common} type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />
-      );
-    case "checkbox":
-      return (
-        <label className="radio-group__item">
-          <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
-          {variable.placeholder ?? ""}
-        </label>
-      );
-    case "select":
-    case "search-select":
-      return (
-        <select {...common} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
-          <option value="" disabled>
-            {variable.placeholder ?? "선택하세요"}
-          </option>
-          {(variable.options ?? []).map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      );
-    case "radio":
-      return (
-        <div className="radio-group">
-          {(variable.options ?? []).map((opt) => (
-            <label className="radio-group__item" key={opt.value}>
-              <input
-                type="radio"
-                name={id}
-                checked={String(value ?? "") === opt.value}
-                onChange={() => onChange(opt.value)}
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-      );
-    default: // text 등
-      return (
-        <input
-          {...common}
-          type="text"
-          placeholder={variable.placeholder}
-          value={String(value ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-  }
 }

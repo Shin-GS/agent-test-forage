@@ -144,8 +144,9 @@ public class ExecutionService {
             throw ApiException.invalidRequest("recipeId is required");
         }
         // 단일 실행 = 레시피 1개짜리 플랜. 공통 오케스트레이션(startInternal)으로 수렴한다.
+        // 단일 실행은 사전 편집값이 없다(recipeInputs=null) — 발화값(initialContext)만 첫 레시피에 시드된다.
         return startInternal(conversationId, requesterId, List.of(request.recipeId()),
-                request.mode(), request.initialContext());
+                request.mode(), request.initialContext(), null);
     }
 
     /**
@@ -164,7 +165,7 @@ public class ExecutionService {
             throw ApiException.invalidRequest("recipeIds is required (at least one)");
         }
         return startInternal(conversationId, requesterId, request.recipeIds(),
-                request.mode(), request.initialContext());
+                request.mode(), request.initialContext(), request.recipeInputs());
     }
 
     /**
@@ -177,7 +178,8 @@ public class ExecutionService {
      * 원본 레시피 기준으로 갱신한다(플랜은 레시피가 실제 시작될 때 카운트). 단일도 첫 레시피 RUNNING 시 갱신되어 동작은 동일하다.
      */
     private ExecutionResponse startInternal(Long conversationId, Long requesterId, List<Long> recipeIds,
-                                            ExecutionMode requestedMode, Map<String, Object> initialContext) {
+                                            ExecutionMode requestedMode, Map<String, Object> initialContext,
+                                            List<Map<String, Object>> recipeInputs) {
         // 소유자 검증을 락 획득보다 먼저 수행한다. 타인이 남의 conversationId로 호출해도
         // 락을 건드리지 않고 404로 거절되어, 정당한 소유자가 락 경합(409)을 겪지 않는다.
         Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
@@ -222,13 +224,15 @@ public class ExecutionService {
             Execution savedExecution = executionRepository.save(execution);
 
             // 2) EXECUTION_RECIPE N개 생성 + 스냅샷 저장 (원본 독립). 순서 = sequence. 전부 PENDING으로 둔다.
+            //    값 사전 편집(plan.md): 그 sequence의 recipeInputs를 스냅샷 안에 함께 보관해, 각 레시피가
+            //    RUNNING으로 전이될 때 자기 sequence 편집값을 꺼내 시드한다(발화값보다 우선). 미편집/미전달은 빈 맵.
             for (int seq = 0; seq < recipes.size(); seq++) {
                 Recipe recipe = recipes.get(seq);
                 ExecutionRecipe executionRecipe = new ExecutionRecipe(savedExecution.getId(), seq);
                 executionRecipe.setRecipeId(recipe.getId());
                 executionRecipe.setRecipeName(recipe.getName());
                 executionRecipe.setRecipeVersionNo(recipe.getCurrentVersion());
-                executionRecipe.setRecipeSnapshotJson(snapshotOf(recipe));
+                executionRecipe.setRecipeSnapshotJson(snapshotOf(recipe, prerunInputsAt(recipeInputs, seq)));
                 executionRecipe.setStatus(ExecutionRecipeStatus.PENDING);
                 executionRecipeRepository.save(executionRecipe);
             }
@@ -328,9 +332,22 @@ public class ExecutionService {
             recipeRepository.save(originRecipe);
         }
 
-        // context 시드: userInput = { 변수 기본값 ..., initialContext(정규화) ... } (initialContext가 덮어씀).
-        // 이미 context가 있으면(다음 레시피 전이) 기존 extract 누적값은 보존하고 userInput만 이 레시피 기준으로 재시드한다.
-        Map<String, Object> normalizedContext = normalizeExtractedValues(variablesJson, initialContext);
+        // context 시드: userInput = { 변수 기본값 ..., 발화값(initialContext) ..., 사전편집값(recipeInputs) ... }.
+        // 우선순위(plan.md 데이터 자동 채움): 사전편집 > 발화 > 기본값. 같은 key면 뒤가 덮으므로
+        // 발화값 위에 사전편집값을 얹어 하나의 시드 소스로 만든 뒤 정규화한다.
+        // 사전편집값은 이 레시피의 스냅샷(prerunInputsJson)에서 꺼낸다(각 레시피가 자기 sequence 값을 가짐).
+        // 이미 context가 있으면(다음 레시피 전이) 기존 extract 누적값(이전 결과)은 CONTEXT 최상위에 보존하고
+        // userInput만 이 레시피 기준으로 재시드한다. 실행 투입(required 판정·템플릿 userInput.*)은 userInput을
+        // 보므로, 사용자가 명시한 값(사전편집/발화)이 있으면 그 값이 우선한다. 이전 결과는 사용자가 그 key를
+        // 명시하지 않았을 때의 자동 채움 및 결과값(resultValues) 산출에서 CONTEXT 최상위 우선으로 쓰인다.
+        Map<String, Object> seedSource = new java.util.LinkedHashMap<>();
+        if (initialContext != null) {
+            seedSource.putAll(initialContext); // 발화값 (첫 레시피에만 전달됨)
+        }
+        Map<String, Object> prerunInputs = prerunInputsFromSnapshot(executionRecipe);
+        seedSource.putAll(prerunInputs); // 사전편집값이 발화값을 덮음 (사전편집 > 발화)
+
+        Map<String, Object> normalizedContext = normalizeExtractedValues(variablesJson, seedSource);
         Map<String, Object> seededUserInput = seedUserInput(variablesJson, normalizedContext);
         execution.setContextJson(reseedUserInput(execution.getContextJson(), seededUserInput));
         executionRepository.save(execution);
@@ -813,7 +830,9 @@ public class ExecutionService {
         }
 
         // 다음 레시피 RUNNING 전이: 스텝 생성 + userInput 재시드 + usageCount 갱신.
-        // initialContext는 첫 레시피에서만 시드하므로 여기선 null(기본값만 재시드, 기존 extract 누적값은 보존).
+        // initialContext(발화값)는 첫 레시피 전용이라 여기선 null이다. 다만 이 레시피의 사전편집값
+        // (recipeInputs)은 transitionRecipeToRunning이 next의 스냅샷(prerunInputsJson)에서 직접 꺼내 시드하므로
+        // 각 레시피가 자기 sequence 편집값을 받는다. 기존 extract 누적값(이전 결과)은 보존된다.
         Recipe originRecipe = next.getRecipeId() == null ? null
                 : recipeRepository.findByIdAndDeletedAtIsNull(next.getRecipeId()).orElse(null);
         transitionRecipeToRunning(execution, next, originRecipe, null);
@@ -1544,6 +1563,15 @@ public class ExecutionService {
 
     /** 레시피 전체 스냅샷 JSON (메타+스텝+변수+결과정의). 원본 독립 재현용 */
     private String snapshotOf(Recipe recipe) {
+        return snapshotOf(recipe, null);
+    }
+
+    /**
+     * 레시피 전체 스냅샷 JSON (메타+스텝+변수+결과정의). 원본 독립 재현용.
+     * {@code prerunInputs}(값 사전 편집, plan.md)가 있으면 {@code prerunInputsJson} 필드로 함께 저장해,
+     * 이 레시피가 RUNNING으로 전이될 때 꺼내 시드한다(발화값보다 우선). null/빈이면 필드를 넣지 않는다.
+     */
+    private String snapshotOf(Recipe recipe, Map<String, Object> prerunInputs) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("recipeId", recipe.getId());
         node.put("name", recipe.getName());
@@ -1555,11 +1583,27 @@ public class ExecutionService {
         node.put("stepsJson", recipe.getStepsJson());
         node.put("resultDefinitionJson", recipe.getResultDefinitionJson());
         node.put("resultTemplate", recipe.getResultTemplate());
+        if (prerunInputs != null && !prerunInputs.isEmpty()) {
+            // 사전 편집값은 JSON 문자열로 저장(variablesJson과 동일한 문자열-필드 규약).
+            node.put("prerunInputsJson", RecipeJsonUtil.toJsonString(prerunInputs));
+        }
         try {
             return objectMapper.writeValueAsString(node);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to serialize recipe snapshot", e);
         }
+    }
+
+    /**
+     * {@code recipeInputs} 배열에서 {@code seq} 위치의 사전 편집값을 안전하게 꺼낸다.
+     * 배열이 null이거나 인덱스 범위를 벗어나거나 해당 원소가 null이면 빈 맵을 돌려준다(미편집).
+     */
+    private Map<String, Object> prerunInputsAt(List<Map<String, Object>> recipeInputs, int seq) {
+        if (recipeInputs == null || seq < 0 || seq >= recipeInputs.size()) {
+            return Map.of();
+        }
+        Map<String, Object> at = recipeInputs.get(seq);
+        return at == null ? Map.of() : at;
     }
 
     /**
@@ -1897,6 +1941,25 @@ public class ExecutionService {
             return variablesJson == null ? null : variablesJson.toString();
         }
         return null;
+    }
+
+    /**
+     * EXECUTION_RECIPE 스냅샷에서 사전 편집값({@code prerunInputsJson})을 꺼내 맵으로 파싱한다(값 사전 편집).
+     * 스냅샷에 없으면(미편집/기존 실행) 빈 맵. snapshotOf에서 JSON 문자열로 저장했으므로 다시 파싱한다.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> prerunInputsFromSnapshot(ExecutionRecipe executionRecipe) {
+        Object snapshot = RecipeJsonUtil.toObject(executionRecipe.getRecipeSnapshotJson());
+        if (snapshot instanceof Map<?, ?> snapshotMap) {
+            Object prerunInputsJson = snapshotMap.get("prerunInputsJson");
+            if (prerunInputsJson != null) {
+                Object parsed = RecipeJsonUtil.toObject(prerunInputsJson.toString());
+                if (parsed instanceof Map<?, ?> parsedMap) {
+                    return (Map<String, Object>) parsedMap;
+                }
+            }
+        }
+        return Map.of();
     }
 
     /** EXECUTION_RECIPE 스냅샷에서 stepsJson(JSON 문자열)을 꺼낸다. 없으면 null. */

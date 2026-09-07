@@ -299,17 +299,19 @@ investigate 답변(`TEXT`)의 `payloadJson`에 담기는 출처 인용 payload. 
 
 ### plan 카드 상세
 
-플랜 제안(`propose_plan`)을 읽기 전용으로 보여준다(1단계). 편집 UI는 [2단계 백로그](../chat/scenarios/plan-proposal.md#2단계-백로그).
+플랜 제안(`propose_plan`)을 인터랙티브 카드로 보여준다. 스킵·순서변경·값 사전 편집이 확정되어 있다([plan-proposal.md 편집 상태 카드](../chat/scenarios/plan-proposal.md#편집-상태-카드-스킵-반영)). 레시피 추가/제거는 [2단계 백로그](../chat/scenarios/plan-proposal.md#2단계-백로그-여기서-미구현).
 
 | 필드 | 설명 |
 |------|------|
 | `rationale` | AI가 이 조합을 제안한 짧은 한국어 근거 (`propose_plan.rationale`). 카드 상단 💡로 노출 |
-| `recipes` | 순서대로 실행할 레시피 목록. 각 항목: `{ recipeId, name, serviceName, previewValues }` |
-| `previewValues[]` | 각 레시피의 값 미리보기. `{ key, label, value, source }` |
+| `recipes` | 순서대로 실행할 레시피 목록. 각 항목: `{ recipeId, name, serviceName, previewValues, variables }` |
+| `previewValues[]` | 각 레시피의 값 미리보기(아코디언 접힘 상태). `{ key, label, value, source }` |
+| `variables[]` | 각 레시피의 전체 변수 정의. `{ name, label, type, required, default, options }` — [값 지정] 아코디언 편집 폼을 별도 조회 없이 그린다 ([plan.md 변수 스키마 전달](../recipe/plan.md#결정-3-변수-스키마를-카드-payload에-전달)) |
 | `buttons` | `["cancel", "auto"]` — [취소](실행 안 함) / [자동 실행](플랜 실행 진입) |
 
 - **`previewValues[].source` (정직화):** 제안 시점엔 **레시피 기본값만** 확정 표시한다. `default`(📌 기본값) / **`runtime`(값 미정 — `value`는 null)** 2종만 사용한다. `runtime`의 화면 표기는 **"실행 중 결정" 하나로 통일**한다("실행 중 입력"과 혼용하지 않음). **발화 추출값(🗣️)은 제안 카드에 표시하지 않는다**(레시피별 분배 규칙이 1단계 범위 밖 — [plan-proposal.md 값 미리보기](../chat/scenarios/plan-proposal.md#값-미리보기-결정-1--정직하게-축소)). 🗣️ 발화·🔗 이전 결과는 **실행 중 액션 피커**에서만 등장([plan.md 데이터 자동 채움](../recipe/plan.md#데이터-자동-채움-우선순위-실행-중-액션-피커)).
-- 실행 승인([자동 실행]) 이후의 오케스트레이션·진행/실패/중단은 [plan.md](../recipe/plan.md) 참조.
+- **`variables`는 카드 payload에 자족적으로 실린다** — FE는 사용자가 [값 지정] 아코디언을 펼칠 때 이 정의로 편집 폼을 그리며, 편집값은 `startPlan` 요청의 `recipeInputs`로만 반영된다(카드 payload 자체는 불변, 새로고침 시 제안 원본 복원).
+- 편집(스킵/순서변경/값 사전 편집)·실행 승인([자동 실행]) 이후의 오케스트레이션·진행/실패/중단은 [plan.md](../recipe/plan.md) 참조.
 
 ---
 

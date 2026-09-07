@@ -47,6 +47,32 @@ const CARD: PlanCardMeta = {
   rationale: "입사지원은 이력서·포지션이 선행돼야 해 3단계로 구성",
 };
 
+// 값 사전 편집용 카드: 각 레시피에 variables(변수 정의) 포함.
+const CARD_WITH_VARS: PlanCardMeta = {
+  cardType: "plan",
+  recipeIds: [10, 20],
+  recipes: [
+    {
+      recipeId: 10,
+      recipeName: "이력서 작성",
+      serviceName: "사람인",
+      inputPreview: [],
+      variables: [
+        { key: "name", label: "이름", type: "text", required: true },
+        { key: "career", label: "경력", type: "number" },
+      ],
+    },
+    {
+      recipeId: 20,
+      recipeName: "포지션 탐색",
+      serviceName: "사람인",
+      inputPreview: [],
+      variables: [{ key: "keyword", label: "키워드", type: "text" }],
+    },
+  ],
+  rationale: "값을 미리 지정할 수 있어요",
+};
+
 /** 각 레시피 행 요소를 이름으로 찾는다 (plan-recipe 컨테이너 기준) */
 function recipeRow(name: string): HTMLElement {
   const nameEl = screen.getByText(name);
@@ -223,5 +249,75 @@ describe("PlanCard 편집 (스킵 + 순서변경)", () => {
     // 실행 순서: 스킵 제외하므로 [포지션(20), 입사지원(30)] — 스킵 행 위치와 무관
     const [, payload] = startPlanMock.mock.calls[0];
     expect(payload.recipeIds).toEqual([20, 30]);
+  });
+});
+
+describe("PlanCard 값 사전 편집", () => {
+  it("[값 지정] 토글로 변수 입력 폼이 노출된다", async () => {
+    const user = userEvent.setup();
+    render(<PlanCard card={CARD_WITH_VARS} />);
+
+    // 초기: 폼 미노출 (이름 입력 필드 없음)
+    expect(screen.queryByLabelText("이름 *")).not.toBeInTheDocument();
+
+    // 이력서 작성 행의 [값 지정] 토글 클릭
+    const toggle = screen.getByRole("button", { name: "이력서 작성 값 지정" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await user.click(toggle);
+
+    // 폼 노출: 이름/경력 필드
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("이름 *")).toBeInTheDocument();
+    expect(screen.getByLabelText("경력")).toBeInTheDocument();
+  });
+
+  it("값 입력 후 자동 실행 시 recipeInputs에 recipeIds와 같은 인덱스로 담긴다", async () => {
+    const user = userEvent.setup();
+    render(<PlanCard card={CARD_WITH_VARS} />);
+
+    // 이력서(10) 값 지정 펼치고 이름 입력
+    await user.click(screen.getByRole("button", { name: "이력서 작성 값 지정" }));
+    await user.type(screen.getByLabelText("이름 *"), "홍길동");
+    await user.type(screen.getByLabelText("경력"), "3");
+
+    await user.click(screen.getByRole("button", { name: "플랜 자동 실행" }));
+
+    const [, payload] = startPlanMock.mock.calls[0];
+    expect(payload.recipeIds).toEqual([10, 20]);
+    // recipeInputs[0]은 recipeIds[0]=10(이력서)의 편집값. number 타입은 숫자 변환.
+    expect(payload.recipeInputs).toEqual([{ name: "홍길동", career: 3 }, {}]);
+  });
+
+  it("값을 지정하면 '값 지정됨' 뱃지가 표시된다", async () => {
+    const user = userEvent.setup();
+    render(<PlanCard card={CARD_WITH_VARS} />);
+
+    await user.click(screen.getByRole("button", { name: "이력서 작성 값 지정" }));
+    expect(screen.queryByText("값 지정됨")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("이름 *"), "홍길동");
+    expect(screen.getByText("값 지정됨")).toBeInTheDocument();
+  });
+
+  it("스킵된 레시피는 [값 지정] 토글이 비활성", async () => {
+    const user = userEvent.setup();
+    render(<PlanCard card={CARD_WITH_VARS} />);
+
+    // 포지션 탐색 스킵
+    await user.click(screen.getByRole("checkbox", { name: "포지션 탐색 실행 포함" }));
+
+    expect(screen.getByRole("button", { name: "포지션 탐색 값 지정" })).toBeDisabled();
+  });
+
+  it("미편집 레시피는 {} 로 전달된다", async () => {
+    const user = userEvent.setup();
+    render(<PlanCard card={CARD_WITH_VARS} />);
+
+    // 아무 값도 편집하지 않고 바로 실행
+    await user.click(screen.getByRole("button", { name: "플랜 자동 실행" }));
+
+    const [, payload] = startPlanMock.mock.calls[0];
+    expect(payload.recipeIds).toEqual([10, 20]);
+    expect(payload.recipeInputs).toEqual([{}, {}]);
   });
 });

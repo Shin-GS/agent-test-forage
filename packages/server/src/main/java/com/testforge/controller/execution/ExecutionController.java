@@ -75,7 +75,7 @@ public class ExecutionController {
         Long requesterId = CurrentUser.id();
         PlanStartRequest secured = new PlanStartRequest(
                 requesterId, request.recipeIds(), request.mode(),
-                request.messageId(), request.initialContext());
+                request.messageId(), request.initialContext(), request.recipeInputs());
         ExecutionResponse response = executionService.startPlan(conversationId, requesterId, secured);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

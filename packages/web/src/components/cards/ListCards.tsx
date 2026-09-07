@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { ApiError, conversationsApi, executionsApi } from "../../api";
 import type {
+  ActionPickerVariable,
   CandidatesCard as CandidatesCardMeta,
   PlanCard as PlanCardMeta,
   PlanRecipeItem,
@@ -18,6 +19,7 @@ import { applyRunResult } from "../../services/executionResult";
 import { useChatStore } from "../../store/chatStore";
 import { useToastStore } from "../../store/toastStore";
 import type { ConversationRuntimeStatus } from "../../store/types";
+import { FieldInput, initialValue } from "../chat/FieldInput";
 
 const listStyle: React.CSSProperties = {
   display: "flex",
@@ -109,6 +111,34 @@ interface PlanEditRow {
   uid: string;
   item: PlanRecipeItem;
   included: boolean;
+  /**
+   * 사용자가 편집한 값 맵 (key→값). 미편집 key 는 아예 담지 않는다(프리필하지 않음).
+   * 이렇게 두면 "실제 편집 여부"를 키 존재만으로 판별할 수 있고, 자동 실행 시 편집값만 전송한다.
+   */
+  inputs: Record<string, unknown>;
+}
+
+/** 변수 값이 "비어있는지"(미입력으로 취급) 판정. 빈 문자열/undefined/null 은 미입력 */
+function isEmptyValue(value: unknown): boolean {
+  return value === "" || value === undefined || value === null;
+}
+
+/**
+ * 자동 실행에 보낼 편집값 맵 구성. 비어있지 않은 값만 담고, number 타입은 숫자로 변환한다
+ * (ActionPicker 제출 규칙과 동일). 편집이 없으면 빈 맵({}).
+ */
+function normalizeInputs(
+  variables: ActionPickerVariable[] | undefined,
+  inputs: Record<string, unknown>
+): Record<string, unknown> {
+  const byKey = new Map((variables ?? []).map((v) => [v.key, v]));
+  const out: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(inputs)) {
+    if (isEmptyValue(raw)) continue;
+    const variable = byKey.get(key);
+    out[key] = variable?.type === "number" ? Number(raw) : raw;
+  }
+  return out;
 }
 
 /**
@@ -137,8 +167,11 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
       uid: `plan-row-${i}`,
       item,
       included: item.recipeId != null,
+      inputs: {},
     }))
   );
+  // [값 지정] 아코디언 펼침 상태 (uid 집합). 순서변경/스킵 시에도 uid 기준이라 자연 유지.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   // 순서변경/스킵 결과를 스크린리더에 알리는 문구 (aria-live)
   const [announce, setAnnounce] = useState("");
 
@@ -158,6 +191,30 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
       prev.map((row, i) =>
         i === index && row.item.recipeId != null ? { ...row, included: !row.included } : row
       )
+    );
+  };
+
+  /** [값 지정] 아코디언 펼침 토글. 잠금 상태에서도 열람은 허용하나, 입력은 disabled 로 막는다 */
+  const toggleExpanded = (uid: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  };
+
+  /** 특정 행의 변수 값 변경. 빈 값이면 key 를 제거(미편집으로 되돌림), 아니면 저장 */
+  const setRowInput = (index: number, key: string, value: unknown) => {
+    if (locked) return;
+    setRows((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        const nextInputs = { ...row.inputs };
+        if (isEmptyValue(value)) delete nextInputs[key];
+        else nextInputs[key] = value;
+        return { ...row, inputs: nextInputs };
+      })
     );
   };
 
@@ -190,6 +247,13 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
       .filter((r) => r.included && r.item.recipeId != null)
       .map((r) => r.item.recipeId as number);
 
+  // recipeInputs: buildRecipeIds 와 인덱스 1:1. 체크된 항목만 화면 순서대로, 편집값만 정규화.
+  // 미편집 레시피는 {}. number 는 숫자 변환.
+  const buildRecipeInputs = (): Array<Record<string, unknown>> =>
+    rows
+      .filter((r) => r.included && r.item.recipeId != null)
+      .map((r) => normalizeInputs(r.item.variables, r.inputs));
+
   const handleCancel = async () => {
     if (running || started || conversationId == null) return;
     setRunning(true);
@@ -217,12 +281,15 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
     // 체크된 항목만, 화면 순서대로 recipeIds 구성 (스킵/순서변경 반영). plan.md "BE 변경 없음".
     const recipeIds = buildRecipeIds();
     if (recipeIds.length === 0) return;
+    // 값 사전 편집 맵 (recipeIds 와 인덱스 1:1). 편집값만 담고 미편집은 {}.
+    const recipeInputs = buildRecipeInputs();
     setRunning(true);
     setError(null);
     try {
       // 플랜은 항상 AUTO. recipeIds 1개면 BE 가 단일(SINGLE)로 수렴한다.
       const execution = await executionsApi.startPlan(convId, {
         recipeIds,
+        recipeInputs,
         mode: "AUTO",
       });
 
@@ -286,6 +353,7 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
       <div className="plan-card__recipes">
         {rows.map((row, idx) => {
           const order = row.included ? ++orderCounter : null;
+          const hasVariables = (row.item.variables?.length ?? 0) > 0;
           return (
             <PlanRecipeRow
               key={row.uid}
@@ -299,6 +367,13 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
               onToggle={() => toggleIncluded(idx)}
               onMoveUp={() => move(idx, -1)}
               onMoveDown={() => move(idx, 1)}
+              // 값 편집: 변수 있고, 포함되고, recipeId 있고, 잠금 아닐 때만 토글 가능
+              canEditValues={hasVariables && row.included && row.item.recipeId != null && !locked}
+              expanded={expanded.has(row.uid)}
+              edited={Object.keys(row.inputs).length > 0}
+              inputs={row.inputs}
+              onToggleExpanded={() => toggleExpanded(row.uid)}
+              onInputChange={(key, value) => setRowInput(idx, key, value)}
             />
           );
         })}
@@ -355,6 +430,16 @@ interface PlanRecipeRowProps {
   onToggle: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  /** [값 지정] 토글 가능 여부 (변수 있고 포함 + 미잠금) */
+  canEditValues: boolean;
+  /** 편집 폼 펼침 여부 */
+  expanded: boolean;
+  /** 사용자가 값을 편집했는지 ("값 지정됨" 뱃지 표시용) */
+  edited: boolean;
+  /** 현재 편집값 맵 (미편집 key 는 없음) */
+  inputs: Record<string, unknown>;
+  onToggleExpanded: () => void;
+  onInputChange: (key: string, value: unknown) => void;
 }
 
 /**
@@ -372,8 +457,18 @@ function PlanRecipeRow({
   onToggle,
   onMoveUp,
   onMoveDown,
+  canEditValues,
+  expanded,
+  edited,
+  inputs,
+  onToggleExpanded,
+  onInputChange,
 }: PlanRecipeRowProps) {
   const preview = recipe.inputPreview ?? [];
+  const variables = recipe.variables ?? [];
+  const hasVariables = variables.length > 0;
+  // 편집 폼 컨테이너 id (aria-controls 연결용). recipeId 폴백으로 안정 문자열 구성.
+  const formId = `plan-edit-${recipe.recipeId ?? name}`;
 
   return (
     <div className={`plan-recipe${included ? "" : " plan-recipe--skipped"}`}>
@@ -413,10 +508,32 @@ function PlanRecipeRow({
         )}
         <span className="plan-recipe__name">{name}</span>
         {!included && <span className="plan-recipe__excluded">(제외됨)</span>}
+        {edited && included && <span className="badge badge--info">값 지정됨</span>}
         {recipe.serviceName && (
           <span className="badge badge--neutral" style={{ marginLeft: "auto" }}>
             {recipe.serviceName}
           </span>
+        )}
+        {/* [값 지정] 아코디언 토글: 변수 있는 행에만 노출. 스킵/삭제/잠금이면 비활성 */}
+        {hasVariables && (
+          <button
+            type="button"
+            className="plan-recipe__edit-toggle"
+            style={recipe.serviceName ? undefined : { marginLeft: "auto" }}
+            aria-expanded={expanded}
+            aria-controls={formId}
+            aria-label={`${name} 값 지정`}
+            disabled={!canEditValues}
+            onClick={onToggleExpanded}
+          >
+            값 지정{" "}
+            <span
+              className={`plan-recipe__edit-caret${expanded ? " plan-recipe__edit-caret--open" : ""}`}
+              aria-hidden
+            >
+              ▸
+            </span>
+          </button>
         )}
       </div>
       {/* 스킵 행은 값 미리보기 숨김 (디자인 Case 11: 제외 행은 head 만) */}
@@ -431,6 +548,29 @@ function PlanRecipeRow({
           {preview.length > 0 && " · "}
           {/* 나머지 값은 실행 전 확정 불가 → "실행 중 결정" (🔗 예측 표시 금지) */}
           <span className="plan-value--pending">그 외 값은 실행 중 결정</span>
+        </div>
+      )}
+      {/* 값 편집 폼: 펼쳤고 포함된 행에만. 각 변수 FieldInput 재사용(중복 구현 금지). */}
+      {included && expanded && hasVariables && (
+        <div className="plan-recipe__edit-form" id={formId} role="group" aria-label={`${name} 변수 입력`}>
+          {variables.map((v) => {
+            // 편집값이 있으면 그 값, 없으면 default 기반 초기값(표시용 폴백)
+            const current = v.key in inputs ? inputs[v.key] : initialValue(v);
+            return (
+              <div className="form-group" key={v.key}>
+                <label className="form-label" htmlFor={`plan-${recipe.recipeId ?? name}-${v.key}`}>
+                  {v.label}
+                  {v.required ? " *" : ""}
+                </label>
+                <FieldInput
+                  variable={v}
+                  value={current}
+                  onChange={(val) => onInputChange(v.key, val)}
+                  idPrefix={`plan-${recipe.recipeId ?? name}`}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

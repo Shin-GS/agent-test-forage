@@ -539,4 +539,108 @@ class PlanExecutionIntegrationTest {
         assertThat(result.get("recipes").get(0).get("recipeName").asText()).isEqualTo("회원가입");
         assertThat(result.get("recipes").get(0).get("status").asText()).isEqualTo("success");
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // 값 사전 편집 (recipeInputs) — 레시피별 시드 / 우선순위 / required 충족
+    // ─────────────────────────────────────────────────────────────
+
+    /** recipeInputs 포함 플랜 시작 (recipeInputs 는 JSON 배열 문자열) */
+    private void startPlanWithInputs(Long conversationId, String recipeIdsJson,
+                                     String recipeInputsJson) throws Exception {
+        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":" + recipeIdsJson
+                                + ",\"recipeInputs\":" + recipeInputsJson + "}"))
+                .andExpect(status().isCreated());
+    }
+
+    /** 실행 context.userInput 에서 특정 key 값을 문자열로 꺼낸다 (없으면 null) */
+    private String userInputValue(Long executionId, String key) {
+        try {
+            String contextJson = executionRepository.findById(executionId).orElseThrow().getContextJson();
+            JsonNode userInput = objectMapper.readTree(contextJson).get("userInput");
+            if (userInput == null || userInput.get(key) == null || userInput.get(key).isNull()) {
+                return null;
+            }
+            return userInput.get(key).asText();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // ── required 변수를 recipeInputs 로 채우면 pre-run 액션 피커 없이 통과(자동 실행 논스톱) ──
+    @Test
+    void planWithInputs_requiredFilled_skipsPreRunPicker() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipeWithRequiredVar("이력서 작성", specId, "career");
+        Long conversationId = newConversation(specId);
+
+        // r1 의 required 변수 career 를 사전 편집값으로 채움 → 액션 피커 없이 바로 EXECUTING
+        startPlanWithInputs(conversationId, "[" + r1 + "]", "[{\"career\":\"3년\"}]");
+
+        Long executionId = executionRepository.findAll().get(0).getId();
+        // pendingInputs 없이 EXECUTING (WAITING_INPUT 아님)
+        assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.EXECUTING);
+        // 사전 편집값이 첫 레시피 userInput 에 시드됨
+        assertThat(userInputValue(executionId, "career")).isEqualTo("3년");
+    }
+
+    // ── required 변수를 안 채우면 기존대로 pre-run 액션 피커(WAITING_INPUT) ──
+    @Test
+    void planWithoutInputs_requiredMissing_waitsForPicker() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipeWithRequiredVar("이력서 작성", specId, "career");
+        Long conversationId = newConversation(specId);
+
+        // recipeInputs 미전달 → career 미충족 → WAITING_INPUT
+        startPlan(conversationId, "[" + r1 + "]");
+
+        assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.WAITING_INPUT);
+    }
+
+    // ── 레시피별 시드: 2번째 레시피의 recipeInputs 는 그 레시피 전이 시점에 시드된다 ──
+    @Test
+    void planWithInputs_secondRecipeSeededOnTransition() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipe("이력서 작성", specId); // 변수 없음
+        Long r2 = newRecipeWithRequiredVar("입사지원", specId, "memo");
+        Long conversationId = newConversation(specId);
+
+        // r1 은 미편집({}), r2 는 memo 사전 편집
+        startPlanWithInputs(conversationId, "[" + r1 + "," + r2 + "]",
+                "[{},{\"memo\":\"지원합니다\"}]");
+        Long executionId = executionRepository.findAll().get(0).getId();
+
+        // 시작 시점엔 r1 이 RUNNING, r2 는 PENDING → r2 userInput 아직 시드 전
+        assertThat(userInputValue(executionId, "memo")).isNull();
+
+        // r1 완료 → r2 전이: 이 시점에 r2 의 사전 편집값(memo)이 시드되어 required 충족 → 논스톱
+        reportRunningRecipeStep(executionId);
+
+        assertThat(userInputValue(executionId, "memo")).isEqualTo("지원합니다");
+        // memo 가 채워져 액션 피커 없이 EXECUTING 유지
+        assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
+                .isEqualTo(ConversationStatus.EXECUTING);
+    }
+
+    // ── 우선순위: 사전 편집값이 발화값(initialContext)을 덮는다 (사전편집 > 발화) ──
+    @Test
+    void planWithInputs_prerunOverridesInitialContext() throws Exception {
+        Long specId = 10L;
+        Long r1 = newRecipeWithRequiredVar("이력서 작성", specId, "career");
+        Long conversationId = newConversation(specId);
+
+        // 발화값 career=1년, 사전편집 career=3년 → 사전편집이 이김
+        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":[" + r1 + "]"
+                                + ",\"initialContext\":{\"career\":\"1년\"}"
+                                + ",\"recipeInputs\":[{\"career\":\"3년\"}]}"))
+                .andExpect(status().isCreated());
+
+        Long executionId = executionRepository.findAll().get(0).getId();
+        assertThat(userInputValue(executionId, "career")).isEqualTo("3년");
+    }
 }
