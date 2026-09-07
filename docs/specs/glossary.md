@@ -32,7 +32,7 @@ last-updated: 2026-09-18
 | **서비스 설명** | 스펙(서버)의 메타 정보. description/domain/capabilities/notes. AI 서비스 매칭 컨텍스트로 활용 |
 | **정보 조회 (investigate)** | 정책/기능 질문에 답하기 위해 AI가 정보 소스를 반복 조회하는 agentic loop. 읽기 전용, 승인 불필요 |
 | **커넥터** | investigate가 조회하는 정보 소스 추상화. api_spec (1단계 구현) / jira (2단계, 인터페이스만) / figma (추후) |
-| **참고 자료 카드** | 조회한 소스의 원본 링크를 버튼 리스트로 보여주는 카드 UI (출처 인용) |
+| **참고 자료 카드** | 조회한 소스를 칩(버튼) 리스트로 보여주는 카드 UI (출처 인용). 1단계 `api_spec` 칩은 클릭 시 그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼침 |
 | **PROGRESS 메시지** | 레시피 실행 진행 블록을 담는 메시지 유형. 실행 시작 시 생성되고 스텝 진행마다 같은 메시지를 갱신(message_update). FE 메모리가 아닌 MESSAGE로 저장되어 새로고침 시 복원 |
 | **RESULT 메시지** | 레시피 실행 결과 블록을 담는 메시지 유형. 실행 완료 시 생성. resultValues(진실) + 표시용 요약(content) 보유 |
 | **INVESTIGATE_PROGRESS 메시지** | 정보 조회(investigate) 루프의 진행 블록을 담는 메시지 유형. 소스별 조회 단계마다 같은 메시지를 갱신(message_update). 실행(EXECUTION)이 아니므로 PROGRESS와 구분. 최종 답변은 별도 TEXT 메시지(references payload)로 발행 |

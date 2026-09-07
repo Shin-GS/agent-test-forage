@@ -240,9 +240,9 @@ investigate 답변(`TEXT`)의 `payloadJson`에 담기는 출처 인용 payload. 
 }
 ```
 
-- `references[]`: 조회한 소스의 원본 링크. `source`(1단계는 `api_spec`) / `label`(버튼 표시명, 예: method+path) / `url`(클릭 대상). **1단계(`api_spec`)의 `url`은 클릭 시 사이드 패널 스펙 상세를 여는 식별자다**(외부 URL/내부 라우트 이동 아님). Jira/Figma(2단계+)는 외부 URL 새 탭.
+- `references[]`: 조회한 소스의 원본 링크. `source`(1단계는 `api_spec`) / `label`(버튼 표시명, 예: method+path) / `url`(클릭 대상). **1단계(`api_spec`)의 `url`(`/specs/{apiSpecId}/endpoints/{endpointId}`)은 칩 클릭 시 그 자리(채팅 인라인)에서 엔드포인트 상세 아코디언을 펼치기 위한 식별자다**(외부 URL/내부 라우트 이동 아님). FE는 `url`에서 `apiSpecId`·`endpointId`를 파싱해 `GET /api/v1/specs/{apiSpecId}`로 상세를 조회한다. Jira/Figma(2단계+)는 외부 URL 새 탭.
 - 조회한 소스가 없으면 references payload 없이 순수 `TEXT`로 발행한다(참고 자료 섹션 미표시).
-- FE 렌더: 카드 UI [참고 자료형](../chat/card-ui.md#참고-자료형-상세)으로 답변 하단에 버튼 리스트 표시.
+- FE 렌더: 카드 UI [참고 자료형](../chat/card-ui.md#참고-자료형-상세)으로 답변 하단에 칩 리스트 표시. 1단계 `api_spec` 칩은 클릭 시 그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼친다.
 
 ### CARD
 

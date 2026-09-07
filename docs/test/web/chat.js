@@ -265,10 +265,10 @@ const CHAT_TESTS = {
         "답변 하단에 참고 자료 버튼 리스트 표시 확인",
         "Jira 출처: 🎫 티켓키+제목 버튼 확인",
         "API 스펙 출처: 📋 method+path 버튼 확인",
-        "버튼 클릭 시 원본이 새 탭 또는 스펙 상세로 열리는지 확인",
+        "api_spec 칩 클릭 시 채팅 인라인 아코디언으로 엔드포인트 상세가 펼쳐지는지 확인 (상세: CHAT-094)",
         "조회한 소스가 없으면 참고 자료 섹션이 미표시되는지 확인"
       ],
-      expected: "조회한 출처가 참고 자료 버튼으로 표시, 클릭 시 원본 이동"
+      expected: "조회한 출처가 참고 자료 칩으로 표시, api_spec 칩 클릭 시 인라인 아코디언 확장"
     },
     // === 플랜 1단계: 판단(intent) 분기 ===
     {
@@ -571,15 +571,15 @@ const CHAT_TESTS = {
     },
     {
       id: "CHAT-049",
-      title: "references 버튼 클릭 → 사이드 패널 스펙 상세 이동",
-      precondition: "실제 AI 모드(OpenAI 호환), references 버튼 표시됨",
+      title: "references 칩 클릭 → 채팅 인라인 아코디언 확장 (사이드 패널 이동 아님)",
+      precondition: "실제 AI 모드(OpenAI 호환), api_spec references 칩 표시됨",
       steps: [
-        "참고 자료 버튼(📋 method+path) 클릭",
-        "사이드 패널의 스펙 상세로 이동하는지 확인",
-        "외부 URL/새 탭/내부 라우트 페이지 이동이 아니라 사이드 패널 상세인지 확인",
+        "참고 자료 칩(📋 method+path) 클릭",
+        "그 자리(채팅 인라인)에서 아코디언이 펼쳐지는지 확인 — 사이드 패널 이동/새 탭/라우트 이동이 아님",
+        "펼친 상세에 method/path/summary/description+서비스명이 표시되는지 확인 (상세는 CHAT-094~102 참조)",
         "조회한 소스가 없으면 참고 자료 섹션이 미표시되는지 확인"
       ],
-      expected: "references 클릭 시 사이드 패널 스펙 상세가 열림 (새 탭/외부 이동 아님), 조회 소스 없으면 섹션 미표시"
+      expected: "references 클릭 시 채팅 인라인 아코디언이 그 자리에서 펼쳐짐 (사이드 패널/새 탭/외부 이동 아님), 조회 소스 없으면 섹션 미표시"
     },
     {
       id: "CHAT-050",
@@ -1118,6 +1118,160 @@ const CHAT_TESTS = {
         "재개 진행 전이가 aria-live로 announce되는지 확인 (예: '재개를 시작합니다')"
       ],
       expected: "마우스 없이 키보드만으로 [이어서 실행]/[플랜 중단] 버튼을 조작할 수 있고, aria-label과 aria-live로 스크린 리더 접근성이 보장됨"
+    },
+    // === 정보 조회 investigate: references 인라인 확장 (api_spec 칩) ===
+    {
+      id: "CHAT-094",
+      title: "references 칩 클릭 → 인라인 아코디언 펼침 (엔드포인트 상세)",
+      precondition: "investigate 답변에 api_spec references 칩(📋 method+path) 표시됨, 접힌 상태",
+      steps: [
+        "답변 하단의 references 칩(예: '📋 POST /api/v1/users') 클릭",
+        "칩 바로 그 자리(채팅 인라인)에서 아코디언이 펼쳐지는지 확인 (사이드 패널 이동 아님)",
+        "펼친 내용에 method / path / summary / description + 서비스명이 표시되는지 확인",
+        "칩 화살표 표기가 ▸(접힘)에서 ▾(펼침)으로 바뀌는지 확인"
+      ],
+      expected: "칩 클릭 시 그 자리에서 아코디언이 펼쳐지고, 엔드포인트의 method·path·summary·description과 서비스명이 표시됨"
+    },
+    {
+      id: "CHAT-095",
+      title: "펼친 칩 다시 클릭 → 접힘 + aria-expanded 토글",
+      precondition: "references 칩이 펼쳐진 상태",
+      steps: [
+        "펼쳐진 칩을 다시 클릭",
+        "아코디언 상세가 접히는지 확인",
+        "칩 button의 aria-expanded가 true → false로 토글되는지 확인 (개발자도구 접근성 트리)",
+        "다시 클릭 시 aria-expanded가 false → true로 재토글되는지 확인"
+      ],
+      expected: "같은 칩 재클릭 시 상세가 접히고, aria-expanded 속성이 펼침/접힘에 맞게 토글됨"
+    },
+    {
+      id: "CHAT-096",
+      title: "각 칩 독립 토글 — 여러 개 동시 펼침",
+      precondition: "investigate 답변에 api_spec references 칩이 2개 이상 표시됨",
+      steps: [
+        "첫 번째 칩 클릭 → 펼침 확인",
+        "첫 번째 칩을 접지 않은 채 두 번째 칩 클릭",
+        "두 칩의 상세가 동시에 펼쳐진 상태로 유지되는지 확인",
+        "한 칩을 접어도 다른 칩의 펼침 상태가 영향받지 않는지 확인"
+      ],
+      expected: "각 칩이 서로 독립적으로 토글되어 여러 상세가 동시에 펼쳐질 수 있고, 하나를 접어도 나머지는 유지됨"
+    },
+    {
+      id: "CHAT-097",
+      title: "펼침 시 GET /specs/{apiSpecId} 조회 + endpointId 파싱 매칭",
+      precondition: "references 칩(payload url = /specs/{apiSpecId}/endpoints/{endpointId}), 접힌 상태",
+      steps: [
+        "칩을 펼침",
+        "네트워크 탭에서 GET /api/v1/specs/{apiSpecId} 호출이 발생하는지 확인",
+        "url에서 파싱한 endpointId에 해당하는 엔드포인트가 상세로 표시되는지 확인 (다른 엔드포인트 아님)",
+        "getSpec 상세 조회가 일반 사용자 계정으로도 성공하는지 확인 (공용 조회)"
+      ],
+      expected: "펼칠 때 스펙 상세를 조회하고, url에서 파싱한 endpointId로 해당 엔드포인트를 정확히 찾아 표시함 (일반 사용자도 조회 가능)",
+      dbCheck: "API_SPEC 테이블에 apiSpecId 존재 확인, 해당 스펙 endpoints에 endpointId 존재 확인"
+    },
+    {
+      id: "CHAT-098",
+      title: "펼침 로딩 표시 → 성공 시 상세",
+      precondition: "references 칩 접힌 상태, 스펙 조회 정상 응답 (지연 포함 가능)",
+      steps: [
+        "칩을 펼침",
+        "조회 중 로딩 표시(예 '불러오는 중...')가 나타나는지 확인",
+        "조회 성공 후 로딩이 사라지고 엔드포인트 상세로 전환되는지 확인"
+      ],
+      expected: "펼침 시 로딩 표시가 먼저 나타나고, 조회 성공 시 상세 내용으로 대체됨"
+    },
+    {
+      id: "CHAT-099",
+      title: "에러 1 — 스펙 조회 실패 (삭제/네트워크)",
+      precondition: "references 칩, 해당 apiSpecId 스펙이 삭제되었거나 조회가 네트워크/500 실패",
+      steps: [
+        "칩을 펼침",
+        "GET /api/v1/specs/{apiSpecId}가 실패(404/500/네트워크)하는 상황 재현",
+        "'스펙 정보를 불러올 수 없습니다' 안내가 상세 영역에 표시되는지 확인"
+      ],
+      expected: "스펙 조회 자체가 실패하면 '스펙 정보를 불러올 수 없습니다' 에러 안내가 표시됨",
+      dbCheck: "API_SPEC 테이블에서 apiSpecId 행이 없거나 조회 불가 상태인지 확인"
+    },
+    {
+      id: "CHAT-100",
+      title: "에러 2 — 엔드포인트 없음 (스펙은 조회되나 endpointId 부재)",
+      precondition: "references 칩, 스펙은 정상 조회되나 endpointId가 endpoints에서 삭제/재등록으로 사라짐",
+      steps: [
+        "칩을 펼침",
+        "스펙 상세 조회는 성공하나 파싱한 endpointId가 endpoints 목록에 없는 상황 재현",
+        "'해당 엔드포인트를 찾을 수 없습니다' 안내가 표시되는지 확인",
+        "스펙 전체 실패 메시지('스펙 정보를 불러올 수 없습니다')와 구분되어 표시되는지 확인"
+      ],
+      expected: "스펙은 조회되지만 endpointId가 없으면 '해당 엔드포인트를 찾을 수 없습니다'로 스펙 전체 에러와 구분되어 안내됨",
+      dbCheck: "API_SPEC은 존재하나 해당 endpointId 엔드포인트가 endpoints에 없음을 확인"
+    },
+    {
+      id: "CHAT-101",
+      title: "에러 3 — url 형식 불일치/null → 인라인 확장 미제공 (정적 폴백)",
+      precondition: "references payload의 url이 null이거나 /specs/{apiSpecId}/endpoints/{endpointId} 패턴과 불일치 (예: 외부 URL)",
+      steps: [
+        "url이 null이거나 패턴 불일치인 references 칩 확인",
+        "칩이 클릭 가능한 button이 아니라 비인터랙션 정적 표시로 폴백되는지 확인",
+        "클릭해도 아코디언이 펼쳐지지 않고 조회 호출도 발생하지 않는지 확인",
+        "aria-expanded 같은 토글 속성이 부여되지 않는지 확인"
+      ],
+      expected: "url이 null이거나 패턴 불일치이면 인라인 확장을 제공하지 않고 정적 칩으로 폴백됨 (클릭/조회 없음)"
+    },
+    {
+      id: "CHAT-102",
+      title: "펼침 시점 DEPRECATED/INACTIVE → 상세 표시 + 상태 뱃지",
+      precondition: "references는 조회 시점 ACTIVE였으나 펼치는 시점 엔드포인트가 DEPRECATED/INACTIVE로 변경됨",
+      steps: [
+        "칩을 펼침",
+        "엔드포인트 상세가 숨겨지지 않고 그대로 표시되는지 확인",
+        "상태 뱃지(예 '지원 종료' / DEPRECATED/INACTIVE)가 함께 표시되는지 확인"
+      ],
+      expected: "펼침 시점에 DEPRECATED/INACTIVE로 바뀌었어도 상세는 표시하되 상태 뱃지를 붙여 최신 상태를 인지시킴 (숨기지 않음)",
+      dbCheck: "해당 엔드포인트의 STATUS가 DEPRECATED 또는 INACTIVE인지 확인"
+    },
+    {
+      id: "CHAT-103",
+      title: "전체 스펙 보기 링크 — 관리자만 표시 + /admin/specs/{id} 이동",
+      precondition: "관리자(ADMIN) 계정 로그인, references 칩 펼친 상태",
+      steps: [
+        "인라인 상세 안에 '전체 스펙 보기' 링크가 표시되는지 확인",
+        "링크 클릭 시 /admin/specs/{apiSpecId}로 이동하는지 확인 (apiSpecId 일치)"
+      ],
+      expected: "관리자에게는 '전체 스펙 보기' 링크가 표시되고, 클릭 시 /admin/specs/{apiSpecId}로 이동함"
+    },
+    {
+      id: "CHAT-104",
+      title: "전체 스펙 보기 링크 — 일반 사용자 미렌더",
+      precondition: "일반 사용자(비관리자) 계정 로그인, references 칩 펼친 상태",
+      steps: [
+        "인라인 상세 안에 '전체 스펙 보기' 링크가 렌더되지 않는지 확인 (비활성 버튼이 아니라 아예 없음)",
+        "DOM에 해당 링크 요소가 존재하지 않는지 개발자도구로 확인"
+      ],
+      expected: "일반 사용자에게는 '전체 스펙 보기' 링크가 비활성이 아니라 아예 미렌더됨 (혼란 방지)"
+    },
+    {
+      id: "CHAT-105",
+      title: "새로고침 시 references payload 복원 (펼침 상태는 초기화)",
+      precondition: "investigate 답변 메시지(references 포함), 일부 칩을 펼친 상태",
+      steps: [
+        "references 칩 하나를 펼침",
+        "브라우저 새로고침",
+        "답변 메시지와 references 칩이 다시 표시되는지 확인 (payload 복원)",
+        "새로고침 후 칩은 모두 접힌 초기 상태인지 확인 (펼침 상태는 복원 안 됨)"
+      ],
+      expected: "새로고침 시 references 칩은 payload로 복원되어 다시 보이지만, 펼침/접힘 상태는 초기화되어 모두 접힌 상태로 표시됨"
+    },
+    {
+      id: "CHAT-106",
+      title: "접근성 — 키보드 칩 토글 + aria-expanded + 로딩/에러 aria-live",
+      precondition: "references 칩 표시됨 (인라인 확장 제공, url 패턴 일치), 마우스 미사용",
+      steps: [
+        "Tab 키로 references 칩(button)에 포커스 이동 가능한지 확인",
+        "Enter/Space로 펼침/접힘이 토글되는지 확인",
+        "칩 button에 aria-expanded 속성이 상태에 맞게 부여되는지 확인",
+        "펼침 중 로딩 표시와 에러 안내('스펙 정보를 불러올 수 없습니다'/'해당 엔드포인트를 찾을 수 없습니다')가 aria-live로 스크린 리더에 announce되는지 확인"
+      ],
+      expected: "마우스 없이 키보드만으로 칩을 토글할 수 있고, aria-expanded로 상태가 노출되며 로딩/에러가 aria-live로 announce됨"
     }
   ]
 };

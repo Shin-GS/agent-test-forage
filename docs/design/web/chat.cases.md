@@ -170,9 +170,11 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 ### Case 17: 참고 자료 (조회 완료 답변 + references)
 
 - AI 답변 본문(Markdown): **출처 근거 인용 포함** (예: "POST /api/v1/users 요청 스키마의 `agreementYn` 필드가 required")
-- 하단 "참고한 자료:" + references 버튼 리스트
-  - **1단계는 `api_spec` 소스만** → 버튼 [📋 method + path], 클릭 시 **사이드 패널 스펙 상세로 이동** (외부 URL/내부 라우트 아님 → aria-label 명시)
-  - 🎫 Jira 버튼은 [2단계](../../specs/chat/scenarios/investigation.md#2단계-백로그) — 1단계 미노출
+- 하단 "참고한 자료:" + references 칩(button) 리스트
+  - **1단계는 `api_spec` 소스만** → 칩 [📋 method + path ▸], **클릭 시 그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼침** (`aria-expanded` 토글, 각 칩 독립 — 여러 개 동시 펼침 가능). 확장 인디케이터 ▸ 접힘 / ▾ 펼침
+  - 펼친 상세: 서비스명 + method/path + summary + description. 펼침 시점에 DEPRECATED/INACTIVE면 `badge--warning`("지원 종료") 표시(상세는 유지). 하단 "전체 스펙 보기 →" 링크는 **관리자만 렌더**(일반 사용자 미렌더)
+  - `url`(`/specs/{apiSpecId}/endpoints/{endpointId}`) 파싱 실패 시 비인터랙션 정적 칩으로 폴백. 로딩/실패/엔드포인트 없음 상태 안내는 [investigation.md](../../specs/chat/scenarios/investigation.md#인라인-확장-동작-1단계-api_spec-칩)
+  - 🎫 Jira 칩은 [2단계](../../specs/chat/scenarios/investigation.md#2단계-백로그) — 1단계 미노출
 - 조회한 소스가 없으면 참고 자료 섹션 미표시 (순수 TEXT)
 - references payload는 답변 TEXT 메시지에 저장 → 새로고침 복원 ([messaging.md references](../../specs/common/messaging.md#references-정보-조회-참고-자료))
 

@@ -128,8 +128,27 @@
     .references { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px dashed var(--color-border); }
     .references__label { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-2); }
     .references__list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+    /* references 항목 = 칩(button) + 인라인 아코디언 상세. 각 칩 독립 토글. */
+    .reference-item { display: flex; flex-direction: column; }
     .reference-btn { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-secondary); cursor: pointer; transition: all var(--transition-fast); }
     .reference-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    /* 펼침 상태(aria-expanded=true) 칩 강조 */
+    .reference-btn[aria-expanded="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-subtle); }
+    /* 확장 인디케이터(▸ 접힘 / ▾ 펼침). aria-hidden. */
+    .reference-btn__toggle { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-left: var(--space-1); }
+    .reference-btn[aria-expanded="true"] .reference-btn__toggle { color: var(--color-accent); }
+    /* 인라인 아코디언 상세 (엔드포인트 상세). 접힘 시 hidden 속성으로 비표시. */
+    .reference-detail { margin-top: var(--space-2); padding: var(--space-3); background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--space-1); }
+    /* display:flex가 기본 hidden(display:none)을 덮어쓰지 않게 명시 */
+    .reference-detail[hidden] { display: none; }
+    .reference-detail__service { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+    .reference-detail__endpoint { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); font-family: var(--font-mono); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); flex-wrap: wrap; }
+    .reference-detail__summary { font-size: var(--font-size-sm); color: var(--color-text-primary); }
+    .reference-detail__desc { font-size: var(--font-size-xs); color: var(--color-text-secondary); line-height: var(--line-height-relaxed); }
+    .reference-detail__spec-link { align-self: flex-start; margin-top: var(--space-1); font-size: var(--font-size-xs); color: var(--color-accent); text-decoration: none; }
+    .reference-detail__spec-link:hover { text-decoration: underline; }
+    /* 로딩/에러 상태 텍스트 (정적 HTML엔 주석으로만 명시, 클래스는 실제 구현용) */
+    .reference-detail__status { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
 
     /* 정보 조회 진행 (INVESTIGATE_PROGRESS 메시지 = investigation.md / messaging.md 정본) */
     .investigate-progress { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); margin: var(--space-2) 0; }
@@ -1401,12 +1420,60 @@
                     <p>회원가입 시 약관 동의는 <strong>필수</strong>입니다. <code>POST /api/v1/users</code> 요청 스키마의 <code>agreementYn</code> 필드가 required로 정의되어 있습니다. 필수 약관(이용약관, 개인정보 처리방침)과 선택 약관(마케팅 수신)으로 구분됩니다.</p>
                   </div>
                   <!-- 참고 자료 카드 (references payload). 1단계는 api_spec 소스만 노출.
-                       클릭 시 사이드 패널 스펙 상세로 이동(외부 URL/내부 라우트 아님) → aria-label에 명시.
-                       🎫 Jira 버튼은 2단계(investigation.md 2단계 백로그) — 1단계 미노출. -->
+                       각 칩은 클릭 가능한 button이며 aria-expanded로 인라인 아코디언(엔드포인트 상세)을 독립 토글한다.
+                       여러 개 동시 펼침 가능. url(/specs/{apiSpecId}/endpoints/{endpointId}) 파싱 실패 시엔 비인터랙션 정적 칩으로 폴백.
+                       상세 데이터는 GET /api/v1/specs/{apiSpecId}(공용 getSpec) 재사용 → BE 변경 없음.
+                       🎫 Jira 칩은 2단계(investigation.md 2단계 백로그) — 1단계 미노출. -->
+                  <!-- 로딩/에러 상태(정적 HTML로 표현 생략, 실제 구현 시 .reference-detail 내부에 렌더):
+                       · 조회 중       → "불러오는 중..."
+                       · 스펙 조회 실패 → "스펙 정보를 불러올 수 없습니다"
+                       · 엔드포인트 없음 → "해당 엔드포인트를 찾을 수 없습니다" -->
                   <div class="references">
                     <div class="references__label">참고한 자료</div>
                     <div class="references__list">
-                      <button class="reference-btn" aria-label="스펙 상세 열기: POST /api/v1/users (사이드 패널)"><span aria-hidden="true">📋</span> POST /api/v1/users</button>
+                      <!-- 칩 1: 펼친 상태 (aria-expanded=true, ▾) — 엔드포인트 상세 노출 -->
+                      <div class="reference-item">
+                        <button class="reference-btn" aria-expanded="true" aria-controls="ref-detail-users">
+                          <span aria-hidden="true">📋</span> POST /api/v1/users
+                          <span class="reference-btn__toggle" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="reference-detail" id="ref-detail-users" role="region" aria-label="POST /api/v1/users 엔드포인트 상세">
+                          <div class="reference-detail__service">서비스: 사용자 서비스</div>
+                          <div class="reference-detail__endpoint"><span>POST /api/v1/users</span></div>
+                          <div class="reference-detail__summary">회원가입 — 신규 사용자를 생성합니다.</div>
+                          <div class="reference-detail__desc">약관 동의(<code>agreementYn</code>)는 required 필드입니다. 필수 약관(이용약관, 개인정보 처리방침)과 선택 약관(마케팅 수신)으로 구분됩니다.</div>
+                          <!-- "전체 스펙 보기" 링크: 관리자만 렌더. 일반 사용자에겐 이 <a>를 아예 렌더하지 않음(비활성 버튼 아님). -->
+                          <a class="reference-detail__spec-link" href="/admin/specs/42">전체 스펙 보기 →</a>
+                        </div>
+                      </div>
+                      <!-- 칩 2: 펼친 상태 — 펼침 시점에 DEPRECATED로 바뀐 엔드포인트(지원 종료 뱃지 표시, 상세는 유지) -->
+                      <div class="reference-item">
+                        <button class="reference-btn" aria-expanded="true" aria-controls="ref-detail-terms">
+                          <span aria-hidden="true">📋</span> GET /api/v1/terms
+                          <span class="reference-btn__toggle" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="reference-detail" id="ref-detail-terms" role="region" aria-label="GET /api/v1/terms 엔드포인트 상세">
+                          <div class="reference-detail__service">서비스: 사용자 서비스</div>
+                          <div class="reference-detail__endpoint"><span>GET /api/v1/terms</span><span class="badge badge--warning">지원 종료</span></div>
+                          <div class="reference-detail__summary">약관 목록 조회 — 활성 약관 항목을 반환합니다.</div>
+                          <div class="reference-detail__desc">필수/선택 약관 구분값과 버전을 제공합니다.</div>
+                          <a class="reference-detail__spec-link" href="/admin/specs/42">전체 스펙 보기 →</a>
+                        </div>
+                      </div>
+                      <!-- 칩 3: 접힌 상태 (aria-expanded=false, ▸) — 상세는 hidden -->
+                      <div class="reference-item">
+                        <button class="reference-btn" aria-expanded="false" aria-controls="ref-detail-agreements">
+                          <span aria-hidden="true">📋</span> POST /api/v1/agreements
+                          <span class="reference-btn__toggle" aria-hidden="true">▸</span>
+                        </button>
+                        <div class="reference-detail" id="ref-detail-agreements" role="region" aria-label="POST /api/v1/agreements 엔드포인트 상세" hidden>
+                          <div class="reference-detail__service">서비스: 사용자 서비스</div>
+                          <div class="reference-detail__endpoint"><span>POST /api/v1/agreements</span></div>
+                          <div class="reference-detail__summary">약관 동의 기록 — 사용자의 약관 동의 이력을 저장합니다.</div>
+                          <div class="reference-detail__desc">동의 항목별 동의 여부와 시각을 기록합니다.</div>
+                          <a class="reference-detail__spec-link" href="/admin/specs/42">전체 스펙 보기 →</a>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

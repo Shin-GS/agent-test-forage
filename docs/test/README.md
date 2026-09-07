@@ -36,7 +36,7 @@ docs/test/
 │   ├── test-renderer.js   ← 렌더링 엔진 (ES module)
 │   └── test-manifest.js   ← 기능별 테스트 파일 매니페스트
 └── web/
-    ├── chat.js            ← 채팅 + 레시피 실행 + 플랜 + 정보 조회(investigate) (93개 케이스)
+    ├── chat.js            ← 채팅 + 레시피 실행 + 플랜 + 정보 조회(investigate) (106개 케이스)
     ├── panel.js           ← 사이드 패널 재설계 (19개 케이스)
     ├── recipe-editor.js   ← 레시피 편집/관리 (36개 케이스)
     ├── login.js           ← 로그인/인증 (8개 케이스)
@@ -50,7 +50,7 @@ docs/test/
 
 | 기능 | 우선순위 | 케이스 수 | ID 접두사 |
 |------|----------|-----------|-----------|
-| 채팅 + 레시피 + 플랜 + 정보 조회 | critical | 93 | CHAT-xxx |
+| 채팅 + 레시피 + 플랜 + 정보 조회 | critical | 106 | CHAT-xxx |
 | 사이드 패널 (재설계) | high | 19 | PANEL-xxx |
 | 레시피 편집/관리 | high | 36 | RECIPE-xxx |
 | 로그인/인증 | high | 8 | LOGIN-xxx |
@@ -58,7 +58,7 @@ docs/test/
 | 설정 | medium | 7 | SETTINGS-xxx |
 | 전체 히스토리 페이지 | medium | 16 | HISTORY-xxx |
 | 관리자 페이지 A(스펙 관리+RBAC)+B(사용자 관리) | medium | 44 | ADMIN-xxx |
-| **합계** | | **236** | |
+| **합계** | | **249** | |
 
 > 관리자 페이지 케이스 구분: **A(완료)** = ADMIN-001~019 (RBAC + 스펙 관리), **별도 작업** = ADMIN-020 (서비스 설명 편집, SKIP — 위치 확보용, 삭제 금지), **B(이번 작업)** = ADMIN-030~053 (사용자 관리: 진입/목록/검색/생성/역할·상태·비밀번호 변경 + 자기 보호 + 마지막 ACTIVE ADMIN 보호 + 삭제 액션 없음).
 

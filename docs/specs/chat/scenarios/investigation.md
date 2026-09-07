@@ -1,5 +1,5 @@
 ---
-status: draft
+status: confirmed
 last-updated: 2026-09-19
 ---
 
@@ -215,7 +215,7 @@ loop:
 
 ## 참고 자료 (references) 표시
 
-조회한 소스의 원본 링크를 답변 하단에 버튼 리스트로 표시(출처 인용 UX).
+조회한 소스를 답변 하단에 **칩(버튼) 리스트**로 표시(출처 인용 UX). 1단계 `api_spec` 칩은 **클릭 시 그 자리(채팅 인라인)에서 해당 엔드포인트 상세를 아코디언으로 펼친다**(인라인 확장).
 
 - 답변 메시지(`TEXT`)의 `payloadJson`에 **references payload를 포함**해 저장한다 → **새로고침 시 복원**된다. 스키마: [messaging.md references payload](../../common/messaging.md#references-정보-조회-참고-자료).
 - **답변 본문에 출처 근거를 인용**하도록 유도한다(할루시네이션 방지 강화). 예: "POST /users 스키마의 `agreementYn` 필드에 따르면 약관 동의는 필수입니다."
@@ -225,11 +225,42 @@ AI: 회원가입 시 약관 동의는 필수입니다.
     (POST /api/v1/users 요청 스키마의 agreementYn 필드가 required)
 
 참고한 자료:
-[📋 POST /api/v1/users]
+[📋 POST /api/v1/users ▸]        ← 클릭 → 그 자리에서 아코디언 펼침
+
+  [📋 POST /api/v1/users ▾]      ← 펼친 상태
+  ┌─────────────────────────────────────┐
+  │ 서비스: 사용자 서비스                  │
+  │ POST /api/v1/users                    │
+  │ 회원가입 — 신규 사용자를 생성합니다.    │
+  │ description: 약관 동의(agreementYn)... │
+  │                                       │
+  │ 전체 스펙 보기 →   (관리자만)          │
+  └─────────────────────────────────────┘
 ```
 
-- 1단계 참고 자료는 `api_spec` 소스만 → **클릭 시 사이드 패널의 스펙 상세로 이동**한다(외부 URL/내부 라우트 이동 아님). references `url`은 이 사이드 패널 상세를 여는 식별자로 쓴다.
+### 인라인 확장 동작 (1단계, api_spec 칩)
+
+- **칩은 클릭 가능한 button**이며 `aria-expanded`로 펼침/접힘 상태를 토글한다. **각 칩은 독립 토글**(여러 개 동시 펼침 가능).
+- 펼친 내용(C-2 방식): 해당 엔드포인트의 **method / path / summary + 서비스명**을 표시한다. (엔드포인트 상세 `description`은 현재 `SpecEndpointItem` DTO에 없어 표시하지 않는다 — 노출하려면 BE가 `operationJson`을 파싱해 DTO에 추가해야 하므로 [2단계 백로그](#2단계-백로그). summary만으로 "참고 엔드포인트 확인" 목적은 충족된다.)
+- 데이터 조회: `GET /api/v1/specs/{apiSpecId}`(SpecDetail)를 호출한 뒤, references payload의 `url`(`/specs/{apiSpecId}/endpoints/{endpointId}`)에서 파싱한 `endpointId`로 해당 엔드포인트를 찾아 표시한다. `getSpec` 상세 조회는 **공용(로그인만 하면 일반 사용자도 조회 가능)**이다.
+- **url 파싱 규칙**: `url`을 `/specs/{apiSpecId}/endpoints/{endpointId}` 패턴으로 파싱해 두 정수 ID를 얻는다. `url`이 null이거나 이 패턴과 맞지 않으면(형식 불일치) 인라인 확장을 제공하지 않는다(칩은 비인터랙션 정적 표시로 폴백). 외부 URL(2단계+ jira/figma)도 이 패턴이 아니므로 자연히 제외된다.
+- **로딩/에러 3단**:
+  - 조회 중: 로딩 표시(예 "불러오는 중...").
+  - 스펙 조회 실패(삭제/네트워크 등): **"스펙 정보를 불러올 수 없습니다"**.
+  - 스펙은 조회되나 **`endpointId`가 스펙 endpoints에 없음**(그 사이 엔드포인트가 삭제/재등록으로 사라짐): **"해당 엔드포인트를 찾을 수 없습니다"** 안내(스펙 전체 에러와 구분).
+- **펼침 시점 상태 변화**: references는 조회 시점 ACTIVE 엔드포인트만 담지만, 펼치는 시점엔 `DEPRECATED`/`INACTIVE`로 바뀌었을 수 있다. 이 경우에도 **상세는 그대로 표시하되 상태 뱃지**(예 "지원 종료")를 붙여 사용자가 최신 상태를 인지하게 한다(숨기지 않음 — AI가 그때 참고한 사실은 유효하므로).
+
+### 2차 진입점 — 전체 스펙 보기 (자리만)
+
+- 인라인 상세 안에 **"전체 스펙 보기"** 링크를 둔다.
+- **관리자**면 `/admin/specs/{apiSpecId}`로 이동하는 링크를 표시한다.
+- **일반 사용자**면 이 링크를 **아예 렌더하지 않는다**(비활성 버튼이 아니라 미렌더 — "왜 못 누르지?" 혼란 방지). 일반 사용자용 전체 스펙 뷰는 니즈 확인 후 후속([2단계 백로그](#2단계-백로그)).
+
+### 스코프 경계
+
+- **BE 변경 없음**: references payload에 `url`이 이미 담긴다(`ApiSpecConnector`). 상세 표시는 기존 `getSpec`을 재사용한다.
 - 조회한 소스가 없으면 참고 자료 섹션 미표시.
+- jira/figma references의 외부 URL 새 탭 열기는 [2단계+ 백로그](#2단계-백로그).
 - 카드 UI 상세: [카드 UI - 참고 자료 카드](../card-ui.md#참고-자료형-상세)
 
 ### EXECUTION 저장 안 함
@@ -272,7 +303,10 @@ investigate는 **실행이 아니므로 EXECUTION 계층에 저장하지 않는�
 
 1단계 범위 밖. 확정 아님(도입 시 별도 설계).
 
+- **일반 사용자용 전체 스펙 상세 화면**: 인라인 아코디언은 엔드포인트 단건만 보여준다. 스펙 전체를 보는 뷰(사이드 패널 뷰 또는 일반 라우트)는 니즈 확인 후. 현재 "전체 스펙 보기"는 관리자만 `/admin/specs/{apiSpecId}`로 이동한다.
+- **jira/figma references 외부 URL 새 탭 열기**: 1단계는 `api_spec` 인라인 확장만. 외부 소스 칩의 새 탭 열기는 2단계+.
 - **jira 커넥터 구현**: 외부 Jira REST 조회, 서버 시크릿 토큰, 서비스별 `projectKey` 범위 제한, 티켓 URL 참고 링크. (인터페이스는 1단계에 열어둠)
+- **엔드포인트 상세 description 노출**: 현재 인라인 확장은 method/path/summary/서비스명만 표시. 엔드포인트별 상세 설명(description)은 `operationJson`(OpenAPI 원본)에 있으나 `SpecEndpointItem` DTO에 없어 미노출. BE가 operationJson을 파싱해 DTO에 description을 추가하면 인라인 상세에 표시 가능(니즈 확인 후).
 - **figma 커넥터**: key 확보 + 사용성 검증 후.
 - **조회 결과 캐시 영속화/공유**: 1단계는 루프 내 메모리 캐시. 세션/사용자 간 공유·TTL 캐시는 2단계.
 - **사용자별 소스 인증**: 1단계 외부 소스 토큰은 서버 환경변수. 사용자별 인증은 추후.
