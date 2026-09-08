@@ -28,6 +28,10 @@ function conversationLockMessage(status: ConversationRuntimeStatus): string {
 
 interface Props {
   card: ExecutionModeCardMeta;
+  /** 촉발 파트 id (실행 요청 messageId 로 전달 → BE CONSUMED 처리) */
+  partId: number;
+  /** 파트가 이미 CONSUMED/CANCELLED 인지 (재실행 차단 + 배지 표시) */
+  consumed: boolean;
 }
 
 /** buttons 코드 → 표시 라벨 + 실행 모드 코드 (기획 messaging.md: auto→바로 실행, manual→값 확인 후 실행) */
@@ -49,7 +53,7 @@ function renderValue(value: unknown | null): string {
   return String(value);
 }
 
-export function ExecutionModeCard({ card }: Props) {
+export function ExecutionModeCard({ card, partId, consumed }: Props) {
   const conversationId = useChatStore((state) => state.currentConversationId);
   const conversationStatus = useChatStore((state) => state.conversationStatus);
   const setActionPicker = useChatStore((state) => state.setActionPicker);
@@ -57,7 +61,7 @@ export function ExecutionModeCard({ card }: Props) {
   const showToast = useToastStore((state) => state.show);
   const [running, setRunning] = useState(false);
   // 이 카드로 실행을 시작하면(이 세션에서) 재실행을 막는다(중복 방지). 로컬 상태만 사용한다.
-  // 새로고침 후에는 다시 활성화되며, 실행 중복은 대화방 락(아래 processing 체크 + BE 409)으로 방어한다.
+  // 새로고침 후에는 파트 status(CONSUMED)로 복원되어 재활성화되지 않는다(consumed prop).
   const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +70,8 @@ export function ExecutionModeCard({ card }: Props) {
   const authPending = authPause != null && authPause.conversationId === conversationId;
 
   const buttons = card.buttons?.length ? card.buttons : ["auto", "manual"];
-  const disabled = running || started || conversationId == null;
+  // consumed(파트 소진, 새로고침 복원)면 항상 비활성. 로컬 started 는 이 세션 중복 방지.
+  const disabled = running || started || consumed || conversationId == null;
 
   const handleRun = async (buttonCode: string) => {
     if (disabled) return;
@@ -85,6 +90,8 @@ export function ExecutionModeCard({ card }: Props) {
         mode: spec.mode,
         // AI 가 발화에서 추출한 값을 실행 시작 시 시드(BE 가 recipe 변수 기본값과 병합).
         initialContext: card.extractedValues,
+        // 촉발 파트를 CONSUMED 처리하도록 파트 id 전달(messaging.md — messageId 필드).
+        messageId: partId,
       });
 
       // 입력 미충족: BE 가 대화방을 WAITING_INPUT 으로 세우고 pendingInputs(수집할 변수)를 준다.
@@ -97,6 +104,7 @@ export function ExecutionModeCard({ card }: Props) {
           stepIndex: -1, // pre-run 일괄 수집
           variables: execution.pendingInputs ?? [],
           mode: spec.mode,
+          partId: execution.actionPickerPartId ?? undefined,
         });
         setStarted(true);
         return;
@@ -180,7 +188,7 @@ export function ExecutionModeCard({ card }: Props) {
             </button>
           );
         })}
-        {started && (
+        {(started || consumed) && (
           <span className={`badge ${authPending ? "badge--warning" : "badge--info"}`}>
             {authPending ? "인증 대기" : "실행됨"}
           </span>

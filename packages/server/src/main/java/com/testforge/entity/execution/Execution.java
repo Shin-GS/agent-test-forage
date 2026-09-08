@@ -33,8 +33,8 @@ import java.time.LocalDateTime;
                 // 커서 페이징(WHERE user_id=? AND id<? ORDER BY id DESC)을 인덱스로 커버하기 위해 복합
                 @Index(name = "IDX_EXECUTION_USER_ID", columnList = "USER_ID, ID"),
                 @Index(name = "IDX_EXECUTION_CONVERSATION_ID", columnList = "CONVERSATION_ID, ID"),
-                // 촉발 메시지별 실행 조회 (진행 블록 위치 매칭 — 새로고침 복원)
-                @Index(name = "IDX_EXECUTION_MESSAGE_ID", columnList = "MESSAGE_ID"),
+                // 촉발 파트별 실행 조회 (한 턴 다중 실행 구분 — 새로고침 복원/분석)
+                @Index(name = "IDX_EXECUTION_TRIGGER_PART_ID", columnList = "TRIGGER_PART_ID"),
                 // 기간 필터/표시용 (추후 기간 검색 대비). 히스토리 정렬 자체는 ID 기준
                 @Index(name = "IDX_EXECUTION_STARTED", columnList = "STARTED_AT")
         }
@@ -56,11 +56,12 @@ public class Execution extends BaseEntity {
     private Long conversationId;
 
     /**
-     * 실행을 촉발한 execution_mode 카드 메시지 ID. 대화 진입/새로고침 시 실행 진행 블록을 촉발 메시지
-     * 위치에 복원하는 데 사용한다(db/execution.md 새로고침 복원). NULL은 대화 없이 시작된 실행(추후) 대비.
+     * 실행을 촉발한 {@code MESSAGE_PART} ID(예: execution_mode 카드 파트 또는 진행 파트). 한 턴에 실행이
+     * 여러 개여도 각 실행이 자기 촉발 파트를 특정한다(db/execution.md 새로고침 복원/분석). NULL은 대화
+     * 없이 시작된 실행(추후) 대비.
      */
-    @Column(name = "MESSAGE_ID")
-    private Long messageId;
+    @Column(name = "TRIGGER_PART_ID")
+    private Long triggerPartId;
 
     /** 대상 서비스(스펙) 참조. 스펙 삭제 대비 NULL 허용 */
     @Column(name = "API_SPEC_ID")
@@ -133,12 +134,12 @@ public class Execution extends BaseEntity {
         this.conversationId = conversationId;
     }
 
-    public Long getMessageId() {
-        return messageId;
+    public Long getTriggerPartId() {
+        return triggerPartId;
     }
 
-    public void setMessageId(Long messageId) {
-        this.messageId = messageId;
+    public void setTriggerPartId(Long triggerPartId) {
+        this.triggerPartId = triggerPartId;
     }
 
     public Long getApiSpecId() {

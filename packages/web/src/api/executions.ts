@@ -9,6 +9,11 @@ export interface StartExecutionPayload {
   mode: string;
   /** 실행 시작 시 시드할 초기값 (AI 추출값 등). BE 가 recipe 변수 기본값과 병합해 context.userInput 에 넣는다 */
   initialContext?: Record<string, unknown>;
+  /**
+   * 촉발 파트 id (execution_mode 카드 파트). BE 가 이 파트를 CONSUMED 로 전이시킨다.
+   * messaging.md: 카드 실행은 기존 요청의 messageId 필드에 촉발 파트 id 를 넣는다(별도 partId 필드 아님).
+   */
+  messageId?: number;
 }
 
 export interface StartPlanPayload {
@@ -23,6 +28,11 @@ export interface StartPlanPayload {
   mode?: string;
   /** 첫 레시피에 시드할 초기값 (AI 추출값 등). 없으면 생략 */
   initialContext?: Record<string, unknown>;
+  /**
+   * 촉발 파트 id (plan 카드 파트). BE 가 이 파트를 CONSUMED 로 전이시킨다.
+   * messaging.md: 카드 실행은 기존 요청의 messageId 필드에 촉발 파트 id 를 넣는다.
+   */
+  messageId?: number;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -107,6 +117,11 @@ export interface ActionPickerRespondPayload {
   /** pre-run 일괄 수집이면 -1 (execution.md 규약) */
   stepIndex: number;
   values: Record<string, any>;
+  /**
+   * 대상 ACTION_PICKER 파트 id (messaging.md). BE 가 이 파트를 CONSUMED 로 전이시킨다.
+   * 새로고침 후 액션 피커 재활성화 방지의 핵심. 없으면 생략(레거시 안전).
+   */
+  partId?: number;
 }
 
 /**

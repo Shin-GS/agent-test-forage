@@ -9,10 +9,14 @@ import com.testforge.common.error.ApiException;
 import com.testforge.common.error.ErrorCode;
 import com.testforge.dto.conversation.AssistantMessageDraft;
 import com.testforge.entity.conversation.Message;
+import com.testforge.entity.conversation.MessagePart;
+import com.testforge.entity.conversation.enums.MessageRole;
+import com.testforge.entity.conversation.enums.PartType;
 import com.testforge.entity.recipe.Recipe;
 import com.testforge.entity.spec.ApiSpec;
 import com.testforge.entity.spec.enums.SpecStatus;
 import com.testforge.repository.conversation.ConversationRepository;
+import com.testforge.repository.conversation.MessagePartRepository;
 import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.repository.recipe.RecipeRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
@@ -55,6 +59,7 @@ public class ChatProcessor {
     private final ConversationService conversationService;
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
+    private final MessagePartRepository messagePartRepository;
     private final RecipeRepository recipeRepository;
     private final ApiSpecRepository apiSpecRepository;
     private final InvestigateLoop investigateLoop;
@@ -63,6 +68,7 @@ public class ChatProcessor {
                          ConversationService conversationService,
                          ConversationRepository conversationRepository,
                          MessageRepository messageRepository,
+                         MessagePartRepository messagePartRepository,
                          RecipeRepository recipeRepository,
                          ApiSpecRepository apiSpecRepository,
                          InvestigateLoop investigateLoop) {
@@ -70,6 +76,7 @@ public class ChatProcessor {
         this.conversationService = conversationService;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
+        this.messagePartRepository = messagePartRepository;
         this.recipeRepository = recipeRepository;
         this.apiSpecRepository = apiSpecRepository;
         this.investigateLoop = investigateLoop;
@@ -151,10 +158,11 @@ public class ChatProcessor {
 
         Long apiSpecId = conversation.getApiSpecId();
 
-        // 최근 이력: 현재(마지막) 사용자 메시지를 제외하고, 오래된→최신 순으로 최대 HISTORY_LIMIT건
-        List<Message> allMessages = messageRepository.findByConversationIdOrderBySeqAsc(conversationId);
-        String utterance = latestUserContent(allMessages);
-        List<IntentContext.HistoryTurn> history = toHistory(allMessages);
+        // 최근 이력: 턴(MESSAGE)을 id 오름차순으로 로드하고, 파트를 턴별로 묶는다.
+        List<Message> allTurns = messageRepository.findByConversationIdOrderByIdAsc(conversationId);
+        Map<Long, List<MessagePart>> partsByTurn = loadPartsByTurn(allTurns);
+        String utterance = latestUserContent(allTurns, partsByTurn);
+        List<IntentContext.HistoryTurn> history = toHistory(allTurns, partsByTurn);
 
         List<RecipeCandidate> recipes = List.of();
         List<ServiceOption> services = List.of();
@@ -166,27 +174,40 @@ public class ChatProcessor {
             services = loadServices();
         }
 
-        String referenceId = latestUserReferenceId(allMessages);
+        String referenceId = latestUserReferenceId(allTurns);
         return new IntentContext(userId, conversationId, utterance, apiSpecId,
                 recipes, services, referenceId, history);
     }
 
-    /** 마지막 USER 메시지 content (없으면 빈 문자열) */
-    private String latestUserContent(List<Message> messages) {
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message m = messages.get(i);
-            if (m.getRole() != null && "USER".equals(m.getRole().name())) {
-                return m.getContent() == null ? "" : m.getContent();
+    /** 턴들의 파트를 한 번에 로드해 turnId → 파트 목록(id 오름차순) 맵으로 묶는다(N+1 방지). */
+    private Map<Long, List<MessagePart>> loadPartsByTurn(List<Message> turns) {
+        if (turns.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> turnIds = turns.stream().map(Message::getId).toList();
+        Map<Long, List<MessagePart>> byTurn = new LinkedHashMap<>();
+        for (MessagePart part : messagePartRepository.findByMessageIdInOrderByIdAsc(turnIds)) {
+            byTurn.computeIfAbsent(part.getMessageId(), k -> new ArrayList<>()).add(part);
+        }
+        return byTurn;
+    }
+
+    /** 마지막 USER 턴의 발화 텍스트 (TEXT 파트 content를 이어 붙임). 없으면 빈 문자열 */
+    private String latestUserContent(List<Message> turns, Map<Long, List<MessagePart>> partsByTurn) {
+        for (int i = turns.size() - 1; i >= 0; i--) {
+            Message m = turns.get(i);
+            if (m.getRole() == MessageRole.USER) {
+                return textOf(partsByTurn.getOrDefault(m.getId(), List.of()));
             }
         }
         return "";
     }
 
-    /** 마지막 USER 메시지의 referenceId (없으면 null) */
-    private String latestUserReferenceId(List<Message> messages) {
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message m = messages.get(i);
-            if (m.getRole() != null && "USER".equals(m.getRole().name())) {
+    /** 마지막 USER 턴의 referenceId (없으면 null) */
+    private String latestUserReferenceId(List<Message> turns) {
+        for (int i = turns.size() - 1; i >= 0; i--) {
+            Message m = turns.get(i);
+            if (m.getRole() == MessageRole.USER) {
                 return m.getReferenceId();
             }
         }
@@ -194,34 +215,116 @@ public class ChatProcessor {
     }
 
     /**
-     * 이력 변환: 마지막 USER 메시지(현재 발화) 1건을 제외하고 최대 HISTORY_LIMIT건을 최신 쪽에서 취해
-     * 오래된→최신 순으로 돌려준다. content가 없는 메시지(카드 등)는 타입 표기로 대체한다.
+     * 이력 변환 (messaging.md AI 컨텍스트 변환 규칙 — 파트 화이트리스트 + 요약). 마지막 USER 턴(현재 발화)
+     * 1건을 제외하고 최대 HISTORY_LIMIT건을 최신 쪽에서 취해 오래된→최신 순으로 돌려준다. 각 턴은 파트를
+     * 순회하며 다음만 LLM에 전달한다:
+     * <ul>
+     *   <li>TEXT → 본문 그대로</li>
+     *   <li>RESULT → 결과 요약만(resultValues + summary). 원시 응답은 제외</li>
+     *   <li>PROGRESS / INVESTIGATE(진행) / CARD / ACTION_PICKER / REFERENCES → 제외(렌더 메타/진행 로그)</li>
+     * </ul>
+     * 전달할 내용이 없는 턴은 이력에서 생략한다(토큰 절약).
      */
-    private List<IntentContext.HistoryTurn> toHistory(List<Message> messages) {
-        // 현재 발화(마지막 USER 메시지)의 인덱스를 찾아 그 이전까지만 이력으로 사용
+    private List<IntentContext.HistoryTurn> toHistory(List<Message> turns,
+                                                      Map<Long, List<MessagePart>> partsByTurn) {
+        // 현재 발화(마지막 USER 턴)의 인덱스를 찾아 그 이전까지만 이력으로 사용
         int currentUserIdx = -1;
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message m = messages.get(i);
-            if (m.getRole() != null && "USER".equals(m.getRole().name())) {
+        for (int i = turns.size() - 1; i >= 0; i--) {
+            if (turns.get(i).getRole() == MessageRole.USER) {
                 currentUserIdx = i;
                 break;
             }
         }
-        List<Message> prior = currentUserIdx >= 0 ? messages.subList(0, currentUserIdx) : messages;
+        List<Message> prior = currentUserIdx >= 0 ? turns.subList(0, currentUserIdx) : turns;
 
-        // 최신 HISTORY_LIMIT건만
         int from = Math.max(0, prior.size() - HISTORY_LIMIT);
-        List<IntentContext.HistoryTurn> turns = new ArrayList<>();
+        List<IntentContext.HistoryTurn> history = new ArrayList<>();
         for (Message m : prior.subList(from, prior.size())) {
-            String role = m.getRole() == null ? "assistant" : m.getRole().name().toLowerCase();
-            String content = m.getContent();
+            String content = summarizeTurnForLlm(partsByTurn.getOrDefault(m.getId(), List.of()));
             if (content == null || content.isBlank()) {
-                // 카드/진행 메시지 등 본문 없는 항목은 타입만 표기(토큰 절약)
-                content = "[" + (m.getType() == null ? "message" : m.getType().name().toLowerCase()) + "]";
+                continue; // 전달할 내용 없는 턴(카드/진행만 등)은 생략
             }
-            turns.add(new IntentContext.HistoryTurn(role, content));
+            String role = m.getRole() == MessageRole.USER ? "user" : "assistant";
+            history.add(new IntentContext.HistoryTurn(role, content));
         }
-        return turns;
+        return history;
+    }
+
+    /** 파트 목록에서 TEXT 파트 본문만 개행으로 이어 붙인다(발화 텍스트 추출). */
+    private String textOf(List<MessagePart> parts) {
+        StringBuilder sb = new StringBuilder();
+        for (MessagePart part : parts) {
+            if (part.getType() == PartType.TEXT && part.getContent() != null && !part.getContent().isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append("\n");
+                }
+                sb.append(part.getContent());
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 한 턴의 파트들을 LLM 컨텍스트 텍스트로 요약한다(화이트리스트). TEXT는 그대로, RESULT는 요약
+     * (resultValues + summary)만, 나머지(PROGRESS/INVESTIGATE/CARD/ACTION_PICKER/REFERENCES)는 제외한다.
+     */
+    private String summarizeTurnForLlm(List<MessagePart> parts) {
+        StringBuilder sb = new StringBuilder();
+        for (MessagePart part : parts) {
+            String piece = switch (part.getType()) {
+                case TEXT -> part.getContent();
+                case RESULT -> summarizeResultPayload(part.getPayloadJson());
+                default -> null; // 진행/카드/피커/참고자료/투자진행은 컨텍스트에서 제외
+            };
+            if (piece != null && !piece.isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append("\n");
+                }
+                sb.append(piece);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * RESULT 파트 payload를 "레시피 결과 요약"으로 축약한다(resultValues + summary만). 원시 응답/진행 메타는
+     * 제외한다(messaging.md AI 컨텍스트 변환 규칙). 파싱 실패 시 null(해당 파트 생략).
+     */
+    @SuppressWarnings("unchecked")
+    private String summarizeResultPayload(String payloadJson) {
+        Object parsed = RecipeJsonUtil.toObject(payloadJson);
+        if (!(parsed instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object recipes = ((Map<String, Object>) map).get("recipes");
+        if (!(recipes instanceof List<?> list)) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> recipe)) {
+                continue;
+            }
+            Map<String, Object> r = (Map<String, Object>) recipe;
+            Object name = r.get("recipeName");
+            Object summary = r.get("summary");
+            Object values = r.get("resultValues");
+            StringBuilder line = new StringBuilder("[실행 결과]");
+            if (name != null) {
+                line.append(" ").append(name);
+            }
+            if (summary != null && !summary.toString().isBlank()) {
+                line.append(" — ").append(summary);
+            }
+            if (values instanceof Map<?, ?> vm && !vm.isEmpty()) {
+                line.append(" (").append(RecipeJsonUtil.toJsonString(vm)).append(")");
+            }
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            sb.append(line);
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 
     /**

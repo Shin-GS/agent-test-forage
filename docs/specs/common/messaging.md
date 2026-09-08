@@ -151,6 +151,8 @@ last-updated: 2026-09-08
 - 한 턴 다중 실행: `[TEXT, PROGRESS(exec A), RESULT(A), PROGRESS(exec B), RESULT(B)]`
 - 카드 제안: `[TEXT, CARD(plan)]` → 사용자가 [자동 실행] 누르면 그 파트 CONSUMED + **후속 AI 턴**에서 PROGRESS/RESULT
 
+> **현재 구현 참고 (한 턴 다중 실행):** 위 "한 턴 다중 실행" 예시는 파트 모델의 목표 형태다. 현재는 대화방 단위 락으로 한 대화방에 동시 실행이 1개로 제한되고(실행 시작 시 `beginProgressMessage`가 항상 새 ASSISTANT 턴을 생성), 실질적으로 **실행 1개 = 턴 1개(`[PROGRESS, RESULT]`)**로 동작한다. RESULT는 그 실행의 PROGRESS 파트와 **같은 턴**에 append된다(EXECUTION.TRIGGER_PART_ID로 연결). 한 발화가 여러 실행을 한 턴에 묶는 형태는 동시 실행/순차 다중 실행을 도입할 때 `beginProgressMessage`가 열린 턴에 append하도록 확장하며 활성화한다.
+
 - **SYSTEM 안내**(취소/중지 등)는 `role=system` 턴 + `TEXT` 파트 1개로 표현한다(별도 SYSTEM 파트 타입 없음).
 - **빈 ASSISTANT 턴**: AI 응답을 시작할 때 `status=streaming`인 빈 턴을 먼저 만들고 파트를 append한다(기존 "PENDING 자리 미리 INSERT" 패턴의 대체). 완료 시 턴 `status=complete`.
 

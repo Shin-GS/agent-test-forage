@@ -4,7 +4,9 @@ import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.conversation.enums.ConversationStatus;
 import com.testforge.entity.user.enums.UserRole;
 import com.testforge.lock.ConversationLock;
+import com.testforge.entity.conversation.MessagePart;
 import com.testforge.repository.conversation.ConversationRepository;
+import com.testforge.repository.conversation.MessagePartRepository;
 import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.service.conversation.ConversationService;
 import com.testforge.sse.SseEvent;
@@ -62,6 +64,9 @@ class ConversationLockAndStatusIntegrationTest {
     private MessageRepository messageRepository;
 
     @Autowired
+    private MessagePartRepository messagePartRepository;
+
+    @Autowired
     private ConversationService conversationService;
 
     @Autowired
@@ -106,13 +111,14 @@ class ConversationLockAndStatusIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_BUSY"));
 
-        // 점유 해제 후에는 정상 접수 (접수 메시지는 USER seq=1)
+        // 점유 해제 후에는 정상 접수 (접수 메시지는 USER 턴 + TEXT 파트)
         conversationLock.unlock(id);
         mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"이제 됨\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message.seq").value(1));
+                .andExpect(jsonPath("$.message.role.code").value("USER"))
+                .andExpect(jsonPath("$.message.parts[0].content").value("이제 됨"));
 
         // 접수 시 잡은 락은 AI 처리 종결(completeAssistantTurn) 시점에 해제된다.
         // 테스트는 AI 처리를 동기로 태우므로(SyncChatExecutorTestConfig), 이 시점엔 이미 해제됨.
@@ -120,7 +126,7 @@ class ConversationLockAndStatusIntegrationTest {
         // 처리 종결로 대화방은 IDLE, assistant 응답 메시지가 이어 붙어 총 2건
         assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
                 .isEqualTo(ConversationStatus.IDLE);
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(2);
+        assertThat(messageRepository.findByConversationIdOrderByIdAsc(id)).hasSize(2);
     }
 
     // ── 취소: 진행 중 → IDLE 전이 + session_status(idle) 발행 + 재호출 멱등(no-op) ──
@@ -150,10 +156,13 @@ class ConversationLockAndStatusIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.code").value("IDLE"));
 
-        // 시스템 안내 메시지가 저장됨
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(1);
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id).get(0).getContent())
-                .contains("중지");
+        // 시스템 안내 턴(SYSTEM + TEXT 파트 1개)이 저장됨
+        List<com.testforge.entity.conversation.Message> turns =
+                messageRepository.findByConversationIdOrderByIdAsc(id);
+        assertThat(turns).hasSize(1);
+        List<MessagePart> parts = messagePartRepository.findByMessageIdOrderByIdAsc(turns.get(0).getId());
+        assertThat(parts).hasSize(1);
+        assertThat(parts.get(0).getContent()).contains("중지");
     }
 
     // ── 취소/중지: 없는 대화방 → 404 ──
@@ -221,7 +230,7 @@ class ConversationLockAndStatusIntegrationTest {
         // 처리 종결로 대화방은 IDLE, user+assistant 2건
         assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
                 .isEqualTo(ConversationStatus.IDLE);
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(2);
+        assertThat(messageRepository.findByConversationIdOrderByIdAsc(id)).hasSize(2);
     }
 
     // ── completeAssistantTurn: AI_RESPONDING이면 저장 + idle 전이 ──
@@ -236,7 +245,7 @@ class ConversationLockAndStatusIntegrationTest {
         assertThat(view).isNotNull();
         assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
                 .isEqualTo(ConversationStatus.IDLE);
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(1);
+        assertThat(messageRepository.findByConversationIdOrderByIdAsc(id)).hasSize(1);
         // 유효 처리였으므로 락도 해제됨
         assertThat(conversationLock.isLocked(id)).isFalse();
     }
@@ -251,7 +260,7 @@ class ConversationLockAndStatusIntegrationTest {
 
         // 버려짐: null 반환 + 메시지 미저장 + 상태 그대로 IDLE
         assertThat(view).isNull();
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).isEmpty();
+        assertThat(messageRepository.findByConversationIdOrderByIdAsc(id)).isEmpty();
         assertThat(conversationRepository.findById(id).orElseThrow().getStatus())
                 .isEqualTo(ConversationStatus.IDLE);
     }

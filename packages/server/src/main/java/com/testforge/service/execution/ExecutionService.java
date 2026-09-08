@@ -129,7 +129,7 @@ public class ExecutionService {
     /**
      * 단일 레시피 실행 시작. 대화방 락을 잡고 executing으로 전이한 뒤, 레시피 스냅샷을 저장하고
      * EXECUTION / EXECUTION_RECIPE / EXECUTION_STEP(PENDING) 3계층 레코드를 생성한다.
-     * 진행 블록(PROGRESS) 메시지를 만들어({@code message_new}) 그 ID를 MESSAGE_ID에 저장하고,
+     * 진행 블록(PROGRESS) 파트를 만들어({@code message_new}) 그 파트 ID를 TRIGGER_PART_ID에 저장하고,
      * {@code session_status: executing}을 커밋 후 발행한다.
      *
      * <p>이미 처리 중인 대화방이면(락 경합) 409 CONVERSATION_BUSY. 레시피/대화방이 없으면 404.
@@ -145,8 +145,9 @@ public class ExecutionService {
         }
         // 단일 실행 = 레시피 1개짜리 플랜. 공통 오케스트레이션(startInternal)으로 수렴한다.
         // 단일 실행은 사전 편집값이 없다(recipeInputs=null) — 발화값(initialContext)만 첫 레시피에 시드된다.
+        // messageId()는 실행을 촉발한 execution_mode 카드 파트 ID(있으면 CONSUMED 처리).
         return startInternal(conversationId, requesterId, List.of(request.recipeId()),
-                request.mode(), request.initialContext(), null);
+                request.mode(), request.initialContext(), null, request.messageId());
     }
 
     /**
@@ -164,8 +165,9 @@ public class ExecutionService {
         if (request.recipeIds() == null || request.recipeIds().isEmpty()) {
             throw ApiException.invalidRequest("recipeIds is required (at least one)");
         }
+        // messageId()는 실행을 촉발한 plan 카드 파트 ID(있으면 CONSUMED 처리).
         return startInternal(conversationId, requesterId, request.recipeIds(),
-                request.mode(), request.initialContext(), request.recipeInputs());
+                request.mode(), request.initialContext(), request.recipeInputs(), request.messageId());
     }
 
     /**
@@ -179,7 +181,7 @@ public class ExecutionService {
      */
     private ExecutionResponse startInternal(Long conversationId, Long requesterId, List<Long> recipeIds,
                                             ExecutionMode requestedMode, Map<String, Object> initialContext,
-                                            List<Map<String, Object>> recipeInputs) {
+                                            List<Map<String, Object>> recipeInputs, Long triggerPartId) {
         // 소유자 검증을 락 획득보다 먼저 수행한다. 타인이 남의 conversationId로 호출해도
         // 락을 건드리지 않고 404로 거절되어, 정당한 소유자가 락 경합(409)을 겪지 않는다.
         Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
@@ -222,6 +224,10 @@ public class ExecutionService {
             execution.setApiSpecId(firstRecipe.getApiSpecId());
             execution.setTitle(planTitle(type, recipes));
             Execution savedExecution = executionRepository.save(execution);
+
+            // 실행을 촉발한 인터랙티브 카드 파트(execution_mode/plan/candidates)를 CONSUMED로 전이한다
+            // (messaging.md 인터랙티브 파트 CONSUMED — 새로고침 후 재활성화 방지). partId 없으면 no-op.
+            conversationService.consumeInteractivePart(conversationId, triggerPartId);
 
             // 2) EXECUTION_RECIPE N개 생성 + 스냅샷 저장 (원본 독립). 순서 = sequence. 전부 PENDING으로 둔다.
             //    값 사전 편집(plan.md): 그 sequence의 recipeInputs를 스냅샷 안에 함께 보관해, 각 레시피가
@@ -271,7 +277,7 @@ public class ExecutionService {
             conversation.setStatus(ConversationStatus.EXECUTING);
             conversationRepository.save(conversation);
 
-            // 진행 블록(PROGRESS) 메시지 생성 + message_new. 그 ID를 EXECUTION.MESSAGE_ID로 저장.
+            // 진행 블록(PROGRESS) 파트 생성 + message_new. 그 파트 ID를 EXECUTION.TRIGGER_PART_ID로 저장.
             beginProgressMessage(savedExecution, conversationId);
 
             publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
@@ -937,6 +943,9 @@ public class ExecutionService {
                     "required inputs are still missing: " + stillMissing.size() + " field(s)");
         }
 
+        // 응답한 ACTION_PICKER 파트를 CONSUMED로 전이한다(messaging.md 버튼/피커 응답 partId). partId 없으면 no-op.
+        conversationService.consumeInteractivePart(conversationId, request.partId());
+
         // 재개: WAITING_INPUT → EXECUTING 전이 + SSE (락 유지 → 실행 종료 시 해제)
         conversation.setStatus(ConversationStatus.EXECUTING);
         conversationRepository.save(conversation);
@@ -944,7 +953,7 @@ public class ExecutionService {
         Long ownerId = conversation.getUserId();
         Long executionId = execution.getId();
 
-        // 실행 진행 블록(PROGRESS) 메시지 생성 + message_new (재개 시점이 실제 실행 시작). MESSAGE_ID 채움.
+        // 실행 진행 블록(PROGRESS) 파트 생성 + message_new (재개 시점이 실제 실행 시작). TRIGGER_PART_ID 채움.
         beginProgressMessage(execution, conversationId);
 
         publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
@@ -1123,12 +1132,20 @@ public class ExecutionService {
                 }
 
                 String recipeName = firstNonNull(er.getRecipeName(), execution.getTitle());
-                String template = snapshot == null ? null : asString(snapshot.get("resultTemplate"));
+                String statusCode = recipeStatusCode(er.getStatus());
                 String recipeContent;
-                if (template != null && !template.isBlank()) {
-                    recipeContent = renderTemplate(template, resultValues, userInput);
+                if (!"success".equals(statusCode)) {
+                    // 성공이 아닌 레시피(failed/skipped/stopped/cancelled)는 결과 템플릿 치환/성공 요약을 하지
+                    // 않는다. 실패인데 성공 문구가 나오거나 {{orderId}} 등이 미치환으로 남는 것을 막고,
+                    // 상태 기반 문구로 summary를 만든다(recipeStatusSummary).
+                    recipeContent = recipeStatusSummary(recipeName, statusCode);
                 } else {
-                    recipeContent = buildFallbackSummary(recipeName, resultValues, resultLabels);
+                    String template = snapshot == null ? null : asString(snapshot.get("resultTemplate"));
+                    if (template != null && !template.isBlank()) {
+                        recipeContent = renderTemplate(template, resultValues, userInput);
+                    } else {
+                        recipeContent = buildFallbackSummary(recipeName, resultValues, resultLabels);
+                    }
                 }
 
                 resultRecipes.add(new ResultRecipe(
@@ -1150,7 +1167,10 @@ public class ExecutionService {
 
             String payloadJson = buildResultPayload(execution.getId(), execution.getTitle(),
                     progressStatusOf(execution.getStatus()), resultRecipes);
-            conversationService.createResultMessage(conversationId, payloadJson, content);
+            // RESULT 파트를 진행(PROGRESS) 파트와 같은 턴에 append한다(messaging.md 한 턴 = PROGRESS+RESULT).
+            // 연결 고리는 EXECUTION.TRIGGER_PART_ID(= PROGRESS 파트 ID). 없으면 새 턴 폴백(ConversationService).
+            conversationService.appendResultToTurn(conversationId, execution.getId(),
+                    execution.getTriggerPartId(), payloadJson, content);
         } catch (Exception e) {
             // 결과 발행 실패가 실행 종료(상태 확정/idle/락 해제)를 막지 않도록 방어적으로 삼킨다.
             log.warn("Failed to publish result message: executionId={}, conversationId={}",
@@ -1184,6 +1204,14 @@ public class ExecutionService {
         };
         int seq = (er.getSequence() == null ? 0 : er.getSequence()) + 1;
         String name = firstNonNull(er.getRecipeName(), "레시피");
+        String statusCode = recipeStatusCode(er.getStatus());
+        String line = icon + " " + seq + ". " + name;
+
+        // 성공이 아닌 레시피는 결과값 나열 대신 상태 기반 문구를 붙인다(실패인데 결과값/성공 뉘앙스 방지).
+        if (!"success".equals(statusCode)) {
+            return line + " — " + recipeStatusTail(statusCode);
+        }
+
         StringBuilder tail = new StringBuilder();
         for (Map.Entry<String, Object> e : resultValues.entrySet()) {
             if (!isScalar(e.getValue())) {
@@ -1199,7 +1227,6 @@ public class ExecutionService {
                 tail.append(e.getValue());
             }
         }
-        String line = icon + " " + seq + ". " + name;
         return tail.length() == 0 ? line : line + " — " + tail;
     }
 
@@ -1222,9 +1249,11 @@ public class ExecutionService {
         String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), "running", recipes);
         String content = progressContent(execution.getTitle(), "running", recipes);
 
-        Long messageId = conversationService.createProgressMessage(conversationId, payloadJson, content);
-        if (messageId != null) {
-            execution.setMessageId(messageId);
+        Long partId = conversationService.createProgressMessage(
+                conversationId, execution.getId(), payloadJson, content);
+        if (partId != null) {
+            // 진행 파트 id를 실행의 촉발 파트로 저장(이후 갱신 대상 + 새로고침 복원 링크).
+            execution.setTriggerPartId(partId);
             executionRepository.save(execution);
         }
     }
@@ -1232,18 +1261,18 @@ public class ExecutionService {
     /**
      * 진행 블록(PROGRESS) 메시지를 현재 스텝 상태로 다시 그려 {@code message_update}로 갱신한다.
      * 스텝 상태는 EXECUTION_STEP 레코드에서 읽어(pending은 그대로) 반영하고, 실행 전체 status는 인자로 받는다
-     * (진행 중이면 "running", 종료 시 최종 상태). MESSAGE_ID가 없으면(진행 블록 미생성) no-op.
+     * (진행 중이면 "running", 종료 시 최종 상태). TRIGGER_PART_ID가 없으면(진행 블록 미생성) no-op.
      */
     private void refreshProgressMessage(Execution execution, String overallStatus) {
         Long conversationId = execution.getConversationId();
-        Long messageId = execution.getMessageId();
-        if (conversationId == null || messageId == null) {
+        Long partId = execution.getTriggerPartId();
+        if (conversationId == null || partId == null) {
             return;
         }
         List<ProgressRecipe> recipes = progressRecipes(execution.getId());
         String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), overallStatus, recipes);
         String content = progressContent(execution.getTitle(), overallStatus, recipes);
-        conversationService.updateProgressMessage(conversationId, messageId, payloadJson, content);
+        conversationService.updateProgressMessage(conversationId, partId, payloadJson, content);
     }
 
     /** 실행 최종 상태 → PROGRESS payload의 status 코드(소문자). RUNNING은 "running". */
@@ -1654,6 +1683,31 @@ public class ExecutionService {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * 성공이 아닌 레시피의 상태 기반 결과 요약 문구. 실패/스킵/중지/취소 레시피에는 resultTemplate 치환이나
+     * 성공 요약(buildFallbackSummary)을 쓰지 않고(값 미치환·오해 방지), 상태를 그대로 알리는 문구를 만든다.
+     * RESULT 파트의 recipes[].summary(및 플랜 한 줄 요약)에 일관되게 쓰인다.
+     */
+    private String recipeStatusSummary(String recipeName, String statusCode) {
+        String name = (recipeName == null || recipeName.isBlank()) ? "이 레시피" : recipeName;
+        return switch (statusCode) {
+            case "failed" -> name + " 실행에 실패했습니다.";
+            case "skipped" -> name + "는 조건에 맞지 않아 건너뛰었습니다.";
+            case "stopped", "cancelled" -> name + " 실행이 중단되었습니다.";
+            default -> name + " 실행이 완료되지 않았습니다.";
+        };
+    }
+
+    /** 플랜 결과 한 줄(recipeSummaryLine)의 꼬리에 붙일 짧은 상태 문구(레시피명 없이). */
+    private String recipeStatusTail(String statusCode) {
+        return switch (statusCode) {
+            case "failed" -> "실패";
+            case "skipped" -> "건너뜀";
+            case "stopped", "cancelled" -> "중단됨";
+            default -> "미완료";
+        };
     }
 
     /** EXECUTION_RECIPE의 레시피 전체 스냅샷을 Map으로. 스냅샷이 없거나 Map이 아니면 null. */

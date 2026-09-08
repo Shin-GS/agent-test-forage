@@ -3,16 +3,17 @@ package com.testforge.entity.conversation.enums;
 import com.testforge.common.EnumColumn;
 
 /**
- * 메시지 상태 (MESSAGE.STATUS). AI 응답 자리를 PENDING으로 미리 두고 완료/실패로 전이한다.
- * 사용자 메시지는 저장 시점에 COMPLETED로 기록한다.
+ * 턴 전체 상태 (MESSAGE.STATUS). AI 응답을 시작할 때 빈 ASSISTANT 턴을 {@code STREAMING}으로 INSERT하고
+ * 파트를 append하며 진행하다가, 완료 시 {@code COMPLETE}, 오류 시 {@code FAILED}로 확정한다.
+ * 사용자 턴은 저장 시 {@code COMPLETE}로 기록한다(messaging.md 종결 보장/낙관적 UI).
  * DB에는 {@code @Enumerated(STRING)}으로 name()이 그대로 저장된다.
  */
 public enum MessageStatus implements EnumColumn {
 
-    /** 생성 대기 (AI 응답 자리 예약) */
-    PENDING("대기"),
-    /** 완료 (내용 채워짐) */
-    COMPLETED("완료"),
+    /** 스트리밍 중 (AI 응답 진행 — 파트 append 중) */
+    STREAMING("스트리밍"),
+    /** 완료 (턴 확정) */
+    COMPLETE("완료"),
     /** 실패 */
     FAILED("실패");
 

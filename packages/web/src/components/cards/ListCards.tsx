@@ -148,13 +148,24 @@ function normalizeInputs(
  * - [취소] → 대화방 cancel API (FE 단독 해제 금지). [자동 실행] → plan-executions 시작 → 러너 구동.
  * - 🔗 이전 결과 예측 표시 금지(실행 전 확정 불가). 값 미리보기는 기본값(📌)만.
  */
-export function PlanCard({ card }: { card: PlanCardMeta }) {
+export function PlanCard({
+  card,
+  partId,
+  consumed = false,
+}: {
+  card: PlanCardMeta;
+  /** 촉발 파트 id (실행 요청 messageId 로 전달 → BE CONSUMED 처리) */
+  partId?: number;
+  /** 파트가 이미 CONSUMED/CANCELLED 인지 (새로고침 복원 시 재실행 차단) */
+  consumed?: boolean;
+}) {
   const conversationId = useChatStore((state) => state.currentConversationId);
   const conversationStatus = useChatStore((state) => state.conversationStatus);
   const showToast = useToastStore((state) => state.show);
 
   const [running, setRunning] = useState(false);
   // 이 카드로 플랜을 시작하면(이 세션에서) 재클릭을 막는다(중복 방지). 로컬 상태만 사용.
+  // 새로고침 후에는 파트 status(CONSUMED)로 복원되어 재활성화되지 않는다(consumed prop).
   const [started, setStarted] = useState(false);
   // 취소로 종료된 경우(실행 아님) — "실행됨" 배지 오표기 방지. 취소/실행을 배지에서 구분한다.
   const [cancelled, setCancelled] = useState(false);
@@ -177,8 +188,8 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
 
   const total = rows.length;
   const includedCount = rows.filter((r) => r.included).length;
-  // 편집 잠금: 실행/취소 후에는 체크박스/이동 버튼을 잠근다.
-  const locked = running || started;
+  // 편집 잠금: 실행/취소 후 또는 파트 소진(consumed) 시 체크박스/이동 버튼을 잠근다.
+  const locked = running || started || consumed;
   const disabled = locked || conversationId == null || includedCount === 0;
 
   const rowName = (item: PlanRecipeItem, order: number): string =>
@@ -255,7 +266,7 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
       .map((r) => normalizeInputs(r.item.variables, r.inputs));
 
   const handleCancel = async () => {
-    if (running || started || conversationId == null) return;
+    if (running || started || consumed || conversationId == null) return;
     setRunning(true);
     setError(null);
     try {
@@ -291,6 +302,8 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
         recipeIds,
         recipeInputs,
         mode: "AUTO",
+        // 촉발 파트를 CONSUMED 처리하도록 파트 id 전달(messaging.md — messageId 필드).
+        messageId: partId,
       });
 
       // 시작 직후 첫 레시피에 pre-run 필수 입력 미충족이면 BE 가 pendingInputs 를 준다 → 액션 피커.
@@ -301,6 +314,7 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
           stepIndex: -1,
           variables: execution.pendingInputs ?? [],
           mode: "AUTO",
+          partId: execution.actionPickerPartId ?? undefined,
         });
         setStarted(true);
         return;
@@ -390,7 +404,7 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
           type="button"
           className="btn btn--ghost"
           onClick={handleCancel}
-          disabled={running || started || conversationId == null}
+          disabled={running || started || consumed || conversationId == null}
           aria-label="플랜 취소"
         >
           취소
@@ -404,7 +418,7 @@ export function PlanCard({ card }: { card: PlanCardMeta }) {
         >
           {running ? "실행 중..." : "자동 실행 ▶"}
         </button>
-        {started && (
+        {(started || consumed) && (
           <span className={`badge ${cancelled ? "badge--neutral" : "badge--info"}`}>
             {cancelled ? "취소됨" : "실행됨"}
           </span>

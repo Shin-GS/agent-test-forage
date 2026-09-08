@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.conversation.Message;
+import com.testforge.entity.conversation.MessagePart;
 import com.testforge.entity.conversation.enums.ConversationStatus;
-import com.testforge.entity.conversation.enums.MessageType;
+import com.testforge.entity.conversation.enums.PartType;
 import com.testforge.entity.execution.Execution;
 import com.testforge.entity.execution.ExecutionRecipe;
 import com.testforge.entity.execution.ExecutionStep;
@@ -15,6 +16,7 @@ import com.testforge.entity.recipe.Recipe;
 import com.testforge.entity.user.enums.UserRole;
 import com.testforge.lock.ConversationLock;
 import com.testforge.repository.conversation.ConversationRepository;
+import com.testforge.repository.conversation.MessagePartRepository;
 import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.repository.execution.ExecutionRecipeRepository;
 import com.testforge.repository.execution.ExecutionRepository;
@@ -76,6 +78,8 @@ class PlanExecutionIntegrationTest {
     private ConversationLock conversationLock;
     @Autowired
     private MessageRepository messageRepository;
+    @Autowired
+    private MessagePartRepository messagePartRepository;
     @Autowired
     private TestAuthSupport testAuth;
 
@@ -434,17 +438,19 @@ class PlanExecutionIntegrationTest {
 
     // ── PROGRESS/RESULT payload 스키마 (schemaVersion 2, 레시피 그룹/레시피별 구조) ──
 
-    /** 대화방의 최신 특정 타입 메시지 payloadJson(=metadataJson)을 파싱해 돌려준다. 없으면 실패. */
-    private JsonNode latestPayload(Long conversationId, MessageType type) throws Exception {
-        List<Message> messages = messageRepository.findByConversationIdOrderBySeqAsc(conversationId);
-        Message target = null;
-        for (Message m : messages) {
-            if (m.getType() == type) {
-                target = m; // 최신(SEQ 오름차순의 마지막)
+    /** 대화방의 최신 특정 타입 파트 payloadJson을 파싱해 돌려준다. 없으면 실패. */
+    private JsonNode latestPayload(Long conversationId, PartType type) throws Exception {
+        List<Message> turns = messageRepository.findByConversationIdOrderByIdAsc(conversationId);
+        MessagePart target = null;
+        for (Message turn : turns) {
+            for (MessagePart part : messagePartRepository.findByMessageIdOrderByIdAsc(turn.getId())) {
+                if (part.getType() == type) {
+                    target = part; // 최신(턴 id 오름차순 → 파트 id 오름차순의 마지막)
+                }
             }
         }
-        assertThat(target).as("expected a %s message", type).isNotNull();
-        return objectMapper.readTree(target.getMetadataJson());
+        assertThat(target).as("expected a %s part", type).isNotNull();
+        return objectMapper.readTree(target.getPayloadJson());
     }
 
     // 플랜 PROGRESS: 레시피 그룹 구조 + recipeProgress(k/N) + 현재 레시피만 스텝 펼침
@@ -461,7 +467,7 @@ class PlanExecutionIntegrationTest {
         // r1 완료 → r2 진행 중. progress 메시지는 message_update로 최신 상태 반영
         reportRunningRecipeStep(executionId);
 
-        JsonNode payload = latestPayload(conversationId, MessageType.PROGRESS);
+        JsonNode payload = latestPayload(conversationId, PartType.PROGRESS);
         assertThat(payload.get("kind").asText()).isEqualTo("progress");
         assertThat(payload.get("schemaVersion").asInt()).isEqualTo(2);
         assertThat(payload.get("title").asText()).isNotEmpty();
@@ -498,7 +504,7 @@ class PlanExecutionIntegrationTest {
         reportRunningRecipeStep(executionId); // r1 완료 → r2 전이
         reportRunningRecipeStep(executionId); // r2 완료 → 자동완료(SUCCESS) → RESULT 발행
 
-        JsonNode payload = latestPayload(conversationId, MessageType.RESULT);
+        JsonNode payload = latestPayload(conversationId, PartType.RESULT);
         assertThat(payload.get("kind").asText()).isEqualTo("result");
         assertThat(payload.get("schemaVersion").asInt()).isEqualTo(2);
         assertThat(payload.get("overallStatus").asText()).isEqualTo("success");
@@ -524,7 +530,7 @@ class PlanExecutionIntegrationTest {
         Long executionId = executionRepository.findAll().get(0).getId();
 
         // 시작 시점 PROGRESS: recipes 1개, recipeProgress total=1
-        JsonNode running = latestPayload(conversationId, MessageType.PROGRESS);
+        JsonNode running = latestPayload(conversationId, PartType.PROGRESS);
         assertThat(running.get("schemaVersion").asInt()).isEqualTo(2);
         assertThat(running.get("recipes")).hasSize(1);
         assertThat(running.get("recipeProgress").get("total").asInt()).isEqualTo(1);
@@ -533,7 +539,7 @@ class PlanExecutionIntegrationTest {
         reportRunningRecipeStep(executionId); // 자동완료(SUCCESS)
 
         // RESULT: recipes 1개로 통일
-        JsonNode result = latestPayload(conversationId, MessageType.RESULT);
+        JsonNode result = latestPayload(conversationId, PartType.RESULT);
         assertThat(result.get("schemaVersion").asInt()).isEqualTo(2);
         assertThat(result.get("recipes")).hasSize(1);
         assertThat(result.get("recipes").get(0).get("recipeName").asText()).isEqualTo("회원가입");

@@ -40,6 +40,7 @@ export async function applyRunResult(
       stepIndex: -1, // pre-run 일괄 수집
       variables: result.input.variables,
       mode,
+      partId: result.input.partId ?? undefined,
     });
     return;
   }

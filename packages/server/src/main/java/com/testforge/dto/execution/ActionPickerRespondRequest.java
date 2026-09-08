@@ -12,9 +12,12 @@ import java.util.Map;
  * @param stepIndex   값을 수집한 사용자 입력 스텝 인덱스. 프로토타입 pre-run 일괄 수집이면 {@code -1}
  *                    (pre-run 마커). 값 병합에는 사용하지 않지만 스키마상 수신한다.
  * @param values      수집한 입력값 맵 (변수 key → 값). userInput 하위에 병합된다.
+ * @param partId      응답한 ACTION_PICKER 파트 ID (optional). 있으면 그 파트를 CONSUMED로 전이한다
+ *                    (messaging.md 버튼/피커 응답 partId). null이면 파트 소비 처리를 건너뛴다.
  */
 public record ActionPickerRespondRequest(
         Long executionId,
         Integer stepIndex,
-        Map<String, Object> values) {
+        Map<String, Object> values,
+        Long partId) {
 }

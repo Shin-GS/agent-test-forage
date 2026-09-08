@@ -30,20 +30,33 @@ const PANEL_WIDTH_DEFAULT = 320;
 const LS_RIGHT_COLLAPSED = "testforge.ui.rightPanel.collapsed";
 const LS_RIGHT_WIDTH = "testforge.ui.rightPanel.width";
 
-/** 낙관적 임시 사용자 메시지 생성 (음수 seq/id 로 서버 확정 메시지와 구분) */
+/**
+ * 낙관적 임시 사용자 턴 생성 (음수 id 로 서버 확정 턴과 구분).
+ * 턴 1개 = TEXT 파트 1개. 확정 message_new(양수 id) 도착 시 store 가 임시 턴을 전부 제거·교체한다.
+ */
 function optimisticUserMessage(conversationId: number, content: string): MessageResponse {
   const now = Date.now();
   return {
     id: -now,
     conversationId,
-    seq: -now,
     role: { code: "USER", description: "사용자" },
-    type: { code: "TEXT", description: "텍스트" },
-    status: { code: "SENT", description: "전송됨" },
-    content,
-    metadata: null,
+    status: { code: "COMPLETE", description: "완료" },
     referenceId: null,
+    clientMessageId: null,
     createdAt: new Date().toISOString(),
+    parts: [
+      {
+        id: -now,
+        type: { code: "TEXT", description: "텍스트" },
+        status: { code: "COMPLETE", description: "완료" },
+        content,
+        executionId: null,
+        investigationId: null,
+        cardType: null,
+        payload: null,
+        schemaVersion: null,
+      },
+    ],
   };
 }
 

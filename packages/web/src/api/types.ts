@@ -29,18 +29,64 @@ export interface ApiErrorBody {
 // Conversation / Message
 // ---------------------------------------------------------------------------
 
-export interface MessageResponse {
+/** 파트 타입 (messaging.md PartType). BE part.type.code 와 1:1 */
+export type PartType =
+  | "TEXT"
+  | "CARD"
+  | "PROGRESS"
+  | "RESULT"
+  | "INVESTIGATE"
+  | "ACTION_PICKER"
+  | "REFERENCES";
+
+/** 파트 상태 (messaging.md 파트 STATUS). BE part.status.code 와 1:1 */
+export type PartStatus =
+  | "STREAMING"
+  | "COMPLETE"
+  | "FAILED"
+  | "PENDING"
+  | "CONSUMED"
+  | "CANCELLED";
+
+/**
+ * 메시지 파트 (BE PartResponse). 한 턴(MessageResponse)의 순서 있는 렌더 단위.
+ * - type/status 는 EnumColumn 직렬화(StatusView: code+description).
+ * - 실행류(PROGRESS/RESULT/ACTION_PICKER)는 executionId, 조회류(INVESTIGATE)는 investigationId 를 가진다.
+ * - CARD 는 cardType + payload, TEXT 는 content 가 본문. 나머지 구조화 데이터는 payload(payloadJson).
+ * - payload 는 BE 가 payloadJson 을 파싱해 내려준 객체(any). kind/schemaVersion 으로 판별한다.
+ */
+export interface PartResponse {
   id: number;
-  conversationId: number;
-  seq: number;
-  role: StatusView;
   type: StatusView;
   status: StatusView;
   content: string | null;
-  /** 카드 등 구조화 데이터. CardMeta 로 좁혀 사용 */
-  metadata: any | null;
+  executionId: number | null;
+  investigationId: number | null;
+  /** CARD 파트의 카드 유형 (execution_mode/plan/candidates/service_select 등). 그 외 파트는 null */
+  cardType: string | null;
+  /** 구조화 데이터(payloadJson 파싱본). 유형별 kind/schemaVersion 보유. TEXT 는 보통 null */
+  payload: any | null;
+  /** payload 스키마 버전 (버전 폴백 판정용). payload.schemaVersion 과 동일할 수 있음 */
+  schemaVersion: number | null;
+}
+
+/**
+ * 메시지 턴 (BE MessageResponse). 대화 타임라인·AI 컨텍스트의 축.
+ * 한 턴 = 사용자 발화 1개 또는 AI 응답 1턴이며, 순서 있는 파트 배열(parts)로 그려진다.
+ * - role.code: USER / ASSISTANT / SYSTEM
+ * - status.code: STREAMING / COMPLETE / FAILED (턴 전체 상태)
+ * - 정렬/커서는 turn id 단독(seq 폐지).
+ * - clientMessageId: 낙관적 UI 매칭 힌트(있으면 사용, 없으면 id 없는 임시 턴 전부 제거로 대체).
+ */
+export interface MessageResponse {
+  id: number;
+  conversationId: number;
+  role: StatusView;
+  status: StatusView;
   referenceId: string | null;
+  clientMessageId: string | null;
   createdAt: string;
+  parts: PartResponse[];
 }
 
 export interface ConversationDetail {
@@ -235,6 +281,12 @@ export interface ExecutionResponse {
   recipes: ExecutionRecipeView[];
   /** 액션 피커로 수집할 변수 스키마(미충족/노출 대상). 없으면 빈 배열 */
   pendingInputs: ActionPickerVariable[];
+  /**
+   * 대기 중인 ACTION_PICKER 파트 id (BE 가 pre-run 수집 시 생성한 파트). 있으면 respond 요청에
+   * partId 로 실어 그 파트를 CONSUMED 처리한다(messaging.md, 새로고침 후 재활성화 방지).
+   * 파트 모델 이전 BE 응답 호환을 위해 optional.
+   */
+  actionPickerPartId?: number | null;
   startedAt: string;
   finishedAt: string | null;
   durationMs: number | null;
@@ -320,7 +372,7 @@ export type CardMeta =
   | CandidatesCard;
 
 // ---------------------------------------------------------------------------
-// 메시지 payload (message.metadata 의 구조화 형태, messaging.md payloadJson 계약)
+// 메시지 파트 payload (part.payload 의 구조화 형태, messaging.md payloadJson 계약)
 // content 는 표시용 요약(파생물), 아래 payload 가 진실. kind 로 판별.
 // ---------------------------------------------------------------------------
 

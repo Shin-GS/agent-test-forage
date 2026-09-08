@@ -1,48 +1,54 @@
 package com.testforge.dto.conversation;
 
-import com.testforge.entity.conversation.enums.MessageType;
+import com.testforge.entity.conversation.enums.MessageRole;
+
+import java.util.List;
 
 /**
- * AI 처리 결과를 대화방에 확정 메시지로 남기기 위한 초안(draft).
- * ChatProcessor(오케스트레이션)가 tool 결과를 이 형태로 만들어 ConversationService로 넘기면,
- * ConversationService가 seq 발번 + 저장 + SSE(message_new) 발행 + 상태 종결(idle)을 처리한다.
+ * AI/시스템 처리 결과를 대화방에 확정 턴으로 남기기 위한 초안(draft). 한 턴은 순서 있는 파트 배열
+ * ({@link PartDraft})로 구성된다. ChatProcessor/InvestigateLoop가 tool 결과를 이 형태로 만들어
+ * ConversationService로 넘기면, ConversationService가 턴(MESSAGE) + 파트(MESSAGE_PART) 저장 +
+ * SSE(message_new) 발행 + 상태 종결(idle)을 처리한다.
  *
  * <ul>
- *   <li>chat/clarify: {@code type=TEXT}, {@code content=AI 메시지}, {@code metadataJson=null}</li>
- *   <li>no_match: {@code type=SYSTEM}, {@code content=고정 안내}, {@code metadataJson={level:"info"}}</li>
- *   <li>카드류(execute_recipe/propose_plan/select_service/show_candidates):
- *       {@code type=CARD}, {@code content=null 또는 짧은 안내}, {@code metadataJson={cardType,...}}</li>
+ *   <li>chat/clarify: role=ASSISTANT, parts=[TEXT]</li>
+ *   <li>investigate 답변: role=ASSISTANT, parts=[TEXT] 또는 [TEXT, REFERENCES]</li>
+ *   <li>no_match: role=SYSTEM, parts=[TEXT]</li>
+ *   <li>카드류(execute_recipe/propose_plan/select_service/show_candidates): role=ASSISTANT, parts=[CARD]</li>
  * </ul>
  *
- * @param type        메시지 표현 타입
- * @param content     본문 (카드류는 null 가능)
- * @param metadataJson 타입별 상세 JSON 문자열 (없으면 null)
+ * @param role  턴 작성 주체
+ * @param parts 순서 있는 파트 초안 배열
  */
 public record AssistantMessageDraft(
-        MessageType type,
-        String content,
-        String metadataJson) {
+        MessageRole role,
+        List<PartDraft> parts) {
 
-    /** chat/clarify: 텍스트 메시지 */
+    /** chat/clarify: ASSISTANT 텍스트 턴 (TEXT 파트 1개) */
     public static AssistantMessageDraft text(String content) {
-        return new AssistantMessageDraft(MessageType.TEXT, content, null);
+        return new AssistantMessageDraft(MessageRole.ASSISTANT, List.of(PartDraft.text(content)));
     }
 
     /**
-     * investigate 최종 답변: TEXT 메시지 + references payload (messaging.md references 스키마).
-     * 조회한 출처가 없으면 {@code payloadJson}을 null로 두어 순수 TEXT로 발행한다(참고 자료 섹션 미표시).
+     * investigate 최종 답변: ASSISTANT 턴 = TEXT 파트 (+ 출처 있으면 REFERENCES 파트).
+     * 조회한 출처가 없으면 {@code referencesPayloadJson}을 null로 두어 순수 TEXT로 발행한다.
      */
-    public static AssistantMessageDraft textWithReferences(String content, String payloadJson) {
-        return new AssistantMessageDraft(MessageType.TEXT, content, payloadJson);
+    public static AssistantMessageDraft textWithReferences(String content, String referencesPayloadJson) {
+        if (referencesPayloadJson == null || referencesPayloadJson.isBlank()) {
+            return text(content);
+        }
+        return new AssistantMessageDraft(MessageRole.ASSISTANT,
+                List.of(PartDraft.text(content), PartDraft.references(referencesPayloadJson)));
     }
 
-    /** no_match 등: 시스템 안내 메시지 */
+    /** no_match 등: SYSTEM 안내 턴 (TEXT 파트 1개). metadataJson은 현 파트 모델에서 사용하지 않는다 */
     public static AssistantMessageDraft system(String content, String metadataJson) {
-        return new AssistantMessageDraft(MessageType.SYSTEM, content, metadataJson);
+        return new AssistantMessageDraft(MessageRole.SYSTEM, List.of(PartDraft.text(content)));
     }
 
-    /** 카드류: content 없이 metadata로 렌더 */
-    public static AssistantMessageDraft card(String metadataJson) {
-        return new AssistantMessageDraft(MessageType.CARD, null, metadataJson);
+    /** 카드류: ASSISTANT 턴 = CARD 파트 1개. cardType은 payloadJson에서 파싱해 채운다(ConversationService) */
+    public static AssistantMessageDraft card(String payloadJson) {
+        return new AssistantMessageDraft(MessageRole.ASSISTANT,
+                List.of(PartDraft.card(null, payloadJson)));
     }
 }

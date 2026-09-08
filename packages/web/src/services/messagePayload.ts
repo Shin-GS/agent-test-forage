@@ -1,5 +1,5 @@
-// 메시지 payload 안전 파싱 (messaging.md payloadJson 계약).
-// message.metadata 는 BE 가 payloadJson 을 파싱해 내려준 객체(any)다.
+// 메시지 파트 payload 안전 파싱 (messaging.md payloadJson 계약).
+// part.payload 는 BE 가 payloadJson 을 파싱해 내려준 객체(any)다.
 // kind/schemaVersion 을 검증하고, FE 가 모르는 상위 schemaVersion 이면 null 을 반환해
 // 호출측이 content 텍스트로 폴백하게 한다.
 
@@ -29,10 +29,10 @@ function isVersionAtMost(payload: { schemaVersion?: number }, max: number): bool
   return v <= max;
 }
 
-/** metadata 가 PROGRESS payload 면 반환, 아니면 null (→ content 폴백) */
-export function asProgressPayload(metadata: unknown): ProgressPayload | null {
-  if (!metadata || typeof metadata !== "object") return null;
-  const p = metadata as Partial<ProgressPayload>;
+/** payload 가 PROGRESS payload 면 반환, 아니면 null (→ content 폴백) */
+export function asProgressPayload(payload: unknown): ProgressPayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Partial<ProgressPayload>;
   if (p.kind !== "progress") return null;
   if (!isSupportedVersion(p)) return null;
   // schemaVersion 2: recipes 그룹 구조. recipes 배열이 진실이다.
@@ -40,10 +40,10 @@ export function asProgressPayload(metadata: unknown): ProgressPayload | null {
   return p as ProgressPayload;
 }
 
-/** metadata 가 RESULT payload 면 반환, 아니면 null (→ content 폴백) */
-export function asResultPayload(metadata: unknown): ResultPayload | null {
-  if (!metadata || typeof metadata !== "object") return null;
-  const p = metadata as Partial<ResultPayload>;
+/** payload 가 RESULT payload 면 반환, 아니면 null (→ content 폴백) */
+export function asResultPayload(payload: unknown): ResultPayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Partial<ResultPayload>;
   if (p.kind !== "result") return null;
   if (!isSupportedVersion(p)) return null;
   // schemaVersion 2: recipes 배열 구조.
@@ -51,12 +51,12 @@ export function asResultPayload(metadata: unknown): ResultPayload | null {
   return p as ResultPayload;
 }
 
-/** metadata 가 INVESTIGATE_PROGRESS payload 면 반환, 아니면 null (→ content 폴백) */
+/** payload 가 INVESTIGATE_PROGRESS payload 면 반환, 아니면 null (→ content 폴백) */
 export function asInvestigateProgressPayload(
-  metadata: unknown
+  payload: unknown
 ): InvestigateProgressPayload | null {
-  if (!metadata || typeof metadata !== "object") return null;
-  const p = metadata as Partial<InvestigateProgressPayload>;
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Partial<InvestigateProgressPayload>;
   if (p.kind !== "investigate_progress") return null;
   // investigate_progress 는 v1 고정. 상위 버전(v2+)이면 폴백.
   if (!isVersionAtMost(p, 1)) return null;
@@ -67,13 +67,12 @@ export function asInvestigateProgressPayload(
 }
 
 /**
- * metadata 가 references payload 면 반환, 아니면 null.
- * references 는 TEXT 메시지에 "동반"되므로, 파싱 실패 시 호출측은 references 섹션만 생략하고
- * content 는 그대로 렌더한다(진행/결과 payload 처럼 전체 content 폴백이 아님).
+ * payload 가 references payload 면 반환, 아니면 null.
+ * references 는 별도 REFERENCES 파트의 payload 다. 파싱 실패 시 호출측은 references 섹션만 생략한다.
  */
-export function asReferencesPayload(metadata: unknown): ReferencesPayload | null {
-  if (!metadata || typeof metadata !== "object") return null;
-  const p = metadata as Partial<ReferencesPayload>;
+export function asReferencesPayload(payload: unknown): ReferencesPayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Partial<ReferencesPayload>;
   if (p.kind !== "references") return null;
   // references 는 v1 고정. 상위 버전(v2+)이면 폴백.
   if (!isVersionAtMost(p, 1)) return null;

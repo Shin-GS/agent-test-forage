@@ -201,13 +201,27 @@
   flex-shrink: 0;
 }
 
-/* 본문: 컬럼의 나머지 폭을 차지. AI TEXT 는 배경 없음(카드/PROGRESS/RESULT 는 자체 컨테이너 유지). */
+/* 본문: 컬럼의 나머지 폭을 차지. AI TEXT 는 배경 없음(카드/PROGRESS/RESULT 는 자체 컨테이너 유지).
+   한 턴 = 아바타 1개 + 파트 세로 스택. 파트 사이 간격은 gap 으로만(억지 구분선 없음). */
 .message__content {
   flex: 1;
   min-width: 0;
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 파트 블록 래퍼: 타입별 자체 컨테이너(카드/PROGRESS 등)를 그대로 품는다(추가 스타일 없음). */
+.message__part {
+  min-width: 0;
+}
+
+/* 인터랙티브 파트(카드/액션피커) 소진(CONSUMED): 비활성 시각처리. 클릭은 각 카드가 consumed 로 차단. */
+.message__part--consumed {
+  opacity: 0.6;
 }
 
 /* --- Tool Call Card --- */

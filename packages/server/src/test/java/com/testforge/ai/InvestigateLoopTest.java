@@ -6,7 +6,12 @@ import com.testforge.ai.connector.ConnectorResult;
 import com.testforge.ai.openai.OpenAiClient;
 import com.testforge.ai.openai.OpenAiDtos;
 import com.testforge.dto.conversation.AssistantMessageDraft;
-import com.testforge.entity.conversation.enums.MessageType;
+import com.testforge.dto.conversation.PartDraft;
+import com.testforge.entity.conversation.enums.MessageRole;
+import com.testforge.entity.conversation.enums.PartType;
+import com.testforge.repository.investigation.InvestigationRepository;
+import com.testforge.repository.investigation.InvestigationStepRepository;
+import com.testforge.entity.investigation.Investigation;
 import com.testforge.service.conversation.ConversationService;
 import com.testforge.service.conversation.InvestigateLoop;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,26 +55,38 @@ class InvestigateLoopTest {
 
     private ScriptedOpenAiClient client;
     private ConversationService conversationService;
+    private InvestigationRepository investigationRepository;
+    private InvestigationStepRepository investigationStepRepository;
 
     @BeforeEach
     void setUp() {
         client = new ScriptedOpenAiClient();
         conversationService = mock(ConversationService.class);
-        when(conversationService.createInvestigateProgressMessage(anyLong(), any(), any()))
+        investigationRepository = mock(InvestigationRepository.class);
+        investigationStepRepository = mock(InvestigationStepRepository.class);
+        // INVESTIGATION 저장은 id가 채워진 레코드를 돌려주도록 스텁(투자 파트가 investigationId를 참조).
+        when(investigationRepository.save(any(Investigation.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        // 진행 블록(INVESTIGATE 파트) 생성 → 파트 ID 반환. (conversationId, investigationId, payload, content)
+        when(conversationService.createInvestigateProgressMessage(anyLong(), any(), any(), any()))
                 .thenReturn(PROGRESS_MESSAGE_ID);
         // 기본: 정상 종결(AI_RESPONDING)로 간주 → 비-null 반환. finalize가 진행 블록을 done/failed로 확정.
         // 취소/폐기 케이스는 개별 테스트에서 null 반환으로 오버라이드한다.
+        // 조회 답변은 진행(INVESTIGATE) 파트와 같은 턴에 append + 종결한다(completeInvestigateTurn).
+        // hard-guard(서비스 미지정, 진행 블록 미생성)만 새 턴(completeAssistantTurn)으로 남긴다.
+        when(conversationService.completeInvestigateTurn(anyLong(), any(), any())).thenReturn(completedView());
         when(conversationService.completeAssistantTurn(anyLong(), any())).thenReturn(completedView());
     }
 
     /** finalize의 non-null 분기(정상 종결)를 태우기 위한 최소 MessageResponse (필드 값은 미검증) */
     private static com.testforge.dto.conversation.MessageResponse completedView() {
         return new com.testforge.dto.conversation.MessageResponse(
-                1L, CONVERSATION_ID, 1L, null, null, null, null, null, null, null);
+                1L, CONVERSATION_ID, null, null, null, null, null, List.of());
     }
 
     private InvestigateLoop loop(Connector... connectors) {
-        return new InvestigateLoop(client, settings(), conversationService, List.of(connectors));
+        return new InvestigateLoop(client, settings(), conversationService,
+                investigationRepository, investigationStepRepository, List.of(connectors));
     }
 
     private AiSettings settings() {
@@ -96,15 +113,19 @@ class InvestigateLoopTest {
         loop(apiSpec).run(ctx("회원가입 정책이 뭐야?"));
 
         // 진행 블록 생성 1 + running 갱신(조회 1회) + done 확정 = update 최소 2회 이상.
-        verify(conversationService).createInvestigateProgressMessage(eq(CONVERSATION_ID), any(), any());
+        verify(conversationService).createInvestigateProgressMessage(eq(CONVERSATION_ID), any(), any(), any());
 
-        // 최종 답변: TEXT + references payload 저장.
+        // 최종 답변: 진행 파트와 같은 턴에 append(completeInvestigateTurn). TEXT 파트 + REFERENCES 파트.
         ArgumentCaptor<AssistantMessageDraft> draft = ArgumentCaptor.forClass(AssistantMessageDraft.class);
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), draft.capture());
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), draft.capture());
         AssistantMessageDraft finalDraft = draft.getValue();
-        assertThat(finalDraft.type()).isEqualTo(MessageType.TEXT);
-        assertThat(finalDraft.content()).contains("약관");
-        assertThat(finalDraft.metadataJson()).contains("references")
+        assertThat(finalDraft.role()).isEqualTo(MessageRole.ASSISTANT);
+        PartDraft textPart = finalDraft.parts().stream()
+                .filter(p -> p.type() == PartType.TEXT).findFirst().orElseThrow();
+        assertThat(textPart.content()).contains("약관");
+        PartDraft refPart = finalDraft.parts().stream()
+                .filter(p -> p.type() == PartType.REFERENCES).findFirst().orElseThrow();
+        assertThat(refPart.payloadJson()).contains("references")
                 .contains("POST /api/v1/users").contains("/specs/7/endpoints/1");
 
         // done 상태로 확정하는 진행 갱신이 발행됨.
@@ -122,7 +143,7 @@ class InvestigateLoopTest {
 
         // 조회 없이 종결. connector.query 호출 없음.
         assertThat(((FakeConnector) apiSpec).queryCount).isZero();
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), any());
     }
 
     // ── 5회 조회 후 chat 강제 (tool_choice 강제) ──
@@ -145,7 +166,7 @@ class InvestigateLoopTest {
         assertThat(apiSpec.queryCount).isEqualTo(5);
         // 마지막 턴은 tool_choice 강제 호출(forceFunction)로 이뤄졌다.
         assertThat(client.forcedChatCalls).isGreaterThanOrEqualTo(1);
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), any());
     }
 
     // ── 미지원 source(예: figma) 스킵도 카운터 소비 ──
@@ -168,7 +189,7 @@ class InvestigateLoopTest {
         assertThat(apiSpec.queryCount).isZero();
         // 무진전 반복도 5회로 수렴 후 강제 chat 종결.
         assertThat(client.forcedChatCalls).isGreaterThanOrEqualTo(1);
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), any());
     }
 
     // ── 중복 (source, query) 캐시 재사용도 카운터 소비 ──
@@ -189,7 +210,7 @@ class InvestigateLoopTest {
         // 동일 질의 반복이므로 실제 커넥터 조회는 1회(첫 회)만, 이후는 캐시.
         assertThat(apiSpec.queryCount).isEqualTo(1);
         assertThat(client.forcedChatCalls).isGreaterThanOrEqualTo(1);
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), any());
     }
 
     // ── 못 찾음: 근거 없으면 references 없이 답변(억지 인용 금지) ──
@@ -204,9 +225,9 @@ class InvestigateLoopTest {
         loop(apiSpec).run(ctx("없는 정책"));
 
         ArgumentCaptor<AssistantMessageDraft> draft = ArgumentCaptor.forClass(AssistantMessageDraft.class);
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), draft.capture());
-        // 조회 근거가 없으므로 references payload 없음(순수 TEXT).
-        assertThat(draft.getValue().metadataJson()).isNull();
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), draft.capture());
+        // 조회 근거가 없으므로 REFERENCES 파트 없음(순수 TEXT 파트만).
+        assertThat(draft.getValue().parts()).noneMatch(p -> p.type() == PartType.REFERENCES);
     }
 
     // ── AI 호출 실패 → AI 비의존 폴백 + 진행 블록 failed + idle 종결 ──
@@ -219,9 +240,9 @@ class InvestigateLoopTest {
 
         loop(apiSpec).run(ctx("정책 질문"));
 
-        // AI 실패에도 종결 보장: 진행 블록 failed 확정 + completeAssistantTurn(idle) 호출.
+        // AI 실패에도 종결 보장: 진행 블록 failed 확정 + completeInvestigateTurn(idle) 호출.
         verifyProgressStatusPublished("failed");
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), any());
     }
 
     // ── 비-ApiException AI 실패도 callAi에서 폴백 처리(못찾음 고정 방지) ──
@@ -237,8 +258,10 @@ class InvestigateLoopTest {
 
         verifyProgressStatusPublished("failed");
         ArgumentCaptor<AssistantMessageDraft> draft = ArgumentCaptor.forClass(AssistantMessageDraft.class);
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), draft.capture());
-        assertThat(draft.getValue().content()).isEqualTo("정보를 찾지 못했습니다.");
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), draft.capture());
+        PartDraft textPart = draft.getValue().parts().stream()
+                .filter(p -> p.type() == PartType.TEXT).findFirst().orElseThrow();
+        assertThat(textPart.content()).isEqualTo("정보를 찾지 못했습니다.");
     }
 
     // ── 취소 경쟁: completeAssistantTurn이 null(폐기) 반환 시 진행 블록 done 확정 스킵 ──
@@ -249,12 +272,12 @@ class InvestigateLoopTest {
         Connector apiSpec = fakeConnector("api_spec", ConnectorResult.found("x", List.of()));
 
         // 취소/중지로 이미 IDLE → 지각 결과 폐기(null 반환).
-        when(conversationService.completeAssistantTurn(anyLong(), any())).thenReturn(null);
+        when(conversationService.completeInvestigateTurn(anyLong(), any(), any())).thenReturn(null);
 
         loop(apiSpec).run(ctx("질문"));
 
         // 결과 확정은 시도했지만(호출됨), done 잔상 방지를 위해 done 진행 갱신은 발행되지 않는다.
-        verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
+        verify(conversationService).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), any());
         verify(conversationService, never()).updateInvestigateProgressMessage(
                 eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID),
                 org.mockito.ArgumentMatchers.contains("\"status\":\"done\""), any());
@@ -269,8 +292,8 @@ class InvestigateLoopTest {
 
         loop(apiSpec).run(ctx("질문"));
 
-        // completeAssistantTurn은 status가 AI_RESPONDING일 때 idle 전이 + 락 해제를 수행한다.
-        verify(conversationService, times(1)).completeAssistantTurn(eq(CONVERSATION_ID), any());
+        // completeInvestigateTurn은 status가 AI_RESPONDING일 때 idle 전이 + 락 해제를 수행한다.
+        verify(conversationService, times(1)).completeInvestigateTurn(eq(CONVERSATION_ID), eq(PROGRESS_MESSAGE_ID), any());
     }
 
     // ── 방어: 서비스 미지정 컨텍스트가 루프에 도달하면 조회 없이 종결 ──
@@ -286,7 +309,7 @@ class InvestigateLoopTest {
 
         assertThat(apiSpec.queryCount).isZero();
         // 조회 진행 블록도 만들지 않고 즉시 종결.
-        verify(conversationService, never()).createInvestigateProgressMessage(anyLong(), any(), any());
+        verify(conversationService, never()).createInvestigateProgressMessage(anyLong(), any(), any(), any());
         verify(conversationService).completeAssistantTurn(eq(CONVERSATION_ID), any());
     }
 

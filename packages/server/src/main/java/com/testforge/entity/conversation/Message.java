@@ -2,7 +2,6 @@ package com.testforge.entity.conversation;
 
 import com.testforge.entity.conversation.enums.MessageRole;
 import com.testforge.entity.conversation.enums.MessageStatus;
-import com.testforge.entity.conversation.enums.MessageType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,26 +10,30 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
 /**
- * 대화 메시지 = 1행 (MESSAGE). 조회/렌더링을 위해 정규화하고,
- * 타입별 상세(cardType/executionId/buttons 등)는 METADATA_JSON에 보관한다(messaging.md).
- * BaseEntity를 쓰지 않고 CREATED_AT만 직접 둔다(스키마 정본: 메시지는 수정/갱신 audit 불필요).
+ * 대화 턴 = 1행 (MESSAGE). 한 턴은 사용자 발화 1개 또는 AI 응답 1턴이다. 화면에 그려지는 실제 블록
+ * (텍스트·카드·진행·결과·조회·액션피커·참고자료)은 이 턴에 딸린 {@link MessagePart}로 저장한다
+ * (db/conversation.md · messaging.md).
+ *
+ * <p>정렬·커서는 {@code ID}(auto-increment) 단독이다(별도 SEQ 없음). FE는 SSE 도착 순서가 아니라 턴
+ * {@code ID}로 정렬하므로 시각 동률/SSE 순서 뒤바뀜 문제가 원천 없다. BaseEntity를 쓰지 않고 CREATED_AT만
+ * 직접 둔다(턴은 생성 후 갱신 audit이 불필요).
  */
 @Entity
 @Table(
         name = "MESSAGE",
         indexes = {
-                @Index(name = "IDX_MESSAGE_CONVERSATION", columnList = "CONVERSATION_ID, SEQ")
+                // 대화방 턴 커서 페이징 (WHERE conversation_id=? AND id<:cursor ORDER BY id DESC)
+                @Index(name = "IDX_MESSAGE_CONVERSATION", columnList = "CONVERSATION_ID, ID")
         }
 )
 public class Message {
 
-    /** 메시지 ID (PK) */
+    /** 턴 ID (PK). 대화방 내 정렬·커서 기준(오름차순 = 시간순). 별도 SEQ 없음 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ID")
@@ -40,35 +43,25 @@ public class Message {
     @Column(name = "CONVERSATION_ID", nullable = false)
     private Long conversationId;
 
-    /** 대화방 내 정렬 순서 (서버 발번, CREATED_AT 동시각 충돌 방지) */
-    @Column(name = "SEQ", nullable = false)
-    private Long seq;
-
-    /** 작성 주체: USER / ASSISTANT / TOOL */
+    /** 작성 주체: USER / ASSISTANT / SYSTEM */
     @Enumerated(EnumType.STRING)
     @Column(name = "ROLE", length = 20, nullable = false)
     private MessageRole role;
 
-    /** 표현 타입: TEXT / CARD / PROGRESS / ACTION_PICKER / SYSTEM */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "TYPE", length = 20, nullable = false)
-    private MessageType type;
-
-    /** 상태: PENDING / COMPLETED / FAILED */
+    /** 턴 전체 상태: STREAMING / COMPLETE / FAILED */
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", length = 20, nullable = false)
     private MessageStatus status;
 
-    /** 메시지 본문 (Markdown) */
-    @Lob
-    @Column(name = "CONTENT", columnDefinition = "LONGTEXT")
-    private String content;
+    /** 목록 미리보기·검색용 요약(파트에서 파생한 캐시, 진실 아님). 없으면 NULL */
+    @Column(name = "CONTENT_PREVIEW", length = 500)
+    private String contentPreview;
 
-    /** 타입별 상세 (JSON 문자열). cardType/executionId/buttons 등 */
-    @Column(name = "METADATA_JSON", columnDefinition = "TEXT")
-    private String metadataJson;
+    /** 낙관적 UI 매칭용(사용자 메시지). 없으면 NULL */
+    @Column(name = "CLIENT_MESSAGE_ID", length = 50)
+    private String clientMessageId;
 
-    /** 참조 태그 (레시피 ID 등). 없으면 NULL */
+    /** 사용자 발화의 참조 태그(레시피 ID 등). 없으면 NULL */
     @Column(name = "REFERENCE_ID", length = 50)
     private String referenceId;
 
@@ -79,11 +72,9 @@ public class Message {
     protected Message() {
     }
 
-    public Message(Long conversationId, Long seq, MessageRole role, MessageType type, MessageStatus status) {
+    public Message(Long conversationId, MessageRole role, MessageStatus status) {
         this.conversationId = conversationId;
-        this.seq = seq;
         this.role = role;
-        this.type = type;
         this.status = status;
         this.createdAt = LocalDateTime.now();
     }
@@ -96,28 +87,12 @@ public class Message {
         return conversationId;
     }
 
-    public Long getSeq() {
-        return seq;
-    }
-
-    public void setSeq(Long seq) {
-        this.seq = seq;
-    }
-
     public MessageRole getRole() {
         return role;
     }
 
     public void setRole(MessageRole role) {
         this.role = role;
-    }
-
-    public MessageType getType() {
-        return type;
-    }
-
-    public void setType(MessageType type) {
-        this.type = type;
     }
 
     public MessageStatus getStatus() {
@@ -128,20 +103,20 @@ public class Message {
         this.status = status;
     }
 
-    public String getContent() {
-        return content;
+    public String getContentPreview() {
+        return contentPreview;
     }
 
-    public void setContent(String content) {
-        this.content = content;
+    public void setContentPreview(String contentPreview) {
+        this.contentPreview = contentPreview;
     }
 
-    public String getMetadataJson() {
-        return metadataJson;
+    public String getClientMessageId() {
+        return clientMessageId;
     }
 
-    public void setMetadataJson(String metadataJson) {
-        this.metadataJson = metadataJson;
+    public void setClientMessageId(String clientMessageId) {
+        this.clientMessageId = clientMessageId;
     }
 
     public String getReferenceId() {

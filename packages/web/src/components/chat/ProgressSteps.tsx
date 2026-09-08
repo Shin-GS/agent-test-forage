@@ -237,6 +237,7 @@ function useResume(executionId: number): { running: boolean; started: boolean; o
           stepIndex: -1,
           variables: execution.pendingInputs ?? [],
           mode: "AUTO",
+          partId: execution.actionPickerPartId ?? undefined,
         });
         setStarted(true);
         return;

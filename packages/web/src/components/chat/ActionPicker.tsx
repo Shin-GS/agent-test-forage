@@ -76,6 +76,8 @@ export function ActionPicker() {
         executionId: actionPicker.executionId,
         stepIndex: actionPicker.stepIndex,
         values: payloadValues,
+        // 대상 ACTION_PICKER 파트를 CONSUMED 처리하도록 파트 id 전달(messaging.md).
+        partId: actionPicker.partId ?? undefined,
       });
 
       // 서버가 executing 으로 전이한 실행을 러너로 구동. 액션 피커는 닫는다(언마운트).

@@ -10,12 +10,19 @@ import com.testforge.ai.openai.OpenAiDtos;
 import com.testforge.ai.openai.ToolSchemas;
 import com.testforge.common.error.ApiException;
 import com.testforge.dto.conversation.AssistantMessageDraft;
+import com.testforge.entity.investigation.Investigation;
+import com.testforge.entity.investigation.InvestigationStep;
+import com.testforge.entity.investigation.enums.InvestigationStatus;
+import com.testforge.entity.investigation.enums.InvestigationStepStatus;
+import com.testforge.repository.investigation.InvestigationRepository;
+import com.testforge.repository.investigation.InvestigationStepRepository;
 import com.testforge.utils.RecipeJsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -107,15 +114,21 @@ public class InvestigateLoop {
     private final OpenAiClient client;
     private final AiSettings settings;
     private final ConversationService conversationService;
+    private final InvestigationRepository investigationRepository;
+    private final InvestigationStepRepository investigationStepRepository;
     private final List<Connector> connectors;
 
     public InvestigateLoop(OpenAiClient client,
                            AiSettings settings,
                            ConversationService conversationService,
+                           InvestigationRepository investigationRepository,
+                           InvestigationStepRepository investigationStepRepository,
                            List<Connector> connectors) {
         this.client = client;
         this.settings = settings;
         this.conversationService = conversationService;
+        this.investigationRepository = investigationRepository;
+        this.investigationStepRepository = investigationStepRepository;
         this.connectors = connectors == null ? List.of() : connectors;
     }
 
@@ -147,9 +160,19 @@ public class InvestigateLoop {
 
         ExecutorService connectorExecutor = Executors.newSingleThreadExecutor(namedDaemon(conversationId));
         try {
+            // 조회 사실 계층(INVESTIGATION) 레코드 먼저 생성 (RUNNING). 질의는 사용자 발화로 시드한다.
+            state.investigation = investigationRepository.save(new Investigation(
+                    context.userId(), conversationId, null, context.apiSpecId(), context.utterance()));
+
             // 진행 블록 1개 생성 (running). 이후 조회 단계마다 message_update로 갱신.
             progressMessageId = conversationService.createInvestigateProgressMessage(
-                    conversationId, renderProgressPayload(state, "running"), renderProgressContent(state));
+                    conversationId, state.investigation.getId(),
+                    renderProgressPayload(state, "running"), renderProgressContent(state));
+            // INVESTIGATE 파트를 촉발 파트로 역참조 저장 (한 턴 다중 조회 구분/분석용).
+            if (progressMessageId != null) {
+                state.investigation.setTriggerPartId(progressMessageId);
+                investigationRepository.save(state.investigation);
+            }
 
             // 초기 메시지: system 가드 + 서비스 컨텍스트 + 이력 + 발화.
             List<OpenAiDtos.ChatMessage> messages = buildInitialMessages(context);
@@ -204,6 +227,8 @@ public class InvestigateLoop {
                 if (outcome.reference != null && !outcome.reference.isEmpty()) {
                     state.references.addAll(outcome.reference);
                 }
+                // 조회 스텝을 사실 계층(INVESTIGATION_STEP)에 정규 저장 (분석/감사용).
+                saveInvestigationStep(state, source, query, outcome);
                 // 진행 블록 갱신 (조회 단계 반영).
                 conversationService.updateInvestigateProgressMessage(conversationId, progressMessageId,
                         renderProgressPayload(state, "running"), renderProgressContent(state));
@@ -224,6 +249,7 @@ public class InvestigateLoop {
                         conversationId);
                 conversationService.updateInvestigateProgressMessage(conversationId, progressMessageId,
                         renderProgressPayload(state, "failed"), renderProgressContent(state));
+                finalizeInvestigation(state, InvestigationStatus.FAILED, NOTICE_NOT_FOUND);
                 state.terminated = true;
             }
         }
@@ -345,7 +371,9 @@ public class InvestigateLoop {
     private void finalizeChat(Long conversationId, Long progressMessageId, LoopState state, String answer) {
         String content = (answer == null || answer.isBlank()) ? NOTICE_NOT_FOUND : answer;
         String referencesPayload = renderReferencesPayload(state.references);
-        var view = conversationService.completeAssistantTurn(conversationId,
+        // 답변(TEXT/REFERENCES)을 진행(INVESTIGATE) 파트와 같은 턴에 append + 종결(idle/락 해제).
+        // messaging.md: 조회 답변 = [INVESTIGATE, TEXT(+REFERENCES)] 한 턴(별도 턴 아님).
+        var view = conversationService.completeInvestigateTurn(conversationId, progressMessageId,
                 AssistantMessageDraft.textWithReferences(content, referencesPayload));
         if (view == null) {
             // 취소/중지로 결과 폐기됨 → 진행 블록 확정 스킵(취소 경로가 이미 정리).
@@ -353,29 +381,103 @@ public class InvestigateLoop {
         }
         conversationService.updateInvestigateProgressMessage(conversationId, progressMessageId,
                 renderProgressPayload(state, "done"), renderProgressContent(state));
+        finalizeInvestigation(state, InvestigationStatus.DONE, content);
         state.terminated = true;
     }
 
     /** 타임아웃 종료: 안내 확정 후에만 진행 블록 timeout 확정 (취소 폐기 시 스킵) */
     private void finalizeTimeout(Long conversationId, Long progressMessageId, LoopState state) {
-        var view = conversationService.completeAssistantTurn(conversationId, AssistantMessageDraft.text(NOTICE_TIMEOUT));
+        var view = conversationService.completeInvestigateTurn(conversationId, progressMessageId,
+                AssistantMessageDraft.text(NOTICE_TIMEOUT));
         if (view == null) {
             return;
         }
         conversationService.updateInvestigateProgressMessage(conversationId, progressMessageId,
                 renderProgressPayload(state, "timeout"), renderProgressContent(state));
+        finalizeInvestigation(state, InvestigationStatus.TIMEOUT, NOTICE_TIMEOUT);
         state.terminated = true;
     }
 
     /** 실패/못 찾음 종료: 안내 확정 후에만 진행 블록 failed 확정 (취소 폐기 시 스킵) */
     private void finalizeFallback(Long conversationId, Long progressMessageId, LoopState state, String notice) {
-        var view = conversationService.completeAssistantTurn(conversationId, AssistantMessageDraft.text(notice));
+        var view = conversationService.completeInvestigateTurn(conversationId, progressMessageId,
+                AssistantMessageDraft.text(notice));
         if (view == null) {
             return;
         }
         conversationService.updateInvestigateProgressMessage(conversationId, progressMessageId,
                 renderProgressPayload(state, "failed"), renderProgressContent(state));
+        finalizeInvestigation(state, InvestigationStatus.FAILED, notice);
         state.terminated = true;
+    }
+
+    /**
+     * 조회 사실 계층(INVESTIGATION)을 종료 상태로 확정한다(status/answerSummary/finishedAt/durationMs).
+     * 비정상 종료(FAILED/TIMEOUT)도 RUNNING 잔존 없이 확정한다(db/investigation.md 종결 보장).
+     * 이미 종료(비-RUNNING)면 no-op(중복 확정 방지). 저장 실패는 방어적으로 삼킨다(종결을 막지 않음).
+     */
+    private void finalizeInvestigation(LoopState state, InvestigationStatus status, String answerSummary) {
+        Investigation investigation = state.investigation;
+        if (investigation == null || investigation.getStatus() != InvestigationStatus.RUNNING) {
+            return;
+        }
+        try {
+            LocalDateTime finishedAt = LocalDateTime.now();
+            investigation.setStatus(status);
+            if (answerSummary != null && !answerSummary.isBlank()) {
+                investigation.setAnswerSummary(answerSummary);
+            }
+            investigation.setFinishedAt(finishedAt);
+            if (investigation.getStartedAt() != null) {
+                investigation.setDurationMs(
+                        Duration.between(investigation.getStartedAt(), finishedAt).toMillis());
+            }
+            investigationRepository.save(investigation);
+        } catch (Exception e) {
+            log.warn("Failed to finalize investigation record: investigationId={}",
+                    investigation.getId(), e);
+        }
+    }
+
+    /**
+     * 한 조회 스텝을 INVESTIGATION_STEP으로 저장한다. outcome의 stepStatus(success/failed/skipped)를
+     * enum으로 매핑하고, 근거(references)가 있으면 REFERENCES_JSON에 스냅샷으로 남긴다(사실 vs 렌더 분리).
+     * investigation이 없으면(생성 실패) no-op, 저장 실패는 방어적으로 삼킨다(조회 루프를 막지 않음).
+     */
+    private void saveInvestigationStep(LoopState state, String source, String query, QueryOutcome outcome) {
+        if (state.investigation == null) {
+            return;
+        }
+        try {
+            InvestigationStepStatus stepStatus = switch (outcome.stepStatus) {
+                case "success" -> InvestigationStepStatus.SUCCESS;
+                case "skipped" -> InvestigationStepStatus.SKIPPED;
+                default -> InvestigationStepStatus.FAILED;
+            };
+            InvestigationStep step = new InvestigationStep(
+                    state.investigation.getId(), source, query, stepStatus);
+            step.setFinishedAt(LocalDateTime.now());
+            if (outcome.reference != null && !outcome.reference.isEmpty()) {
+                step.setReferencesJson(renderStepReferencesJson(outcome.reference));
+            }
+            investigationStepRepository.save(step);
+        } catch (Exception e) {
+            log.warn("Failed to save investigation step: investigationId={}, source={}",
+                    state.investigation == null ? null : state.investigation.getId(), source, e);
+        }
+    }
+
+    /** 스텝 출처를 REFERENCES_JSON 스냅샷으로 직렬화 (source/label/url 리스트). */
+    private String renderStepReferencesJson(List<ConnectorResult.Reference> references) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (ConnectorResult.Reference r : references) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("source", r.source());
+            item.put("label", r.label());
+            item.put("url", r.url());
+            items.add(item);
+        }
+        return RecipeJsonUtil.toJsonString(items);
     }
 
     /** 폴백 안내 문구 선택: 잔여 시간이 없으면 타임아웃 안내, 아니면 못 찾음 안내 */
@@ -407,6 +509,9 @@ public class InvestigateLoop {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("kind", "investigate_progress");
         payload.put("schemaVersion", 1);
+        if (state.investigation != null) {
+            payload.put("investigationId", state.investigation.getId());
+        }
         payload.put("status", status);
         List<Map<String, Object>> steps = new ArrayList<>();
         for (StepView s : state.steps) {
@@ -545,6 +650,8 @@ public class InvestigateLoop {
     private static final class LoopState {
         int queryCount = 0;
         boolean terminated = false;
+        /** 조회 사실 계층 레코드 (분석/감사용). 루프 시작 시 생성 */
+        Investigation investigation;
         final Map<String, String> queryCache = new LinkedHashMap<>();
         final List<StepView> steps = new ArrayList<>();
         final List<ConnectorResult.Reference> references = new ArrayList<>();

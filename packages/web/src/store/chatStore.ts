@@ -57,6 +57,11 @@ export interface ActionPickerState {
   stepIndex: number;
   variables: ActionPickerVariable[];
   mode: string;
+  /**
+   * 대상 ACTION_PICKER 파트 id. respond 요청에 실어 그 파트를 CONSUMED 처리한다
+   * (messaging.md, 새로고침 후 재활성화 방지). BE 응답에 없으면 undefined.
+   */
+  partId?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +112,7 @@ interface ChatState {
    */
   loadConversations: () => Promise<void>;
   setMessages: (messages: MessageResponse[]) => void;
-  /** 낙관적 임시 메시지 추가 (음수 seq 등으로 구분) */
+  /** 낙관적 임시 턴 추가 (음수 id 로 서버 확정 턴과 구분) */
   addMessage: (message: MessageResponse) => void;
   /** 새 대화의 pending 대상 서비스 설정 (null=미지정) */
   setPendingApiSpecId: (apiSpecId: number | null) => void;
@@ -141,16 +146,17 @@ function mapRuntimeStatus(status: StatusView | string): ConversationRuntimeStatu
 }
 
 /**
- * seq 오름차순 정렬 + seq 중복 제거.
- * 같은 seq 가 여러 개면 뒤에 들어온(=서버 확정) 메시지를 우선한다.
- * 임시 메시지는 seq 를 음수로 두어, 서버 메시지가 오면 자연스럽게 대체되도록 한다.
+ * 턴 id 오름차순 정렬 + id 중복 제거.
+ * 같은 id 가 여러 개면 뒤에 들어온(=최신 스냅샷) 턴을 우선한다.
+ * 낙관적 임시 턴은 id 를 음수로 두어, 서버 확정 턴(양수 id)보다 항상 뒤(목록 끝)에 온다.
+ * (messaging.md 낙관적 UI: 확정 턴끼리는 id 오름차순, 임시는 끝.)
  */
 function normalizeMessages(messages: MessageResponse[]): MessageResponse[] {
-  const bySeq = new Map<number, MessageResponse>();
+  const byId = new Map<number, MessageResponse>();
   for (const message of messages) {
-    bySeq.set(message.seq, message);
+    byId.set(message.id, message);
   }
-  return Array.from(bySeq.values()).sort((a, b) => a.seq - b.seq);
+  return Array.from(byId.values()).sort((a, b) => a.id - b.id);
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -214,7 +220,12 @@ export const useChatStore = create<ChatState>((set) => ({
       if (message.conversationId !== state.currentConversationId) {
         return {};
       }
-      return { messages: normalizeMessages([...state.messages, message]) };
+      // 확정 턴(양수 id)이 도착하면 낙관적 임시 턴(id<=0)을 전부 제거하고 확정본을 넣는다.
+      // 임시는 "확정본이 오면 대체될 자리 채우기"일 뿐이라 매칭 키 없이 전부 제거로 충분하다
+      // (대화방 락이 "임시 최대 1개" 불변식을 보장 — messaging.md 낙관적 UI).
+      const confirmed = message.id > 0;
+      const base = confirmed ? state.messages.filter((m) => m.id > 0) : state.messages;
+      return { messages: normalizeMessages([...base, message]) };
     }),
 
   onMessageUpdate: (message) =>
@@ -222,6 +233,7 @@ export const useChatStore = create<ChatState>((set) => ({
       if (message.conversationId !== state.currentConversationId) {
         return {};
       }
+      // 갱신은 그 턴을 parts 배열째 통째로 교체한다(파트 delta 아님, 전체 스냅샷 멱등).
       const next = state.messages.filter((m) => m.id !== message.id);
       return { messages: normalizeMessages([...next, message]) };
     }),

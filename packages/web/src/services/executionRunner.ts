@@ -128,6 +128,8 @@ export interface RunResult {
     executionId: number;
     /** 액션 피커로 수집할 변수 (현재 RUNNING 레시피의 미충족 필수) */
     variables: ActionPickerVariable[];
+    /** 대상 ACTION_PICKER 파트 id (respond 시 CONSUMED 처리용, messaging.md). 없으면 undefined */
+    partId?: number | null;
   };
 }
 
@@ -238,7 +240,11 @@ export async function runExecution(
     if (pendingVariables.length > 0) {
       return {
         outcome: "INPUT_REQUIRED",
-        input: { executionId: current.id, variables: pendingVariables },
+        input: {
+          executionId: current.id,
+          variables: pendingVariables,
+          partId: current.actionPickerPartId ?? undefined,
+        },
       };
     }
     // 값 충족 → 계속 다음 레시피 스텝 실행(루프 지속).

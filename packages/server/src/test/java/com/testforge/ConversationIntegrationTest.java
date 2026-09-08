@@ -1,5 +1,6 @@
 package com.testforge;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.user.enums.UserRole;
 import com.testforge.repository.conversation.ConversationRepository;
@@ -55,6 +56,9 @@ class ConversationIntegrationTest {
     @Autowired
     private TestAuthSupport testAuth;
 
+    // 응답 JSON에서 nextCursor 등을 읽기 위한 파서 (컨텍스트 빈 불필요, 읽기 전용)
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private MockMvc mockMvc;
     private static final long USER_ID = 1L;
 
@@ -84,10 +88,10 @@ class ConversationIntegrationTest {
                 .andExpect(jsonPath("$.conversation.status.description").value("AI 응답 중"))
                 // 첫 메시지가 방금 생겼고 아직 안 읽음(lastReadAt=null) → unread=true
                 .andExpect(jsonPath("$.conversation.unread").value(true))
-                .andExpect(jsonPath("$.message.seq").value(1))
                 .andExpect(jsonPath("$.message.role.code").value("USER"))
-                .andExpect(jsonPath("$.message.status.code").value("COMPLETED"))
-                .andExpect(jsonPath("$.message.content").value("안녕하세요"));
+                .andExpect(jsonPath("$.message.status.code").value("COMPLETE"))
+                .andExpect(jsonPath("$.message.parts[0].type.code").value("TEXT"))
+                .andExpect(jsonPath("$.message.parts[0].content").value("안녕하세요"));
 
         // 대화방이 lastMessageAt와 함께 생성됨 (빈 방 없음)
         assertThat(conversationRepository.findAll()).hasSize(1);
@@ -95,8 +99,8 @@ class ConversationIntegrationTest {
         // AI 처리(동기)까지 마친 뒤 대화방은 IDLE로 종결된다
         assertThat(conversationRepository.findAll().get(0).getStatus())
                 .isEqualTo(com.testforge.entity.conversation.enums.ConversationStatus.IDLE);
-        // "안녕하세요"는 목 resolver가 chat으로 응답 → assistant 텍스트 메시지가 seq=2로 이어 붙는다
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(
+        // "안녕하세요"는 목 resolver가 chat으로 응답 → assistant 텍스트 턴이 이어 붙어 총 2턴
+        assertThat(messageRepository.findByConversationIdOrderByIdAsc(
                 conversationRepository.findAll().get(0).getId())).hasSize(2);
     }
 
@@ -258,38 +262,38 @@ class ConversationIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    // ── sendMessage: 저장 + seq 증가 + lastMessageAt 갱신 (사용자 메시지 사이에 assistant 응답이 낀다) ──
+    // ── sendMessage: 저장(USER 턴 + TEXT 파트) + lastMessageAt 갱신 (사이에 assistant 응답이 낀다) ──
     @Test
     void sendMessage_storesUserMessageWithIncrementingSeq() throws Exception {
         Long id = conversationRepository.save(new Conversation(USER_ID)).getId();
         assertThat(conversationRepository.findById(id).orElseThrow().getLastMessageAt()).isNull();
 
-        // 첫 사용자 메시지 → seq 1 (그 뒤 assistant 응답이 seq 2로 저장됨)
+        // 첫 사용자 메시지 → USER 턴 + TEXT 파트 1개 (그 뒤 assistant 응답 턴이 이어 붙음)
         mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"안녕하세요\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accepted").value(true))
                 .andExpect(jsonPath("$.sessionId").value(id))
-                .andExpect(jsonPath("$.message.seq").value(1))
                 .andExpect(jsonPath("$.message.role.code").value("USER"))
-                .andExpect(jsonPath("$.message.status.code").value("COMPLETED"))
-                .andExpect(jsonPath("$.message.content").value("안녕하세요"));
+                .andExpect(jsonPath("$.message.status.code").value("COMPLETE"))
+                .andExpect(jsonPath("$.message.parts[0].type.code").value("TEXT"))
+                .andExpect(jsonPath("$.message.parts[0].content").value("안녕하세요"));
 
-        // 둘째 사용자 메시지 → seq 3 (앞의 assistant 응답이 seq 2를 차지했으므로)
+        // 둘째 사용자 메시지
         mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"두번째\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message.seq").value(3));
+                .andExpect(jsonPath("$.message.parts[0].content").value("두번째"));
 
         // lastMessageAt 갱신됨 + 처리 종결로 IDLE 복귀
         Conversation after = conversationRepository.findById(id).orElseThrow();
         assertThat(after.getLastMessageAt()).isNotNull();
         assertThat(after.getStatus())
                 .isEqualTo(com.testforge.entity.conversation.enums.ConversationStatus.IDLE);
-        // user 2건 + assistant 2건 = 4건
-        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(id)).hasSize(4);
+        // user 2턴 + assistant 2턴 = 4턴
+        assertThat(messageRepository.findByConversationIdOrderByIdAsc(id)).hasSize(4);
     }
 
     // ── sendMessage: 빈 내용 → 400 ──
@@ -326,17 +330,16 @@ class ConversationIntegrationTest {
                     .andExpect(status().isCreated());
         }
 
-        // user 3건 + assistant 3건 = 6건(seq 1~6). 최신순 DESC로 반환 → items[0].seq=6, items[5].seq=1.
+        // user 3턴 + assistant 3턴 = 6턴. 최신순 DESC로 반환 → items[0]=최신 assistant, items[5]=최초 USER.
         // 전부 한 페이지(size 기본 20)라 hasNext=false.
         mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(6))
                 .andExpect(jsonPath("$.hasNext").value(false))
-                .andExpect(jsonPath("$.items[0].seq").value(6))
-                .andExpect(jsonPath("$.items[0].role.code").value("ASSISTANT"))
-                .andExpect(jsonPath("$.items[5].seq").value(1))
+                // items[0] = 최신 AI측 응답 턴(ASSISTANT 또는 SYSTEM 안내). 사용자 발화가 아니다.
+                .andExpect(jsonPath("$.items[0].role.code").value(org.hamcrest.Matchers.not("USER")))
                 .andExpect(jsonPath("$.items[5].role.code").value("USER"))
-                .andExpect(jsonPath("$.items[5].content").value("첫째"));
+                .andExpect(jsonPath("$.items[5].parts[0].content").value("첫째"));
     }
 
     // ── listMessages: 커서로 과거 페이지 이어 조회 (무한 스크롤) ──
@@ -350,25 +353,28 @@ class ConversationIntegrationTest {
                     .andExpect(status().isCreated());
         }
 
-        // 1페이지 size=2 → 최신 seq 6,5. hasNext=true, nextCursor=5(가장 과거)
-        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
+        // 1페이지 size=2 → 최신 2턴. hasNext=true, nextCursor는 이번 페이지의 가장 과거 턴 id(불투명 값).
+        String page1 = mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .param("size", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(2))
-                .andExpect(jsonPath("$.items[0].seq").value(6))
-                .andExpect(jsonPath("$.items[1].seq").value(5))
                 .andExpect(jsonPath("$.hasNext").value(true))
-                .andExpect(jsonPath("$.nextCursor").value("5"));
+                .andExpect(jsonPath("$.nextCursor").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        String cursor1 = objectMapper.readTree(page1).get("nextCursor").asText();
 
-        // 2페이지(cursor=5) → seq 4,3
-        mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
+        // 2페이지(cursor) → 다음 2턴. 커서가 과거로 이동하며 hasNext 유지, 새 커서는 더 작아진다.
+        String page2 = mockMvc.perform(get("/api/v1/conversations/{id}/messages", id).with(testAuth.as(USER_ID))
                         .param("size", "2")
-                        .param("cursor", "5"))
+                        .param("cursor", cursor1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].seq").value(4))
-                .andExpect(jsonPath("$.items[1].seq").value(3))
+                .andExpect(jsonPath("$.items.length()").value(2))
                 .andExpect(jsonPath("$.hasNext").value(true))
-                .andExpect(jsonPath("$.nextCursor").value("3"));
+                .andExpect(jsonPath("$.nextCursor").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        String cursor2 = objectMapper.readTree(page2).get("nextCursor").asText();
+        // 커서는 과거로 갈수록 작아진다(턴 id 오름차순 = 시간순).
+        assertThat(Long.parseLong(cursor2)).isLessThan(Long.parseLong(cursor1));
     }
 
     // ── listMessages: 없는 대화방 → 404 ──

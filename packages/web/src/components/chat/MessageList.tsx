@@ -85,7 +85,7 @@ export function MessageList({ messages }: Props) {
     <div className="chat-messages" ref={containerRef} onScroll={handleScroll}>
       <div className="messages-container">
         {messages.map((message) => (
-          <MessageItem key={`${message.id}-${message.seq}`} message={message} />
+          <MessageItem key={message.id} message={message} />
         ))}
 
         {/* 인증 필요(401/403) 안내 — 있으면 표시(현재 대화방 것만) */}
