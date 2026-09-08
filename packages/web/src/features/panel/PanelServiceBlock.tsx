@@ -28,8 +28,6 @@ interface Props {
   pendingApiSpecId: number | null;
   /** 새 대화 pending 갱신 */
   onChangePending: (apiSpecId: number | null) => void;
-  /** 기존 대화 서비스 변경 성공 시 (serviceName 등 갱신 반영용) */
-  onServiceChanged: (apiSpecId: number | null, serviceName: string | null) => void;
 }
 
 /** 서비스 라벨: serviceDescription 우선, 없으면 name */
@@ -43,7 +41,6 @@ export function PanelServiceBlock({
   conversationServiceName,
   pendingApiSpecId,
   onChangePending,
-  onServiceChanged,
 }: Props) {
   const { data: services } = useServices();
   const showToast = useToastStore((s) => s.show);
@@ -95,8 +92,9 @@ export function PanelServiceBlock({
     const target = pendingChange.apiSpecId;
     setPendingChange(null);
     try {
-      const detail = await conversationsApi.updateService(conversationId, target);
-      onServiceChanged(detail.apiSpecId, detail.serviceName ?? null);
+      await conversationsApi.updateService(conversationId, target);
+      // 목록 배지/서비스는 BE 가 발행하는 session_list_update → 목록 재조회로 반영된다
+      // (대화방 목록은 낙관적 UI 대상이 아님 — messaging.md. 목록의 진실은 서버).
     } catch {
       showToast("서비스 변경에 실패했어요. 잠시 후 다시 시도해주세요.", "warning");
     }

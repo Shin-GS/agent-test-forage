@@ -54,8 +54,8 @@ const descStyle: React.CSSProperties = {
  * - conversationsApi.updateService(convId, apiSpecId, partId) 호출 → BE 가 서비스 설정 + 카드 CONSUMED.
  * - 서비스 변경은 실행이 아니지만, 대화방이 처리 중(AI 응답/실행/입력 대기)이면 상태 꼬임 방지를 위해
  *   막고 안내한다(ExecutionModeCard 락 규칙과 동일).
- * - 성공 시: 목록의 해당 대화방을 낙관적 갱신(즉시 배지 반영). SSE(session_list_update)로도 갱신되지만
- *   즉시 반영을 위해 setConversations 로 upsert 한다. 카드는 started/consumed 로 비활성.
+ * - 성공 시: 목록 배지는 BE 가 발행하는 session_list_update → 목록 재조회로 반영된다
+ *   (대화방 목록은 낙관적 UI 대상이 아님 — messaging.md). 카드는 started/consumed 로 비활성.
  * - payload: services[] = { apiSpecId, name, label }.
  */
 export function ServiceSelectCard({
@@ -81,7 +81,7 @@ export function ServiceSelectCard({
   const services: any[] = card.services ?? [];
   const disabled = running || started || consumed || conversationId == null;
 
-  const handleSelect = async (apiSpecId: number, name: string) => {
+  const handleSelect = async (apiSpecId: number) => {
     if (disabled) return;
     // 대화방 락: 실행/응답/입력 대기 중이면 서비스 변경도 막는다(상태 꼬임 방지).
     if (conversationStatus !== "idle") {
@@ -93,14 +93,9 @@ export function ServiceSelectCard({
     setError(null);
     try {
       // 촉발 파트 id 를 함께 보내 BE 가 이 카드 파트를 CONSUMED 처리하게 한다(messaging.md).
-      const detail = await conversationsApi.updateService(convId, apiSpecId, partId);
-      // 목록의 해당 대화방을 낙관적 갱신(즉시 서비스 배지 반영). SSE 로도 갱신되지만 지연 없이 반영.
-      const store = useChatStore.getState();
-      store.setConversations(
-        store.conversations.map((c) =>
-          c.id === convId ? { ...c, apiSpecId: detail.apiSpecId, serviceName: detail.serviceName ?? name } : c
-        )
-      );
+      await conversationsApi.updateService(convId, apiSpecId, partId);
+      // 목록 배지는 BE 가 발행하는 session_list_update → 목록 재조회로 반영된다.
+      // (대화방 목록은 낙관적 UI 대상이 아니다 — messaging.md. 목록의 진실은 서버.)
       showToast("서비스가 설정되었습니다", "success");
       setStarted(true);
     } catch (err) {
@@ -126,7 +121,7 @@ export function ServiceSelectCard({
               type="button"
               className="btn btn--secondary btn--sm"
               disabled={disabled || apiSpecId == null}
-              onClick={() => apiSpecId != null && handleSelect(apiSpecId, svc.name ?? label)}
+              onClick={() => apiSpecId != null && handleSelect(apiSpecId)}
             >
               {label}
             </button>

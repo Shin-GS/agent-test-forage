@@ -36,8 +36,6 @@ interface Props extends PanelContext {
   pendingApiSpecId: number | null;
   /** 새 대화 pending 갱신 */
   onChangePendingService: (apiSpecId: number | null) => void;
-  /** 기존 대화 서비스 변경 성공 반영 */
-  onServiceChanged: (apiSpecId: number | null, serviceName: string | null) => void;
 }
 
 const TABS: { key: PanelTab; label: string }[] = [
@@ -57,7 +55,6 @@ export function SidePanel({
   conversationServiceName,
   pendingApiSpecId,
   onChangePendingService,
-  onServiceChanged,
   ...props
 }: Props) {
   const tab = usePanelStore((s) => s.tab);
@@ -91,7 +88,6 @@ export function SidePanel({
           conversationServiceName={conversationServiceName}
           pendingApiSpecId={pendingApiSpecId}
           onChangePending={onChangePendingService}
-          onServiceChanged={onServiceChanged}
         />
 
         {/* 상단 가로 탭 (상세 드릴다운 중에는 숨겨 목록 컨텍스트 혼동 방지) */}

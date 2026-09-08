@@ -68,7 +68,6 @@ export function ChatPage() {
   const conversations = useChatStore((state) => state.conversations);
   const pendingApiSpecId = useChatStore((state) => state.pendingApiSpecId);
 
-  const setConversations = useChatStore((state) => state.setConversations);
   const setCurrentConversation = useChatStore((state) => state.setCurrentConversation);
   const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
@@ -305,18 +304,8 @@ export function ChatPage() {
       ? conversations.find((c) => c.id === currentConversationId) ?? null
       : null;
 
-  // 기존 대화 서비스 변경 성공 시: SSE(session_list_update) 로도 갱신되지만,
-  // 즉시 반영을 위해 목록의 해당 항목을 낙관적으로 upsert 한다(정렬 유지).
-  const onServiceChanged = useCallback(
-    (apiSpecId: number | null, serviceName: string | null) => {
-      if (currentConversationId == null) return;
-      const next = conversations.map((c) =>
-        c.id === currentConversationId ? { ...c, apiSpecId, serviceName } : c
-      );
-      setConversations(next);
-    },
-    [currentConversationId, conversations, setConversations]
-  );
+  // 기존 대화 서비스 변경 성공 시 목록 배지 반영은 BE 의 session_list_update → 목록 재조회가
+  // 담당한다(대화방 목록은 낙관적 UI 대상이 아님 — messaging.md. 목록의 진실은 서버).
 
   const isOnboarding = currentConversationId == null && messages.length === 0;
 
@@ -460,7 +449,6 @@ export function ChatPage() {
         conversationServiceName={currentConversation?.serviceName ?? null}
         pendingApiSpecId={pendingApiSpecId}
         onChangePendingService={setPendingApiSpecId}
-        onServiceChanged={onServiceChanged}
       />
     </div>
   );

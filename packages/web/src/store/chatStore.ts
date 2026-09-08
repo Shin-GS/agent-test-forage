@@ -6,7 +6,6 @@ import { create } from "zustand";
 import type { ActionPickerVariable, ConversationSummary, MessageResponse, StatusView } from "../api/types";
 import type { ConversationRuntimeStatus } from "./types";
 import { conversationsApi } from "../api";
-import { useAuthStore } from "./authStore";
 
 // ---------------------------------------------------------------------------
 // SSE 이벤트 payload (envelope.data) 형태
@@ -258,64 +257,18 @@ export const useChatStore = create<ChatState>((set) => ({
       return { conversationStatus: mapRuntimeStatus(payload.status) };
     }),
 
-  onSessionListUpdate: (payload) =>
-    set((state) => {
-      // BE 계약: { op: "upsert" | "removed", conversation: ConversationListSnapshot }
-      // 방어: payload/conversation 이 없으면 목록을 건드리지 않는다(undefined 로 덮어 크래시 방지).
-      const snap = payload?.conversation;
-      if (!snap || snap.id == null) {
-        return {};
-      }
-
-      if (payload.op === "removed") {
-        return { conversations: state.conversations.filter((c) => c.id !== snap.id) };
-      }
-
-      // upsert: 기존 항목이면 스냅샷 필드로 병합, 없으면 새 요약으로 추가.
-      const existing = state.conversations.find((c) => c.id === snap.id);
-      const merged: ConversationSummary = existing
-        ? {
-            ...existing,
-            title: snap.title ?? existing.title,
-            // apiSpecId 는 null 이 "미지정" 의미. 스냅샷엔 항상 채워지므로 그대로 반영
-            // (?? 를 쓰면 미지정 되돌리기 시 옛 값이 되살아나 serviceName 과 desync).
-            apiSpecId: snap.apiSpecId,
-            // serviceName 은 null 이 "미지정" 의미이므로 undefined 일 때만 기존값 유지
-            serviceName: snap.serviceName !== undefined ? snap.serviceName : existing.serviceName,
-            status: snap.status ?? existing.status,
-            lastMessageAt: snap.lastMessageAt ?? existing.lastMessageAt,
-            unread: snap.unread,
-            updatedAt: snap.updatedAt ?? existing.updatedAt,
-          }
-        : {
-            id: snap.id,
-            // userId 는 세션 사용자로 채운다(스냅샷에는 userId 가 없음). 없으면 0(표시에 미사용).
-            userId: useAuthStore.getState().user?.id ?? 0,
-            title: snap.title,
-            apiSpecId: snap.apiSpecId,
-            serviceName: snap.serviceName ?? null,
-            status: snap.status ?? { code: "IDLE", description: "" },
-            lastMessageAt: snap.lastMessageAt,
-            lastReadAt: null,
-            unread: snap.unread,
-            createdAt: snap.updatedAt ?? new Date().toISOString(),
-            updatedAt: snap.updatedAt ?? new Date().toISOString(),
-          };
-
-      // 기존 항목은 제자리 갱신, 신규 항목만 배열에 추가한 뒤 정렬로 위치를 결정한다.
-      // (갱신 대상을 무조건 맨 앞에 끼워 넣으면, 정렬 키가 동률일 때 stable sort 특성상
-      //  read/updatedAt 같은 순서와 무관한 갱신에도 그 항목이 위로 튀어 목록이 흔들린다.)
-      const next = existing
-        ? state.conversations.map((c) => (c.id === snap.id ? merged : c))
-        : [...state.conversations, merged];
-      // 정렬 기준: lastMessageAt 내림차순(기획 chat/overview.md). 동률이면 id 내림차순으로
-      // 완전히 결정적인 순서를 보장한다(서버 정렬과 일치). orphan 차단으로 목록의 모든
-      // 대화는 lastMessageAt 이 있으나, 방어적으로 null 은 최하단(0)으로 둔다.
-      // read/updatedAt 은 정렬 키에서 제외 → 읽음 처리로는 순서가 바뀌지 않는다.
-      const timeKey = (c: ConversationSummary): number =>
-        c.lastMessageAt ? Date.parse(c.lastMessageAt) : 0;
-      next.sort((a, b) => timeKey(b) - timeKey(a) || b.id - a.id);
-      return { conversations: next };
-    }),
+  onSessionListUpdate: (payload) => {
+    // 목록 갱신은 서버가 진실이다. session_list_update(SIGNAL)를 받으면 FE에서 목록을
+    // 직접 병합/정렬하지 않고 목록 API를 재조회한다(순서·내용의 단일 소스 = 서버).
+    // - 대화방 목록은 낙관적 UI 대상이 아니다(messaging.md: 낙관적 표시는 사용자 발신 메시지에만).
+    // - FE 정렬 제거로 REST/SSE 날짜 포맷 불일치 등으로 정렬이 깨지는 클래스의 버그가 원천 소멸.
+    // - 규모(대화방 200건 상한)상 재조회 왕복 비용은 무시할 수준이며 실시간성 손해도 체감 없다.
+    // removed(현재 보던 방 삭제 시 안내/이동)는 재조회 후 목록에서 사라지는 것으로 반영된다.
+    const snap = payload?.conversation;
+    if (!snap || snap.id == null) {
+      return;
+    }
+    void useChatStore.getState().loadConversations();
+  },
 
 }));
