@@ -23,6 +23,9 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 
 ### 핵심 규칙
 
+> **모호할 땐 no_match(단정)가 아니라 clarify(되물음)로 유도한다.** AI가 `show_candidates`를 빈/무효 `recipeIds`로 부르면 BE가 `no_match` 대신 `clarify`로 폴백해 사용자 의도를 재확인한다. 단, `clarify` 남발은 금지 — 레시피 1개로 확실하면 되묻지 말고 바로 `execute_recipe`, 정말 모호할 때만 `clarify`.
+
+
 - **플랜 판단 기준 = 레시피 개수가 아니라 "결과 의존이 있는 순차 실행 필요 여부"다.** 레시피가 여럿 관련돼 보여도 결과 의존이 없으면 플랜이 아니다.
 - **`show_candidates`(선택)와 `propose_plan`(순차 조합)은 완전히 다른 축이다 — 혼동 금지.** "어떤 레시피?"(택1)는 후보, "여러 레시피를 순서대로"(조합)는 플랜.
 - **AI는 플랜을 "제안만" 한다. 확정은 사용자의 [자동 실행] 클릭이다.** AI 오판·할루시네이션을 사용자 승인으로 완충한다.
@@ -53,16 +56,19 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 
 ## Tools 정의
 
+> 아래 스키마는 실제 코드(`ToolSchemas.java` / `OpenAiCompatibleIntentResolver.java`)를 기준으로 기술한다. AI는 이름 대신 **id**로 대상을 지목한다.
+
 ### execute_recipe
 
 ```json
 {
   "name": "execute_recipe",
-  "description": "단일 레시피를 실행합니다. 사용자가 특정 작업을 요청했고 매칭되는 레시피가 1개일 때 사용.",
+  "description": "사용자 요청과 정확히 일치하는 레시피 1개를 실행한다. 후보가 여러 개면 show_candidates를 쓴다.",
   "parameters": {
-    "recipeId": { "type": "number", "description": "실행할 레시피 ID" },
-    "extractedValues": { "type": "object", "description": "발화에서 명시적으로 언급된 값 (추측 금지)" }
-  }
+    "recipeId": { "type": "integer", "description": "실행할 레시피 ID" },
+    "extractedValues": { "type": "object", "description": "레시피 입력변수 key에 맞춰 발화에 명시적으로 나온 값만 담는다. 추측 금지" }
+  },
+  "required": ["recipeId"]
 }
 ```
 
@@ -71,26 +77,29 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 ```json
 {
   "name": "propose_plan",
-  "description": "결과가 앞→뒤로 흐르는(결과 의존) 레시피 2개 이상을 순서대로 실행하는 플랜을 제안합니다. 단순히 여러 레시피 중 하나를 고르는 경우(show_candidates)와 혼동하지 마세요.",
+  "description": "여러 레시피를 순서대로 실행하는 복합 작업(플랜)을 제안한다. 레시피가 1개뿐이면 execute_recipe를 쓴다.",
   "parameters": {
-    "recipeIds": { "type": "array", "items": { "type": "number" }, "description": "순서대로 실행할 레시피 ID 배열 (결과 의존 순서)" },
-    "extractedValues": { "type": "object", "description": "발화에서 추출한 값 (추측 금지)" },
-    "rationale": { "type": "string", "description": "이 조합을 제안하는 짧은 한국어 근거 (필수). 예: \"입사지원은 이력서·포지션이 선행돼야 해 3단계로 구성\"" }
-  }
+    "recipeIds": { "type": "array", "items": { "type": "integer" }, "description": "순차 실행할 레시피 ID 배열(실행 순서대로, 2개 이상)" },
+    "rationale": { "type": "string", "description": "이 순서로 조합한 근거를 한국어 한 줄로" }
+  },
+  "required": ["recipeIds"]
 }
 ```
 
-- `rationale`은 **1단계 필수 필드**다. 플랜 제안 카드에 근거로 노출되어, 사용자가 조합의 타당성을 판단하는 근거가 된다.
+- 코드 스키마상 `rationale`은 required가 아니다(권장). 단, 플랜 제안 카드의 근거로 노출되므로 가능한 한 함께 담는다.
+- `extractedValues`는 propose_plan 스키마에 **없다**. 값 확정은 실행 시작 후 각 레시피의 액션 피커에서 한다.
+- `recipeIds`가 1개면 BE(`OpenAiCompatibleIntentResolver`)가 `execute_recipe`로 폴백한다(rationale 미사용).
 
 ### select_service
 
 ```json
 {
   "name": "select_service",
-  "description": "어느 서비스에서 진행할지 선택을 요청합니다. 서비스가 미지정이거나 다른 서비스가 적합할 때 사용.",
+  "description": "대상 서비스가 지정되지 않아 사용자가 서비스를 먼저 선택해야 할 때 사용한다. 발화에서 유추되는 서비스가 있으면 apiSpecIds에 추천으로 담고, 없으면 빈 배열로 둔다.",
   "parameters": {
-    "apiSpecIds": { "type": "array", "items": { "type": "integer" }, "description": "추천 서비스(스펙) ID 배열 (최대 3개). 유추 불가 시 빈 배열." }
-  }
+    "apiSpecIds": { "type": "array", "items": { "type": "integer" }, "description": "추천 서비스(스펙) ID 배열. 유추 불가 시 빈 배열" }
+  },
+  "required": ["apiSpecIds"]
 }
 ```
 
@@ -99,12 +108,16 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 ```json
 {
   "name": "show_candidates",
-  "description": "유사한 레시피가 여러 개 매칭될 때 후보 목록을 보여줍니다.",
+  "description": "요청에 부합하는 레시피 후보가 2개 이상이라 사용자가 선택해야 할 때 사용한다.",
   "parameters": {
-    "candidates": { "type": "array", "items": { "type": "object", "properties": { "id": { "type": "number" }, "name": { "type": "string" }, "description": { "type": "string" } } } }
-  }
+    "recipeIds": { "type": "array", "items": { "type": "integer" }, "description": "후보 레시피 ID 배열" }
+  },
+  "required": ["recipeIds"]
 }
 ```
+
+- 스키마는 후보 객체 배열이 아니라 **`recipeIds` 정수 배열**이다(코드 기준). AI는 id만 지목하고, BE가 목록과 대조해 후보 상세를 구성한다.
+- BE는 AI가 준 `recipeIds`를 실제 목록과 대조한다. 유효 후보가 **하나도 없으면 no_match가 아니라 `clarify`로 되묻는다**(단정 대신 재확인).
 
 ### clarify
 
@@ -147,11 +160,12 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 ```json
 {
   "name": "investigate",
-  "description": "질문에 답하기 위해 정보 소스를 조회합니다. API 스펙(엔드포인트/필드), Confluence(요구사항/설계/정책 문서)를 조회해 정책/기능을 파악할 때 사용. 정보가 더 필요하면 반복 호출하세요.",
+  "description": "정책/기능 질문에 답하기 위해 정보 소스를 조회한다. 더 필요하면 반복 호출.",
   "parameters": {
-    "source": { "type": "string", "enum": ["api_spec", "confluence"], "description": "조회할 정보 소스. api_spec=API/엔드포인트/필드 면, confluence=요구사항/설계/정책 문서 면. 애매하면 api_spec 우선" },
+    "source": { "type": "string", "enum": ["api_spec", "confluence"], "description": "조회할 정보 소스. api_spec=등록된 스펙(API·필드 질문), confluence=위키 문서(요구사항·설계·정책 맥락). 애매하면 api_spec을 먼저 시도" },
     "query": { "type": "string", "description": "조회 키워드 또는 질문" }
-  }
+  },
+  "required": ["source", "query"]
 }
 ```
 
@@ -179,7 +193,7 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 | execute_recipe | 없음 | FE가 recipeId로 레시피 정보 조회 → 고정 템플릿 |
 | propose_plan | 없음 | FE가 recipeIds로 정보 조회 → 고정 템플릿 |
 | select_service | 없음 | FE가 apiSpecIds로 서비스 정보 조회 → 고정 템플릿 |
-| show_candidates | 없음 | FE가 candidates로 고정 템플릿 |
+| show_candidates | 없음 | FE가 recipeIds로 후보 정보 조회 → 고정 템플릿 |
 | no_match | 없음 | FE 고정 문구 ("해당 레시피가 없습니다...") |
 | clarify | ✅ AI 생성 | 맥락에 맞는 재질문 필요 |
 | chat | ✅ AI 생성 | 일반 대화 답변 (조회 후 참고 자료 링크 포함 가능) |
@@ -193,9 +207,18 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 당신은 API 워크플로우 실행 도우미입니다.
 사용자의 발화를 분석하여 가장 적절한 tool을 호출하세요.
 
+## 결정 트리 (위에서부터 순서대로 판단)
+1. 서비스 미지정(레시피 목록 비어 있음) + 작업 요청 → select_service (유추 서비스는 apiSpecIds에, 없으면 빈 배열)
+2. 요청과 정확히 1개 레시피 매칭 → execute_recipe (1개로 확실하면 되묻지 말고 바로 실행)
+3. 부합 레시피 2개 이상, 사용자가 택1 → show_candidates (실제 목록 id만)
+4. 결과 의존 레시피 2개 이상 순차 필요 → propose_plan
+5. 요청이 모호/불명확 → clarify (되물음). show_candidates를 빈/억지 후보로 부르지 말 것
+6. 매칭 레시피가 정말 없음 → no_match (없는 기능 지어내지 말 것)
+7. 인사/잡담/일반질문 → chat
+
 ## 원칙
 - 레시피 목록에 없는 작업은 매칭하지 마세요. no_match를 호출하세요.
-- 확실하지 않으면 추측하지 말고 clarify를 호출하세요.
+- 모호할 땐 no_match(단정)가 아니라 clarify(되물음)로 유도하세요. 단, clarify 남발 금지 — 1개로 확실하면 바로 execute_recipe, 정말 모호할 때만 clarify.
 - extractedValues에는 발화에서 명시적으로 언급된 값만 넣으세요. 추측 금지.
 - 결과가 앞→뒤로 흐르는(결과 의존) 레시피가 순서대로 필요한 복합 작업이면 propose_plan을 호출하세요. 이때 rationale에 짧은 한국어 근거를 반드시 넣으세요.
   - 판단 기준은 레시피 개수가 아니라 "결과 의존이 있는 순차 실행 필요 여부"입니다.

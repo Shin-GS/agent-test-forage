@@ -31,12 +31,26 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
 
     private static final String SYSTEM_PROMPT = """
             너는 API 워크플로우 실행 플랫폼의 어시스턴트다. 사용자 발화를 분석해 제공된 tool 중 정확히
-            하나를 호출한다. 반드시 아래 규칙을 지켜라:
-            - 제공된 레시피/서비스 목록에 없는 작업은 지어내지 말 것. 매칭되는 레시피가 없으면 no_match.
-            - 확실하지 않으면 추측하지 말고 clarify로 되물을 것.
-            - 레시피/서비스는 반드시 목록에 있는 id로 지목할 것.
-            - 대상 서비스가 지정되지 않은 상태(레시피 목록이 비어 있음)면 select_service 또는 chat만 사용.
-            - 레시피 실행과 무관한 인사/잡담/일반 질문은 chat.
+            하나를 호출한다.
+
+            [tool 선택 결정 트리] — 위에서부터 순서대로 판단한다:
+            1. 대상 서비스가 지정되지 않았고(레시피 목록이 비어 있음) 작업 요청이면 → select_service.
+               발화에서 유추되는 서비스가 있으면 apiSpecIds에 담고, 없으면 빈 배열로 둔다.
+            2. 요청과 정확히 일치하는 레시피가 1개면 → execute_recipe.
+               1개로 확실하면 되묻지 말고 바로 execute_recipe를 호출한다.
+            3. 요청에 부합하는 레시피가 2개 이상이라 사용자가 골라야 하면 → show_candidates.
+               반드시 실제 목록에 있는 id로만 후보를 담는다. 후보가 없으면 show_candidates를 부르지 말 것.
+            4. 결과가 앞→뒤로 흐르는(결과 의존) 레시피를 2개 이상 순서대로 실행해야 하면 → propose_plan.
+               단순히 여러 후보 중 택1(show_candidates)과 혼동하지 말 것.
+            5. 요청이 모호하거나 정보가 부족하면 → clarify로 되묻는다.
+               show_candidates를 빈/억지 후보로 부르지 말고, 이 경우 clarify를 사용한다.
+            6. 제공된 목록에 매칭되는 레시피가 정말 없으면 → no_match. 없는 기능을 지어내지 말 것.
+            7. 레시피 실행과 무관한 인사/잡담/일반 질문이면 → chat.
+
+            [경계 규칙]
+            - clarify는 남발하지 않는다. 1개로 확실하면 바로 execute_recipe, 정말 모호할 때만 clarify.
+            - 레시피/서비스는 반드시 목록에 있는 id로 지목한다(목록 밖 id 금지).
+            - 대상 서비스 미지정 상태에서는 select_service 또는 chat만 사용한다.
             사용자에게 보이는 message(clarify/chat)는 한국어로 작성한다.
             """;
 
@@ -219,8 +233,11 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
             }
             case SHOW_CANDIDATES -> {
                 List<RecipeCandidate> candidates = mapRecipes(context, asLongList(args.get("recipeIds")));
+                // 후보가 비면(빈/무효 recipeIds) 단정(no_match)하지 않고 되물어 확인한다.
+                // AI가 억지로 show_candidates를 부른 경우일 수 있어, clarify로 사용자 의도를 재확인한다.
                 if (candidates.isEmpty()) {
-                    yield IntentResult.noMatch();
+                    log.warn("show_candidates with empty/invalid recipeIds, falling back to clarify");
+                    yield IntentResult.clarify("어떤 작업을 하시려는지 조금 더 구체적으로 알려주시겠어요?");
                 }
                 yield IntentResult.showCandidates(candidates);
             }

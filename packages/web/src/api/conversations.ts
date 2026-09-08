@@ -104,17 +104,23 @@ export function remove(conversationId: number): Promise<void> {
 
 /**
  * 대화방 대상 서비스 변경.
- * BE: PATCH /conversations/{id}/service, body {apiSpecId: number|null}.
+ * BE: PATCH /conversations/{id}/service, body {apiSpecId: number|null, messageId?: number}.
  * apiSpecId=null 은 미지정으로 변경. 응답: ConversationDetail(serviceName 포함).
  * 404(대화 없음/타인), 400(유효하지 않은 서비스).
+ *
+ * messageId(선택): service_select 카드로 서비스를 고른 경우, 촉발 파트 id 를 전달한다.
+ * BE 가 그 카드 파트를 CONSUMED 로 전이시킨다(messaging.md — 새로고침 후 카드 재활성화 방지).
+ * 사이드 패널 등 카드 없이 변경하는 경로는 messageId 를 생략한다(하위호환).
  */
 export function updateService(
   conversationId: number,
-  apiSpecId: number | null
+  apiSpecId: number | null,
+  messageId?: number
 ): Promise<ConversationDetail> {
   return request<ConversationDetail>(`/conversations/${conversationId}/service`, {
     method: "PATCH",
-    body: { apiSpecId },
+    // messageId 는 있을 때만 body 에 포함(없으면 기존 계약과 동일 — 하위호환).
+    body: messageId != null ? { apiSpecId, messageId } : { apiSpecId },
   });
 }
 

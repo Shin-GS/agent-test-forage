@@ -87,7 +87,8 @@ public class ConversationController {
     @PatchMapping("/{id}/service")
     public ConversationDetailResponse updateService(@PathVariable Long id,
                                                     @RequestBody ConversationServiceUpdateRequest request) {
-        return conversationService.updateService(id, CurrentUser.id(), request.apiSpecId());
+        return conversationService.updateService(id, CurrentUser.id(),
+                request.apiSpecId(), request.messageId());
     }
 
     /** 읽음 처리 (lastReadAt = now; 본인 대화방만) */

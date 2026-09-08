@@ -8,6 +8,7 @@
 // 레시피 실행과 현재 대화방 메시지 표시에 집중한다. 상태는 전역 chatStore 로 공유한다.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { conversationsApi } from "../api";
 import type { MessageResponse } from "../api/types";
@@ -73,11 +74,88 @@ export function ChatPage() {
   const addMessage = useChatStore((state) => state.addMessage);
   const setPendingApiSpecId = useChatStore((state) => state.setPendingApiSpecId);
   const loadConversations = useChatStore((state) => state.loadConversations);
+  const clearConversation = useChatStore((state) => state.clearConversation);
 
   const [error, setError] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+  // URL 파라미터가 대화방의 source of truth. 아래 effect 가 URL→store 로 단방향 동기화한다.
+  const { conversationId: conversationIdParam } = useParams<{ conversationId?: string }>();
+
   const queryClient = useQueryClient();
   const showToast = useToastStore((state) => state.show);
+
+  // URL→store 동기화의 "최신 요청 대상" 추적용 ref.
+  // StrictMode(dev) 이중 실행이나 빠른 연속 전환에서, 가장 마지막에 시작된 로드만
+  // 결과를 반영하도록 하는 sequence guard. cleanup 클로저의 cancelled 플래그와 달리
+  // effect 재실행 사이에 값이 유지되어, 1차/2차 실행이 서로의 결과를 버리는 경합을 없앤다.
+  const loadRequestRef = useRef(0);
+
+  // ─── URL → store 단방향 동기화 ───
+  // URL 의 :conversationId 를 유일한 진입점으로 삼아 현재 대화방을 결정한다.
+  // (store→URL 역방향 effect 는 두지 않는다 — 무한 루프 방지.)
+  //   - id 있음(유효 숫자): 이미 그 대화가 열려 있고 메시지도 로드돼 있으면 재로드 스킵(깜빡임 방지),
+  //     아니면 setCurrentConversation + 메시지 로드 + 읽음 처리. 로드 실패(404/403 등)면 "/" 로 replace + 토스트.
+  //   - id 없음("/"): clearConversation → 온보딩 상태.
+  useEffect(() => {
+    // "/" (딥링크 아님): 온보딩. 단, 방금 새 대화 생성 직후 "/c/:id" 로 전환되기 전
+    // 잔여 렌더에서 store 를 지우지 않도록, param 이 없을 때만 초기화한다.
+    if (conversationIdParam == null) {
+      // 이미 대화가 열려 있고 URL 이 "/" 면 새 채팅으로 초기화
+      if (useChatStore.getState().currentConversationId != null) {
+        clearConversation();
+      }
+      return;
+    }
+
+    const id = Number(conversationIdParam);
+    if (!Number.isInteger(id) || id <= 0) {
+      navigate("/", { replace: true });
+      showToast("대화를 찾을 수 없습니다", "error");
+      return;
+    }
+
+    // 재로드 스킵 가드(강화): "이미 그 대화가 열려 있음"만으로는 부족하다.
+    // StrictMode 2차 실행 시점엔 currentConversationId===id 이지만 messages 가 아직
+    // 비어 있을 수 있는데(1차가 setCurrentConversation 으로 []로 리셋 후 로드 진행 중),
+    // 여기서 스킵하면 1차 결과가 cancelled 로 버려져 영영 0개로 남는다.
+    // → 열려 있고 && (메시지가 이미 있거나 || 이 요청이 이미 진행 중)일 때만 스킵.
+    const state = useChatStore.getState();
+    const alreadyOpen = state.currentConversationId === id;
+    const alreadyHasMessages = state.messages.length > 0;
+    const loadInFlight = loadRequestRef.current !== 0;
+    if (alreadyOpen && (alreadyHasMessages || loadInFlight)) {
+      return;
+    }
+
+    // 이 로드의 시퀀스 번호를 발급. await 완료 시 최신(=마지막 발급)일 때만 반영한다.
+    const requestId = ++loadRequestRef.current;
+    setCurrentConversation(id);
+    void (async () => {
+      try {
+        const page = await conversationsApi.listMessages(id);
+        // 최신 요청이 아니면(그 사이 다른 대화로 전환됨) 무시. StrictMode 이중 실행에서도
+        // 최종적으로 마지막 요청의 결과가 반영되므로 messages 가 비지 않는다.
+        if (loadRequestRef.current !== requestId) return;
+        loadRequestRef.current = 0;
+        setMessages(page.items);
+        // 읽음 처리는 부수효과. 5xx/네트워크로 실패해도 이미 정상 로드된 대화를
+        // 버리면 안 되므로 try 밖(.catch)으로 분리한다(하단 자동 읽음 effect 와 동일 패턴).
+        void conversationsApi.markRead(id).catch(() => {
+          // 무시 — SSE(session_list_update)/다음 진입/재동기화로 복구
+        });
+      } catch {
+        if (loadRequestRef.current !== requestId) return;
+        loadRequestRef.current = 0;
+        // listMessages 실패(존재하지 않거나 권한 없는 대화) → 홈으로 돌려보내고 안내
+        navigate("/", { replace: true });
+        showToast("대화를 찾을 수 없습니다", "error");
+      }
+    })();
+    // conversationIdParam 만 트리거. store 액션/navigate/showToast 는 안정적이라 재실행 유발 안 함.
+    // cleanup 은 두지 않는다 — 취소는 loadRequestRef 시퀀스로 대체(경합 제거).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationIdParam]);
 
   // ─── UI 상태 (우측 패널만, localStorage 저장/복원) ───
   const [rightCollapsed, setRightCollapsed] = useLocalStorageState<boolean>(LS_RIGHT_COLLAPSED, false);
@@ -179,6 +257,9 @@ export function ChatPage() {
           const newId = started.conversation.id;
           setCurrentConversation(newId);
           setMessages([started.message]);
+          // 새 대화 URL 로 전환(replace: 온보딩 "/" 를 히스토리에 남기지 않음).
+          // store 는 이미 위에서 newId 로 반영됐으므로, URL 동기화 effect 는 id 일치로 재로드를 스킵한다.
+          navigate(`/c/${newId}`, { replace: true });
           try {
             const page = await conversationsApi.listMessages(newId);
             if (page.items.length > 0) {
@@ -203,6 +284,7 @@ export function ChatPage() {
       setMessages,
       addMessage,
       loadConversations,
+      navigate,
     ]
   );
 

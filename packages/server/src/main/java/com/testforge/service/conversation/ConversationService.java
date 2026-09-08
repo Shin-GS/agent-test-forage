@@ -232,9 +232,16 @@ public class ConversationService {
      * <p>{@code apiSpecId}가 null이면 "미지정으로 되돌리기"(검증 없이 해제). null이 아니면 미삭제 스펙
      * 존재 여부를 검증하고, 없으면 400(INVALID_REQUEST "유효하지 않은 서비스입니다").
      * updateTitle과 동일하게 목록 한 줄(session_list_update)을 갱신해 모든 탭에 동기화한다.
+     *
+     * <p><b>촉발 카드 파트 소비(선택):</b> {@code triggerPartId}가 non-null이면 service_select 카드
+     * 클릭으로 서비스를 설정한 경우다. 서비스 변경 후 그 파트를 CONSUMED로 전이해 새로고침 후 카드가
+     * 재활성화되지 않게 한다({@link #consumeInteractivePart} 재사용). 파트가 없거나 인터랙티브 타입이
+     * 아니면 no-op이 보장되므로 방어적으로 그대로 호출한다. null이면(기존 호출) 소비 처리 없이 동작한다.
+     * 소비 처리는 그 턴의 {@code message_update} SSE를 발행하므로 FE 카드 비활성화가 함께 동기화된다.
      */
     @Transactional
-    public ConversationDetailResponse updateService(Long id, Long requesterId, Long apiSpecId) {
+    public ConversationDetailResponse updateService(Long id, Long requesterId, Long apiSpecId,
+                                                    Long triggerPartId) {
         Conversation conversation = getOwnedOrThrow(id, requesterId);
 
         // 지정 시에만 존재/유효성 검증. null이면 미지정으로 되돌리기(검증 없음).
@@ -250,7 +257,13 @@ public class ConversationService {
         publishAfterCommit(saved.getUserId(), SseEventType.SESSION_LIST_UPDATE, saved.getId(),
                 SessionListUpdatePayload.upsert(toListSnapshot(saved)));
 
-        log.info("Conversation service updated: conversationId={}, apiSpecId={}", id, apiSpecId);
+        // 촉발 카드 파트가 있으면 CONSUMED로 전이(재활성화 방지). 없거나 타입 불일치면 no-op.
+        if (triggerPartId != null) {
+            consumeInteractivePart(id, triggerPartId);
+        }
+
+        log.info("Conversation service updated: conversationId={}, apiSpecId={}, triggerPartId={}",
+                id, apiSpecId, triggerPartId);
         return toDetail(saved);
     }
 

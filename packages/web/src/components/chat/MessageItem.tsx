@@ -13,6 +13,7 @@
 //   REFERENCES    → MessageReferences (조회 출처 칩)
 // payload 는 part.payload(BE 가 payloadJson 파싱본). 파싱 실패/미지원 버전이면 content 폴백.
 
+import { useMemo, useState } from "react";
 import type { MessageResponse, PartResponse } from "../../api/types";
 import {
   asInvestigateProgressPayload,
@@ -20,8 +21,11 @@ import {
   asReferencesPayload,
   asResultPayload,
 } from "../../services/messagePayload";
+import { buildTurnClipboardText } from "../../services/clipboardText";
+import { useToastStore } from "../../store/toastStore";
 import { MessageCard } from "../cards/MessageCard";
 import { InvestigateProgress, shouldRenderInvestigate } from "./InvestigateProgress";
+import { Markdown } from "./Markdown";
 import { MessageReferences } from "./MessageReferences";
 import { ProgressSteps } from "./ProgressSteps";
 import { ResultMessage } from "./ResultMessage";
@@ -37,10 +41,16 @@ function roleOf(message: MessageResponse): "USER" | "AI" | "SYSTEM" {
   return "AI";
 }
 
-/** content 평문 폴백 렌더 */
+/** content 평문 폴백 렌더 (CARD 폴백/ACTION_PICKER 요약 등 마크다운 대상이 아닌 곳) */
 function contentText(content: string | null) {
   if (!content) return null;
   return <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{content}</div>;
+}
+
+/** TEXT 파트 본문(마크다운 렌더). 순수 TEXT 파트에만 적용한다. */
+function contentMarkdown(content: string | null) {
+  if (!content) return null;
+  return <Markdown content={content} />;
 }
 
 /** 파트가 인터랙티브(카드/액션피커)면서 CONSUMED/CANCELLED 상태인지 — 비활성 시각처리 대상 */
@@ -107,6 +117,7 @@ function renderPart(part: PartResponse) {
       // 저장된 ACTION_PICKER 파트 자체는 content 요약이 있으면만 노출(없으면 빈 블록).
       return contentText(part.content);
     case "TEXT":
+      return contentMarkdown(part.content);
     default:
       return contentText(part.content);
   }
@@ -127,6 +138,44 @@ function PartBlock({ part }: { part: PartResponse }) {
   );
 }
 
+/**
+ * AI 턴 복사 버튼. hover/focus-visible 시 노출.
+ * 미리 조립된 md 텍스트(text)를 복사한다. 부모가 text 비어있으면 이 버튼을 렌더하지 않으므로
+ * 여기서 "복사할 내용 없음" 분기는 필요 없다(방어적으로 빈 문자열이면 no-op).
+ */
+function CopyButton({ text }: { text: string }) {
+  const showToast = useToastStore((s) => s.show);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("복사되었습니다", "success");
+      setCopied(true);
+      // 아이콘을 잠깐 ✓ 로 바꿨다가 원복.
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      showToast("복사에 실패했어요", "error");
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="message__copy"
+      aria-label="답변 복사"
+      onClick={handleCopy}
+    >
+      <span aria-hidden>{copied ? "✓" : "📋"}</span>
+      {/* 복사 성공 시 스크린리더 안내 */}
+      <span className="sr-only" aria-live="polite">
+        {copied ? "복사되었습니다" : ""}
+      </span>
+    </button>
+  );
+}
+
 export function MessageItem({ message }: Props) {
   const role = roleOf(message);
 
@@ -139,6 +188,10 @@ export function MessageItem({ message }: Props) {
 
   // 렌더할 파트만 추린다(빈 요소 숨김 — 예: done+스텝0 investigate).
   const parts = (message.parts ?? []).filter(shouldRenderPart);
+
+  // 복사할 md 텍스트를 미리 조립한다(파트가 바뀔 때만 재계산).
+  // 비어 있으면(카드/진행류만 있어 복사할 TEXT/RESULT 없음) 복사 버튼을 렌더하지 않는다.
+  const copyText = useMemo(() => buildTurnClipboardText(parts), [parts]);
 
   // 표시할 파트가 하나도 없으면 턴 행 자체를 렌더하지 않는다(빈 아바타/여백 방지).
   if (parts.length === 0) {
@@ -155,6 +208,8 @@ export function MessageItem({ message }: Props) {
           <PartBlock key={part.id} part={part} />
         ))}
       </div>
+      {/* 복사 버튼은 AI 턴 + 복사할 내용(TEXT/RESULT)이 있을 때만. USER/SYSTEM·빈 턴 제외. */}
+      {role === "AI" && copyText.length > 0 && <CopyButton text={copyText} />}
     </div>
   );
 }

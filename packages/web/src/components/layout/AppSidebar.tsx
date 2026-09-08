@@ -41,8 +41,6 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
   const conversations = useChatStore((s) => s.conversations);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const setConversations = useChatStore((s) => s.setConversations);
-  const setCurrentConversation = useChatStore((s) => s.setCurrentConversation);
-  const setMessages = useChatStore((s) => s.setMessages);
   const clearConversation = useChatStore((s) => s.clearConversation);
 
   // 회원 드롭업 메뉴 열림 상태
@@ -66,36 +64,23 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
     void loadConversations();
   }, [loadConversations]);
 
-  // 대화 선택 → 채팅 라우트로 이동 + 메시지 로드 + 읽음 처리
+  // 대화 선택 → 대화방 URL 로 이동만 한다(navigate). URL 이 source of truth 이며,
+  // 메시지 로드/읽음 처리/store 동기화는 ChatPage 가 :conversationId 를 읽어 수행한다.
+  // (URL→store 단방향. 같은 대화 재클릭도 동일 URL 로 navigate — ChatPage 가 id 일치로 재로드 스킵.)
   const handleSelect = useCallback(
-    async (conversationId: number) => {
-      // 이미 열려 있는 대화를 다시 클릭하면 아무 것도 하지 않는다(메시지 초기화·재조회로 인한 깜빡임 방지).
-      // 단, 다른 라우트(/recipes 등)에 있을 때는 같은 대화라도 채팅으로 돌아가야 하므로 navigate 는 수행.
-      if (conversationId === currentConversationId) {
-        navigate("/");
-        return;
-      }
-      navigate("/");
-      setCurrentConversation(conversationId);
-      try {
-        const page = await conversationsApi.listMessages(conversationId);
-        setMessages(page.items);
-        await conversationsApi.markRead(conversationId);
-      } catch (err) {
-        showToast(
-          err instanceof Error ? `메시지를 불러오지 못했습니다: ${err.message}` : "메시지를 불러오지 못했습니다",
-          "error"
-        );
-      }
+    (conversationId: number) => {
+      navigate(`/c/${conversationId}`);
     },
-    [navigate, currentConversationId, setCurrentConversation, setMessages, showToast]
+    [navigate]
   );
 
-  // 새 채팅 → 채팅 라우트 + 초기화 (빈 대화방은 서버에 만들지 않음)
+  // 새 채팅 → 채팅 라우트로만 이동. 대화 상태 정리는 ChatPage 의 URL→store effect 가
+  // param==null 을 감지해 clearConversation() 을 수행한다(정리 책임 일원화).
+  // navigate("/") 는 conversationIdParam 을 null 로 만들고, 현재 대화가 열려 있으면
+  // 그 effect 가 정리하므로 여기서 직접 clearConversation 을 호출하지 않는다(이중 호출 방지).
   const handleNew = useCallback(() => {
     navigate("/");
-    clearConversation();
-  }, [navigate, clearConversation]);
+  }, [navigate]);
 
   // 이름 변경: 서버 응답(정규화된 title)을 신뢰값으로 반영. 실패 시 재조회로 롤백.
   const handleRename = useCallback(

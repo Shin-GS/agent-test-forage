@@ -33,9 +33,9 @@ export function MessageCard({ cardType, payload, partId, consumed }: Props) {
     case "execution_mode":
       return <ExecutionModeCard card={card} partId={partId} consumed={consumed} />;
     case "service_select":
-      return <ServiceSelectCard card={card} />;
+      return <ServiceSelectCard card={card} partId={partId} consumed={consumed} />;
     case "candidates":
-      return <CandidatesCard card={card} />;
+      return <CandidatesCard card={card} partId={partId} consumed={consumed} />;
     case "plan":
       return <PlanCard card={card} partId={partId} consumed={consumed} />;
     default:

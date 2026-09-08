@@ -18,8 +18,8 @@ import { runExecution } from "../../services/executionRunner";
 import { applyRunResult } from "../../services/executionResult";
 import { useChatStore } from "../../store/chatStore";
 import { useToastStore } from "../../store/toastStore";
-import type { ConversationRuntimeStatus } from "../../store/types";
 import { FieldInput, initialValue } from "../chat/FieldInput";
+import { conversationLockMessage, useRecipeRun } from "./useRecipeRun";
 
 const listStyle: React.CSSProperties = {
   display: "flex",
@@ -49,57 +49,159 @@ const descStyle: React.CSSProperties = {
   marginTop: 2,
 };
 
-/** 서비스 선택 — 버튼 목록만 표시 (동작은 후속) */
-export function ServiceSelectCard({ card }: { card: ServiceSelectCardMeta }) {
+/**
+ * 서비스 선택 카드 — 각 서비스 버튼 클릭 시 대화방 대상 서비스를 설정한다.
+ * - conversationsApi.updateService(convId, apiSpecId, partId) 호출 → BE 가 서비스 설정 + 카드 CONSUMED.
+ * - 서비스 변경은 실행이 아니지만, 대화방이 처리 중(AI 응답/실행/입력 대기)이면 상태 꼬임 방지를 위해
+ *   막고 안내한다(ExecutionModeCard 락 규칙과 동일).
+ * - 성공 시: 목록의 해당 대화방을 낙관적 갱신(즉시 배지 반영). SSE(session_list_update)로도 갱신되지만
+ *   즉시 반영을 위해 setConversations 로 upsert 한다. 카드는 started/consumed 로 비활성.
+ * - payload: services[] = { apiSpecId, name, label }.
+ */
+export function ServiceSelectCard({
+  card,
+  partId,
+  consumed = false,
+}: {
+  card: ServiceSelectCardMeta;
+  /** 촉발 파트 id (서비스 설정 시 messageId 로 전달 → BE CONSUMED 처리) */
+  partId?: number;
+  /** 파트가 이미 CONSUMED/CANCELLED 인지 (새로고침 복원 시 재선택 차단) */
+  consumed?: boolean;
+}) {
+  const conversationId = useChatStore((state) => state.currentConversationId);
+  const conversationStatus = useChatStore((state) => state.conversationStatus);
+  const showToast = useToastStore((state) => state.show);
+
+  const [running, setRunning] = useState(false);
+  // 이 세션에서 서비스를 고르면 재선택을 막는다(중복 방지). 새로고침 후에는 consumed 로 복원.
+  const [started, setStarted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const services: any[] = card.services ?? [];
+  const disabled = running || started || consumed || conversationId == null;
+
+  const handleSelect = async (apiSpecId: number, name: string) => {
+    if (disabled) return;
+    // 대화방 락: 실행/응답/입력 대기 중이면 서비스 변경도 막는다(상태 꼬임 방지).
+    if (conversationStatus !== "idle") {
+      showToast(conversationLockMessage(conversationStatus), "warning");
+      return;
+    }
+    const convId = conversationId!;
+    setRunning(true);
+    setError(null);
+    try {
+      // 촉발 파트 id 를 함께 보내 BE 가 이 카드 파트를 CONSUMED 처리하게 한다(messaging.md).
+      const detail = await conversationsApi.updateService(convId, apiSpecId, partId);
+      // 목록의 해당 대화방을 낙관적 갱신(즉시 서비스 배지 반영). SSE 로도 갱신되지만 지연 없이 반영.
+      const store = useChatStore.getState();
+      store.setConversations(
+        store.conversations.map((c) =>
+          c.id === convId ? { ...c, apiSpecId: detail.apiSpecId, serviceName: detail.serviceName ?? name } : c
+        )
+      );
+      showToast("서비스가 설정되었습니다", "success");
+      setStarted(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        showToast("현재 대화방에 진행 중인 작업이 있어요. 완료 후 다시 시도해주세요.", "warning");
+      } else {
+        setError(err instanceof Error ? err.message : "서비스 설정에 실패했습니다");
+      }
+    } finally {
+      setRunning(false);
+    }
+  };
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
-      {services.map((svc, idx) => (
-        <button
-          key={svc.id ?? svc.apiSpecId ?? idx}
-          type="button"
-          className="btn btn--secondary btn--sm"
-          disabled
-          title="후속 구현 예정"
-        >
-          {svc.name ?? svc.title ?? String(svc)}
-        </button>
-      ))}
-      {services.length === 0 && <span style={descStyle}>표시할 서비스가 없습니다</span>}
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center" }}>
+        {services.map((svc, idx) => {
+          const apiSpecId: number | undefined = svc.apiSpecId ?? svc.id;
+          const label: string = svc.label ?? svc.name ?? svc.title ?? String(svc);
+          return (
+            <button
+              key={apiSpecId ?? idx}
+              type="button"
+              className="btn btn--secondary btn--sm"
+              disabled={disabled || apiSpecId == null}
+              onClick={() => apiSpecId != null && handleSelect(apiSpecId, svc.name ?? label)}
+            >
+              {label}
+            </button>
+          );
+        })}
+        {services.length === 0 && <span style={descStyle}>표시할 서비스가 없습니다</span>}
+        {(started || consumed) && <span className="badge badge--info">설정됨</span>}
+      </div>
+      {running && (
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)" }}>설정 중입니다...</span>
+      )}
+      {error && <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-error)" }}>{error}</span>}
     </div>
   );
 }
 
-/** 후보 선택 — 항목 목록만 표시 (동작은 후속) */
-export function CandidatesCard({ card }: { card: CandidatesCardMeta }) {
-  const candidates: any[] = card.candidates ?? [];
+/**
+ * 후보 선택 카드 — 각 후보(레시피) 항목 클릭 시 그 레시피를 AUTO 로 실행한다.
+ * ExecutionModeCard 와 동일한 실행 경로(useRecipeRun): 대화방 락 체크 + pendingInputs 분기 + 러너 구동.
+ * - payload: candidates[] = { id(recipeId), name, description }.
+ * - consumed(파트 소진)면 비활성. 실행 시작 후에도 재실행하지 않는다(started).
+ */
+export function CandidatesCard({
+  card,
+  partId,
+  consumed = false,
+}: {
+  card: CandidatesCardMeta;
+  /** 촉발 파트 id (실행 요청 messageId 로 전달 → BE CONSUMED 처리) */
+  partId?: number;
+  /** 파트가 이미 CONSUMED/CANCELLED 인지 (새로고침 복원 시 재실행 차단) */
+  consumed?: boolean;
+}) {
+  const conversationId = useChatStore((state) => state.currentConversationId);
+  const { running, started, error, startRun } = useRecipeRun(consumed);
+
+  // BE candidates 카드 payload 는 recipes 키로 후보를 내려준다(ChatProcessor.candidatesCard:
+  // {cardType:"candidates", recipes:[{id,name,description}]}). 과거 candidates 키도 방어적으로 폴백.
+  const candidates: any[] = card.recipes ?? card.candidates ?? [];
+  const disabled = running || started || consumed || conversationId == null;
+
+  const handleSelect = (recipeId: number) => {
+    if (disabled) return;
+    void startRun({ recipeId, mode: "AUTO", partId });
+  };
+
   return (
     <div style={listStyle}>
-      {candidates.map((c, idx) => (
-        <div key={c.recipeId ?? c.id ?? idx} style={rowStyle}>
-          <div>
-            <div style={nameStyle}>{c.name ?? c.recipeName ?? `후보 ${idx + 1}`}</div>
-            {(c.description ?? c.desc) && <div style={descStyle}>{c.description ?? c.desc}</div>}
-          </div>
-        </div>
-      ))}
+      {candidates.map((c, idx) => {
+        const recipeId: number | undefined = c.id ?? c.recipeId;
+        const name = c.name ?? c.recipeName ?? `후보 ${idx + 1}`;
+        const desc = c.description ?? c.desc;
+        return (
+          <button
+            key={recipeId ?? idx}
+            type="button"
+            className="card card--interactive"
+            style={{ ...rowStyle, textAlign: "left", border: "none", cursor: disabled ? "default" : "pointer", width: "100%" }}
+            disabled={disabled || recipeId == null}
+            onClick={() => recipeId != null && handleSelect(recipeId)}
+            aria-label={`${name} 실행`}
+          >
+            <div>
+              <div style={nameStyle}>{name}</div>
+              {desc && <div style={descStyle}>{desc}</div>}
+            </div>
+            {running && <span style={descStyle}>실행 중...</span>}
+          </button>
+        );
+      })}
       {candidates.length === 0 && <span style={descStyle}>후보가 없습니다</span>}
+      {(started || consumed) && <span className="badge badge--info">실행됨</span>}
+      {error && <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-error)" }}>{error}</span>}
     </div>
   );
-}
-
-/** 대화방 처리 중 안내 문구 (상태별) — ExecutionModeCard 와 동일 규칙 */
-function conversationLockMessage(status: ConversationRuntimeStatus): string {
-  switch (status) {
-    case "ai_responding":
-      return "AI가 응답 중이에요. 완료 후 다시 시도해주세요.";
-    case "executing":
-      return "레시피 실행 중이에요. 완료 후 다시 시도해주세요.";
-    case "input_waiting":
-      return "입력 대기 중이에요. 먼저 진행 중인 작업을 마쳐주세요.";
-    default:
-      return "현재 작업이 진행 중이에요. 완료 후 다시 시도해주세요.";
-  }
 }
 
 /**

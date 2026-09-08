@@ -169,6 +169,8 @@
   margin: 0 auto;
   padding: var(--space-4) var(--chat-column-padding-x);
   transition: background var(--transition-fast);
+  /* 복사 버튼(.message__copy) 절대배치 기준점 */
+  position: relative;
 }
 
 /* 행 전체 hover 는 옅은 bg-hover */
@@ -222,6 +224,96 @@
 /* 인터랙티브 파트(카드/액션피커) 소진(CONSUMED): 비활성 시각처리. 클릭은 각 카드가 consumed 로 차단. */
 .message__part--consumed {
   opacity: 0.6;
+}
+
+/* AI 턴 복사 버튼: 턴 우상단. 평소 숨김, hover 또는 focus-visible 시 fade-in. */
+.message__copy {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--chat-column-padding-x);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+/* hover 시(턴 위 마우스) 노출 */
+.message:hover .message__copy {
+  opacity: 1;
+}
+
+/* 키보드 포커스 시에도 노출(접근성) */
+.message__copy:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.message__copy:hover {
+  background: var(--color-bg-hover);
+}
+
+/* 마크다운 본문: 요소 간 간격을 채팅 톤에 맞게 조정(과한 기본 margin 제거). */
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+.markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+.markdown-body p {
+  margin: 0 0 var(--space-2);
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-5);
+}
+.markdown-body pre {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow-x: auto;
+  margin: 0 0 var(--space-2);
+}
+.markdown-body code {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+}
+.markdown-body :not(pre) > code {
+  background: var(--color-bg-tertiary);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+.markdown-body a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.markdown-body blockquote {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0 0 var(--space-2);
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
 }
 
 /* --- Tool Call Card --- */

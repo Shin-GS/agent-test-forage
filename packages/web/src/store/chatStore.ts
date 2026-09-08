@@ -146,9 +146,14 @@ function mapRuntimeStatus(status: StatusView | string): ConversationRuntimeStatu
 }
 
 /**
- * 턴 id 오름차순 정렬 + id 중복 제거.
+ * 턴 정렬 + id 중복 제거.
  * 같은 id 가 여러 개면 뒤에 들어온(=최신 스냅샷) 턴을 우선한다.
- * 낙관적 임시 턴은 id 를 음수로 두어, 서버 확정 턴(양수 id)보다 항상 뒤(목록 끝)에 온다.
+ * 낙관적 임시 턴은 id 를 음수(-Date.now())로 두므로, 단순 id 오름차순으로 정렬하면
+ * 음수가 모든 양수보다 작아 맨 앞(위)으로 가버린다. 임시 턴은 "가장 최신 발화"이므로
+ * 항상 목록 끝(아래)에 와야 한다. 따라서:
+ *  - 확정 턴(양수)끼리: id 오름차순(과거→최신)
+ *  - 확정 vs 임시: 임시가 항상 뒤
+ *  - 임시(음수)끼리: 먼저 생성된 것이 앞(=-Date.now() 가 덜 음수인 쪽이 앞 → 내림차순)
  * (messaging.md 낙관적 UI: 확정 턴끼리는 id 오름차순, 임시는 끝.)
  */
 function normalizeMessages(messages: MessageResponse[]): MessageResponse[] {
@@ -156,7 +161,13 @@ function normalizeMessages(messages: MessageResponse[]): MessageResponse[] {
   for (const message of messages) {
     byId.set(message.id, message);
   }
-  return Array.from(byId.values()).sort((a, b) => a.id - b.id);
+  return Array.from(byId.values()).sort((a, b) => {
+    const aTemp = a.id <= 0;
+    const bTemp = b.id <= 0;
+    if (aTemp !== bTemp) return aTemp ? 1 : -1; // 임시는 항상 뒤
+    if (aTemp && bTemp) return b.id - a.id; // 임시끼리: 먼저 생성(덜 음수)이 앞
+    return a.id - b.id; // 확정끼리: id 오름차순
+  });
 }
 
 export const useChatStore = create<ChatState>((set) => ({

@@ -32,6 +32,8 @@ function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<ChatPage />} />
+          {/* 대화방 딥링크: URL 이 source of truth. ChatPage 가 :conversationId 를 읽어 store 동기화 */}
+          <Route path="/c/:conversationId" element={<ChatPage />} />
           <Route path="/recipes" element={<RecipeListPage />} />
           <Route path="/recipes/new" element={<RecipeEditPage />} />
           <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
