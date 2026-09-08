@@ -2748,14 +2748,16 @@ select.input {
    아바타 시작 x = 메뉴 아이콘 시작 x, 이름/이메일 시작 x = 라벨 시작 x 로 일치시킨다
    (하단만 정렬 축이 어긋나 보이지 않게). */
 .sidebar-user__avatar {
-  width: var(--sidebar-icon-size);
-  height: var(--sidebar-icon-size);
+  /* 이니셜 2글자(한글 포함)가 온전히 들어갈 크기(32px). 아이콘(18px)에 맞추면 글자가
+     원을 넘쳐 "깨진 조각"처럼 보인다. 좌측 시작 축은 유지되고 원만 우측으로 커진다. */
+  width: var(--space-8);
+  height: var(--space-8);
   border-radius: var(--radius-full);
   background: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
   color: #fff;
   flex-shrink: 0;
   font-weight: var(--font-weight-medium);
