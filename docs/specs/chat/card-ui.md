@@ -143,7 +143,7 @@ AI: 회원가입 시 약관 동의는 필수입니다.
 | Confluence | 📄 페이지 제목 | Confluence 페이지 URL(`{CONFLUENCE_BASE_URL}/wiki/spaces/{KEY}/pages/{id}`) **새 탭**(`target=_blank rel=noopener noreferrer`) | ✅ 2단계 |
 | Figma | 🎨 프레임명 | Figma URL 새 탭 | ⏳ 추후 |
 
-> 참고 자료는 `api_spec`(내부 url → 인라인 확장) / `confluence`(외부 url → 새 탭) 소스가 노출된다(url 형태로 FE가 동작 분기 — [messaging.md references 스키마](../common/messaging.md#references-정보-조회-참고-자료)). 저장·복원은 답변 `TEXT` 메시지의 references payload로 처리. 상세: [investigation.md references 표시](scenarios/investigation.md#참고-자료-references-표시).
+> 참고 자료는 `api_spec`(내부 url → 인라인 확장) / `confluence`(외부 url → 새 탭) 소스가 노출된다(url 형태로 FE가 동작 분기 — [messaging.md references 스키마](../common/messaging.md#references-정보-조회-참고-자료)). 저장·복원은 답변 턴의 `REFERENCES` 파트 payload로 처리. 상세: [investigation.md references 표시](scenarios/investigation.md#참고-자료-references-표시).
 
 ### 인라인 확장 (api_spec 칩)
 

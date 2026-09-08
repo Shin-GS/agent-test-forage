@@ -1,6 +1,6 @@
 ---
-status: confirmed
-last-updated: 2026-09-15
+status: review
+last-updated: 2026-09-08
 ---
 
 # 작업 히스토리
@@ -13,7 +13,7 @@ last-updated: 2026-09-15
 
 - 레시피 실행 건만 저장
 - 대화방 삭제해도 히스토리는 독립적으로 유지
-- 실행은 서버에 저장되며 대화 메시지와도 연결된다(`EXECUTION.MESSAGE_ID` → 실행의 PROGRESS 메시지). 대화 진입/새로고침 시 진행/결과 블록은 PROGRESS/RESULT 메시지 로드로 복원된다. 메시지가 화면의 진실이라면 EXECUTION은 독립된 사실/히스토리 계층이라, **대화를 삭제해도 실행 기록은 유지**된다. 상세: [recipe/execution.md 새로고침 복원](../recipe/execution.md#브라우저-새로고침--탭-닫기) · [messaging.md EXECUTION 계층](../common/messaging.md#execution-계층사실히스토리)
+- 실행은 서버에 저장되며 대화 파트와도 연결된다(파트 → 실행: `MESSAGE_PART.EXECUTION_ID`, 실행 → 촉발 파트: `EXECUTION.TRIGGER_PART_ID`). 대화 진입/새로고침 시 진행/결과 블록은 턴+파트(PROGRESS/RESULT 파트) 로드로 복원된다. 파트가 화면의 진실이라면 EXECUTION은 독립된 사실/히스토리 계층이라, **대화를 삭제해도 실행 기록은 유지**된다. 상세: [recipe/execution.md 새로고침 복원](../recipe/execution.md#브라우저-새로고침--탭-닫기) · [messaging.md EXECUTION 계층](../common/messaging.md#execution-계층사실히스토리)
 
 ## 표시 정보
 

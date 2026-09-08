@@ -33,9 +33,11 @@ last-updated: 2026-09-18
 | **정보 조회 (investigate)** | 정책/기능 질문에 답하기 위해 AI가 정보 소스를 반복 조회하는 agentic loop. 읽기 전용, 승인 불필요 |
 | **커넥터** | investigate가 조회하는 정보 소스 추상화. api_spec (1단계 구현) / confluence (2단계 구현 — Atlassian Cloud REST(CQL), 서비스별 spaceKey 범위) / figma (추후) |
 | **참고 자료 카드** | 조회한 소스를 칩(버튼) 리스트로 보여주는 카드 UI (출처 인용). 1단계 `api_spec` 칩은 클릭 시 그 자리에서 엔드포인트 상세를 인라인 아코디언으로 펼침 |
-| **PROGRESS 메시지** | 레시피 실행 진행 블록을 담는 메시지 유형. 실행 시작 시 생성되고 스텝 진행마다 같은 메시지를 갱신(message_update). FE 메모리가 아닌 MESSAGE로 저장되어 새로고침 시 복원 |
-| **RESULT 메시지** | 레시피 실행 결과 블록을 담는 메시지 유형. 실행 완료 시 생성. resultValues(진실) + 표시용 요약(content) 보유 |
-| **INVESTIGATE_PROGRESS 메시지** | 정보 조회(investigate) 루프의 진행 블록을 담는 메시지 유형. 소스별 조회 단계마다 같은 메시지를 갱신(message_update). 실행(EXECUTION)이 아니므로 PROGRESS와 구분. 최종 답변은 별도 TEXT 메시지(references payload)로 발행 |
-| **payloadJson** | 메시지의 유형별 구조화 데이터 필드(진실). kind/schemaVersion 공통 필드 보유. content(사람이 읽는 표시용 요약, 파생물)와 이원화 |
+| **턴 (MESSAGE)** | 대화의 한 단위. 사용자 발화 1개 또는 AI 응답 1턴. 순서 있는 파트(MESSAGE_PART) 배열을 품는다. 대화 타임라인·AI 컨텍스트의 축이며 정렬은 ID 단독 |
+| **파트 (MESSAGE_PART)** | 한 턴 안의 순서 있는 블록(화면 렌더 단위). 타입: TEXT/CARD/PROGRESS/RESULT/INVESTIGATE/ACTION_PICKER/REFERENCES. 동종 파트 N개 허용. 실행/조회 사실은 EXECUTION_ID/INVESTIGATION_ID로 참조 |
+| **PROGRESS 파트** | 레시피 실행 진행 블록 파트. 실행 시작 시 턴에 append, 스텝 진행마다 그 턴을 갱신(message_update=턴 스냅샷). EXECUTION_ID로 실행 참조. 새로고침 시 파트 로드로 복원 |
+| **RESULT 파트** | 레시피 실행 결과 블록 파트. 실행 완료 시 append. resultValues(진실) + 표시용 요약(content) 보유 |
+| **INVESTIGATE 파트** | 정보 조회(investigate) 진행 블록 파트. 소스별 단계마다 그 턴을 갱신. INVESTIGATION_ID로 조회 참조. 최종 답변은 같은 턴에 TEXT(+REFERENCES) 파트로 append |
+| **payloadJson** | 파트의 유형별 구조화 데이터 필드(진실). kind/schemaVersion 공통 필드 보유. content(사람이 읽는 표시용 텍스트, TEXT 파트 본문)와 이원화 |
 | **표시명 (label)** | 비개발자가 이해하도록 스텝·결과 값에 붙이는 사람말 이름(예: orderId → "주문번호"). 선택 입력이며, 없으면 폴백 체인으로 자동 결정 |
 | **표시명 폴백 체인** | 표시명이 비었을 때 자동 결정하는 우선순위. 스텝=(1)등록 표시명→(2)엔드포인트 summary→(3)method+path, 결과키=(1)결과 정의 label→(2)원본 key. 어떤 경우에도 표기가 깨지지 않음. label은 레시피 스냅샷에 포함되어 히스토리 재현 시 유지 |

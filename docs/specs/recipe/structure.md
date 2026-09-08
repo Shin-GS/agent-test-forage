@@ -151,4 +151,4 @@ function execute(context) {
 
 - 스텝 표시명과 결과 정의 `label`은 **레시피 스냅샷([RECIPE_VERSION](../../db/recipe.md#recipe_version))에 포함**된다.
 - 히스토리 재현 시 그때 그 이름이 유지되도록, 실행 시점의 표시명을 함께 기록한다(스펙 `summary`가 이후 바뀌어도 과거 실행 표기는 흔들리지 않음).
-- **폴백 결과도 실행 시점에 고정**: 스텝에 표시명(label)이 없어 summary(또는 method+path)로 폴백된 경우에도, 서버가 **실행 시점에 폴백 체인으로 확정한 사람말 이름을 PROGRESS 메시지의 `steps[].name`에 저장**한다. 따라서 히스토리 재현·새로고침 복원 시에도 "조회 당시 summary"가 아니라 **그때 그 실행 시점의 이름**이 그대로 표시된다(스펙 `summary`가 이후 변경돼도 과거 표기 불변). PROGRESS `steps[].name` 저장: [messaging.md PROGRESS 스키마](../common/messaging.md#progress-실행-진행-블록)
+- **폴백 결과도 실행 시점에 고정**: 스텝에 표시명(label)이 없어 summary(또는 method+path)로 폴백된 경우에도, 서버가 **실행 시점에 폴백 체인으로 확정한 사람말 이름을 PROGRESS 파트 payload의 `steps[].name`에 저장**한다. 따라서 히스토리 재현·새로고침 복원 시에도 "조회 당시 summary"가 아니라 **그때 그 실행 시점의 이름**이 그대로 표시된다(스펙 `summary`가 이후 변경돼도 과거 표기 불변). PROGRESS `steps[].name` 저장: [messaging.md PROGRESS 스키마](../common/messaging.md#progress-실행-진행-블록)

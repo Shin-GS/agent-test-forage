@@ -10,22 +10,28 @@ ai-test-forge 데이터베이스 스키마 설계 문서.
 | [user.md](user.md) | 사용자 | APP_USER (AI/실행 설정은 DB 미저장 — 설정 파일로만) |
 | [recipe.md](recipe.md) | 레시피 | RECIPE, RECIPE_VERSION |
 | [execution.md](execution.md) | 실행/히스토리 | EXECUTION, EXECUTION_RECIPE, EXECUTION_STEP |
-| [conversation.md](conversation.md) | 대화 | CONVERSATION, MESSAGE |
+| [investigation.md](investigation.md) | 정보 조회(investigate) | INVESTIGATION, INVESTIGATION_STEP |
+| [conversation.md](conversation.md) | 대화 | CONVERSATION, MESSAGE, MESSAGE_PART |
 
 ## 도메인 관계 (개략)
 
 ```
-APP_USER ──┬── CONVERSATION ──── MESSAGE (1:N)
+APP_USER ──┬── CONVERSATION ──── MESSAGE(턴) ──── MESSAGE_PART(블록) (1:N:N)
            ├── RECIPE ──── RECIPE_VERSION (1:N)
-           └── EXECUTION ──── EXECUTION_RECIPE ──── EXECUTION_STEP (1:N:N)
+           ├── EXECUTION ──── EXECUTION_RECIPE ──── EXECUTION_STEP (1:N:N)
+           └── INVESTIGATION ──── INVESTIGATION_STEP (1:N)
 
 API_SPEC ──┬── API_SPEC_DOCUMENT (1:1)
            ├── API_ENDPOINT (1:N)   ← 레시피 스텝이 논리 참조
            └── AUTH_PROFILE (1:N)
 
-CONVERSATION ──── EXECUTION   (연결 유지, 히스토리는 USER_ID 기준 독립)
-RECIPE       ──(스냅샷)──── EXECUTION_RECIPE  (실행 시점 통째 복사)
-API_SPEC     ──── RECIPE / CONVERSATION       (대상 서비스)
+MESSAGE_PART ──── EXECUTION      (파트→실행 렌더 정참조: EXECUTION_ID)
+MESSAGE_PART ──── INVESTIGATION  (파트→조회 렌더 정참조: INVESTIGATION_ID)
+EXECUTION     ──── MESSAGE_PART  (실행→촉발 파트 역참조: TRIGGER_PART_ID)
+INVESTIGATION ──── MESSAGE_PART  (조회→촉발 파트 역참조: TRIGGER_PART_ID)
+CONVERSATION  ──── EXECUTION / INVESTIGATION  (연결 유지, 히스토리는 USER_ID 기준 독립)
+RECIPE        ──(스냅샷)──── EXECUTION_RECIPE  (실행 시점 통째 복사)
+API_SPEC      ──── RECIPE / CONVERSATION       (대상 서비스)
 ```
 
 ## 설계 원칙

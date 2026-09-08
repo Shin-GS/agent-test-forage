@@ -16,14 +16,14 @@ last-updated: 2026-09-06
 실행 시작
     │
     ▼
-채팅: PROGRESS 메시지 생성 (message_new, status:running)
+채팅: AI 턴에 PROGRESS 파트 append (message_update; 턴 없으면 message_new, status:running)
 대화방 상태: 🔄 처리 중
 입력: 차단 + [중지] 버튼 표시
     │
     ▼
 스텝 순차 실행 (FE 브라우저에서 외부 API 직접 호출)
     │
-    ├─ 스텝 완료 → 같은 PROGRESS 메시지 갱신 (message_update, ✅ + 결과 한 줄 누적)
+    ├─ 스텝 완료 → 같은 턴의 PROGRESS 파트 갱신 (message_update=턴 스냅샷, ✅ + 결과 한 줄 누적)
     │              BE에 스텝 결과 저장 API 호출
     │
     ├─ 사용자 입력 필요 (직접 입력 모드 or AI가 판단 불가)
@@ -40,8 +40,8 @@ last-updated: 2026-09-06
     ├─ 실패 (500, 타임아웃 등) → ❌ + 카드 UI: [다시 실행]
     │
     └─ 전체 완료
-          → PROGRESS status 확정 (message_update, success/failed)
-          → 채팅: RESULT 메시지 생성 (message_new, 결과 요약 + resultValues)
+          → PROGRESS 파트 status 확정 (message_update, success/failed)
+          → 채팅: 같은 턴에 RESULT 파트 append (message_update, 결과 요약 + resultValues)
           → 카드 UI: 결과 제공형 카드 ([결과 보기]는 프로토타입 비활성/생략)
           → 히스토리 refresh
           → 대화방 상태: 유휴 (session_status: idle)
@@ -104,7 +104,7 @@ AI: 입사지원이 완료되었습니다.
 └─────────────────────────────────────────┘
 ```
 
-- 진행/완료는 PROGRESS 메시지(스텝 누적, `message_update`) + 완료 시 RESULT 메시지(`message_new`)로 흐른다. 상세: [execution.md 실행 완료](../../recipe/execution.md#실행-완료--결과-요약) · [messaging.md 실행 SSE 흐름](../../common/messaging.md#실행-sse-흐름-message_new--message_update)
+- 진행/완료는 AI 턴의 PROGRESS 파트(스텝 누적, `message_update`=턴 스냅샷) + 완료 시 같은 턴에 RESULT 파트 append로 흐른다. 상세: [execution.md 실행 완료](../../recipe/execution.md#실행-완료--결과-요약) · [messaging.md 실행 SSE 흐름](../../common/messaging.md#실행-sse-흐름-message_new--message_update)
 - 결과 제공형 카드는 노출하되 `[결과 보기]`는 사이드 패널 미구현으로 프로토타입에서 비활성/생략한다.
 
 ---

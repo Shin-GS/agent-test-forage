@@ -101,7 +101,7 @@ OpenRouter는 크레딧/데일리 한도를 넘으면 **HTTP 402(Payment Require
 
 OpenAI 호환 API를 직접 호출하므로, investigate 루프도 우리가 직접 관리한다: "tool_calls가 있으면
 커넥터 실행 → 결과를 messages에 추가 → 재호출"을 최대 5회/타임아웃 120초까지 반복하고, 매 조회마다
-SSE로 진행 상태(INVESTIGATE_PROGRESS 메시지 갱신)를 보낸다. 단순 tool 선택(1회 호출)과 달리 investigate만
+SSE로 진행 상태(INVESTIGATE 파트 갱신 = 그 턴 message_update)를 보낸다. 단순 tool 선택(1회 호출)과 달리 investigate만
 이 반복 루프를 쓴다. **전용 서비스(`InvestigateLoop`)로 분리**하고 `IntentResolver.resolve()`는 단발 tool
 선택 책임을 유지한다(단발 경로 오염 방지).
 

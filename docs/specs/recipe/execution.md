@@ -202,7 +202,7 @@ AI: 📋 입사지원 (사람인)
     └─ ⑤ 템플릿 없음 → [fast] AI 요약 (입력: steps summary + resultValues)
     │
     ▼
-PROGRESS 확정(message_update) + RESULT 메시지(message_new) 발행 + 결과 제공형 카드
+PROGRESS 파트 확정(message_update) + RESULT 파트 append(message_update) + 결과 제공형 카드
     │
     ▼
 session_status: idle + 히스토리 refresh
@@ -329,9 +329,9 @@ API 호출은 사용자 브라우저에서 실행되므로, 브라우저가 닫�
 
 **진행 블록 복원 (메시지-실행 연결)**
 
-- 진행 블록은 FE 메모리(zustand)가 아니라 **PROGRESS 메시지로 저장**되므로, 대화 메시지를 로드하면 그대로 복원된다. 결과도 RESULT 메시지로 저장된다. (계약: [messaging.md 저장/전달 내부 계약](../common/messaging.md#저장전달-내부-계약-febe-공유))
-- 실행-촉발 위치 연결은 `EXECUTION.MESSAGE_ID`(실행의 PROGRESS 메시지)로 한다. 대화 진입 시 메시지 로드로 PROGRESS/RESULT가 복원되고, 이후 갱신은 SSE(`message_update`로 PROGRESS 갱신, 완료 시 RESULT `message_new`).
-- 스키마/인덱스: [db/execution.md `EXECUTION.MESSAGE_ID`](../../db/execution.md#새로고침-복원-메시지-실행-연결)
+- 진행 블록은 FE 메모리(zustand)가 아니라 **PROGRESS 파트로 저장**되므로, 대화 턴+파트를 로드하면 그대로 복원된다. 결과도 RESULT 파트로 저장된다. (계약: [messaging.md 저장/전달 내부 계약](../common/messaging.md#저장전달-내부-계약-febe-공유))
+- 실행-촉발 위치 연결은 `EXECUTION.TRIGGER_PART_ID`(실행을 촉발한 파트)로 하고, 진행/결과 렌더는 `MESSAGE_PART.EXECUTION_ID`(파트→실행 정참조)로 한다. 대화 진입 시 턴+파트 로드로 PROGRESS/RESULT가 복원되고, 이후 갱신은 SSE(`message_update`로 PROGRESS 파트 갱신, 완료 시 RESULT 파트 append).
+- 스키마/인덱스: [db/execution.md 새로고침 복원](../../db/execution.md#새로고침-복원-파트-실행-연결)
 
 **이어서 실행 (PARTIAL 재개)**
 

@@ -277,7 +277,7 @@ reportStep 수신
 - 헤더에 진행률 `(k/N 레시피)` 표시.
 - 완료된 레시피는 접힘(결과 한 줄만), 현재 레시피만 스텝 펼침.
 - 레시피 전이 시 **aria-live로 announce**(접근성): 예 "포지션 탐색 실행을 시작합니다".
-- 진행 블록은 PROGRESS 메시지로 저장되어 새로고침 시 복원된다([messaging.md PROGRESS](../common/messaging.md#progress-실행-진행-블록)).
+- 진행 블록은 AI 턴의 PROGRESS 파트로 저장되어 새로고침 시 복원된다([messaging.md PROGRESS](../common/messaging.md#progress-실행-진행-블록)).
 
 ---
 
@@ -388,7 +388,7 @@ PARTIAL 종료 상태:
 - **신규 엔드포인트**: `POST /api/v1/executions/{executionId}/resume`
 - 실패/중단 카드의 **[이어서 실행]** 버튼 → resume 호출 → 러너 구동.
 - resume 시 **대화방 락을 다시 잡는다.** 이미 처리 중이면 `409`(대화방 단위 락, 동시 요청 불가 — [execution.md 실행 중 입력 제한](execution.md#실행-중-입력-제한)).
-- 락 획득 후 `session_status: executing`로 재전이하고, **새 PROGRESS 메시지를 발행**해 재개 진행을 표시한다(기존 PROGRESS와 별개 메시지).
+- 락 획득 후 `session_status: executing`로 재전이하고, **새 AI 턴에 PROGRESS 파트를 발행**해 재개 진행을 표시한다(기존 진행 파트와 별개 턴).
 - 재개 대상이 아닌 실행(SUCCESS/CANCELLED/RUNNING)에 resume가 오면 거부한다(400).
 - **삭제된 대화의 실행 재개 불가**: 히스토리는 USER_ID 독립이라 삭제 대화의 실행도 히스토리 전체 페이지에 보이지만, resume는 대화방 락/PROGRESS 발행이 전제이므로 **연결된 대화방이 소프트 삭제된(또는 없는) 실행은 재개를 거부**한다(안내: "재개하려면 대화가 필요합니다"). 재실행은 새 대화에서 새 발화로. (연결 대화가 살아있는 실행만 [이어서 실행] 노출.)
 
@@ -402,7 +402,7 @@ PARTIAL 종료 상태:
 ## 결과 표시
 
 - **결과 카드**: 레시피별 요약 + 상세 보기(사이드 패널 연결은 프로토타입 후속).
-- 완료 시 RESULT 메시지 발행([messaging.md RESULT](../common/messaging.md#result-실행-결과-블록)).
+- 완료 시 같은 턴에 RESULT 파트 append([messaging.md RESULT](../common/messaging.md#result-실행-결과-블록)).
 - **추정 실행 시간은 표시하지 않는다.** 학습/개인화 기반 예측은 백로그.
 
 ---

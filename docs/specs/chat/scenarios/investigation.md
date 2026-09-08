@@ -1,6 +1,6 @@
 ---
-status: confirmed
-last-updated: 2026-09-19
+status: review
+last-updated: 2026-09-08
 ---
 
 # 정보 조회 루프 (investigate)
@@ -93,7 +93,7 @@ FE: 답변 메시지 + 참고 자료 렌더링
 1. 사용자 발화 → AI 호출 (IntentResolver.resolve)
 2. AI가 investigate 반환 → InvestigateLoop.run() 진입
 3. BE: 해당 커넥터로 조회 → 결과를 messages에 "참고 데이터"로 래핑하여 추가 (아래 인젝션 방어)
-4. BE: 조회 진행 상태를 SSE로 FE에 전송 (INVESTIGATE_PROGRESS 메시지 갱신)
+4. BE: 조회 진행 상태를 SSE로 FE에 전송 (INVESTIGATE 파트 갱신 = 그 턴 `message_update`)
 5. AI 재호출 (조회 결과 포함)
 6. AI가 또 investigate 반환하면 → 3번으로 (루프)
    AI가 chat 반환하면 → 최종 답변 + 참고 자료 → 종료
@@ -167,8 +167,8 @@ loop:
 ### 종결 보장
 
 - 루프 중 **어떤 예외/타임아웃에도 대화방을 `idle`로 복귀**한다(try/finally). 락 잔존 방지.
-- **`finally`에서 `INVESTIGATE_PROGRESS`가 아직 `running`이면 `failed`(또는 타임아웃이면 `timeout`)로 확정하는 `message_update`를 반드시 발행**한다. `running` 잔존을 금지하여, 새로고침 시 영원히 도는 유령 진행 블록을 방지한다.
-- SSE 종결 이벤트(최종 chat `message_new` + `session_status: idle`)를 반드시 보낸다([messaging.md 종결 보장](../../common/messaging.md#종결-보장-termination-guarantee) 정합).
+- **`finally`에서 `INVESTIGATE` 파트가 아직 `running`이면 `failed`(또는 타임아웃이면 `timeout`)로 확정하는 `message_update`(턴 스냅샷)를 반드시 발행**한다. 동시에 INVESTIGATION 계층 상태도 `failed`/`timeout`으로 확정한다. `running` 잔존을 금지하여, 새로고침 시 영원히 도는 유령 진행 블록을 방지한다.
+- SSE 종결 이벤트(같은 턴에 최종 TEXT 파트 append + `session_status: idle`)를 반드시 보낸다([messaging.md 종결 보장](../../common/messaging.md#종결-보장-termination-guarantee) 정합).
 
 ### 못 찾음 처리 (할루시네이션 금지)
 
@@ -268,8 +268,8 @@ Atlassian Cloud REST(CQL)로 위키 페이지를 조회한다. **호출 주체�
 
 ## 진행 상태 표시 (SSE)
 
-- investigate 진행은 **`INVESTIGATE_PROGRESS` 메시지 1개를 생성**하고, 소스별 조회 단계마다 **`message_update`로 같은 메시지를 갱신**한다(레시피 실행의 PROGRESS 패턴 재사용). 스키마: [messaging.md INVESTIGATE_PROGRESS](../../common/messaging.md#investigate_progress-정보-조회-진행-블록).
-- 최종 답변은 **별도 `message_new`(TEXT + references payload)**로 전달한다.
+- investigate 진행은 AI 턴에 **`INVESTIGATE` 파트 1개를 append**하고, 소스별 조회 단계마다 **`message_update`(그 턴 전체 스냅샷)로 파트를 갱신**한다(레시피 실행의 PROGRESS 패턴 재사용). 파트는 `investigationId`로 [INVESTIGATION 계층](../../../db/investigation.md)을 가리킨다. 스키마: [messaging.md INVESTIGATE](../../common/messaging.md#investigate-정보-조회-진행-블록).
+- 최종 답변은 별도 턴이 아니라 **같은 AI 턴에 `TEXT` 파트(+ 출처 있으면 `REFERENCES` 파트)를 append**한다.
 
 ```
 🔍 정보 조회 중
@@ -278,8 +278,8 @@ Atlassian Cloud REST(CQL)로 위키 페이지를 조회한다. **호출 주체�
 🔄 API 스펙 조회 중 — "약관 동의 필드"
 ```
 
-- 각 조회 단계가 `message_update`로 반영됨. `aria-live`로 진행 갱신을 스크린리더에 알린다.
-- 완료 시 진행 블록은 종료 상태로 확정되고, 실제 답변 메시지가 별도로 추가된다.
+- 각 조회 단계가 `message_update`(턴 스냅샷)로 반영됨. `aria-live`로 진행 갱신을 스크린리더에 알린다.
+- 완료 시 INVESTIGATE 파트는 종료 상태로 확정되고, **같은 턴에** 답변 TEXT 파트가 이어 붙는다.
 
 ---
 

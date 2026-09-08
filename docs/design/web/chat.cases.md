@@ -155,7 +155,7 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 - 레시피별 결과 한 줄 (✓ 이름 — 결과)
 - [▸ 상세 보기](비활성 — 사이드 패널 결과 상세는 후속) / [다시 실행]
 
-### Case 16: 정보 조회 중 (INVESTIGATE_PROGRESS)
+### Case 16: 정보 조회 중 (INVESTIGATE 파트)
 
 - 헤더 "🔍 정보 조회 중"
 - 소스별 조회 단계 리스트: 상태 아이콘 텍스트 병기 (✅ 완료 / 🔄 진행 중 / ⬜ 대기 / ⏭️ 스킵)
@@ -164,7 +164,7 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
   - ⏭️ 스킵: 미지원 source 또는 중복 `(source, query)` 캐시 재사용 — 카운터 소비
 - 단계 전이 announce: `role="status" aria-live="polite"`(sr-only)
   - **FE 구현 필수**: aria-live announce 노드는 초기 빈 상태로 렌더하고 조회 단계 전이 시점에 텍스트를 주입한다 (정적 렌더로는 announce 미발생, Case 12 패턴 동일). **디자인 HTML의 예시 텍스트는 데모용이며 정적 렌더 금지** — 실제 구현/디자인 노드 모두 빈 상태로 시작
-- `message_update`로 같은 INVESTIGATE_PROGRESS 메시지 갱신 (새 메시지 안 쌓음)
+- `message_update`로 그 턴의 INVESTIGATE 파트 갱신 (턴 전체 스냅샷 재전송, 새 턴 안 쌓음)
 - 입력 영역: 조회 중 잠금 (session_status 반영)
 - **종료 상태 확정** (running 잔존 금지 — finally 확정):
   - 실패/타임아웃은 **별도 케이스 없이** 진행 블록을 종료 상태로 확정 + 폴백 안내 (Case 6 패턴 재사용)
