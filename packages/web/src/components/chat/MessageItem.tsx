@@ -17,7 +17,7 @@ import {
   asResultPayload,
 } from "../../services/messagePayload";
 import { MessageCard } from "../cards/MessageCard";
-import { InvestigateProgress } from "./InvestigateProgress";
+import { InvestigateProgress, shouldRenderInvestigate } from "./InvestigateProgress";
 import { MessageReferences } from "./MessageReferences";
 import { ProgressSteps } from "./ProgressSteps";
 import { ResultMessage } from "./ResultMessage";
@@ -91,6 +91,16 @@ export function MessageItem({ message }: Props) {
   // 시스템 메시지: 중앙 안내
   if (role === "SYSTEM") {
     return <div className="chat-system-notice">{message.content}</div>;
+  }
+
+  // 정보 조회(INVESTIGATE_PROGRESS) 중 "정상 종료 + 스텝 0개"는 보여줄 내용이 없다.
+  // 본문만 비우면 아바타/행 여백이 남아 어색하므로, 메시지 행 자체를 렌더하지 않는다.
+  // (DB 기록은 유지 — 화면에서만 숨김. 실제 답변은 별도 TEXT 메시지로 표시됨)
+  if ((message.type.code ?? "").toUpperCase() === "INVESTIGATE_PROGRESS") {
+    const payload = asInvestigateProgressPayload(message.metadata);
+    if (payload && !shouldRenderInvestigate(payload)) {
+      return null;
+    }
   }
 
   const user = role === "USER";

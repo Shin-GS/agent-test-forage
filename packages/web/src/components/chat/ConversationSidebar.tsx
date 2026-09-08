@@ -19,6 +19,8 @@ interface Props {
   onRename: (conversationId: number, title: string) => Promise<void>;
   /** 삭제 확정 시 호출 */
   onDelete: (conversationId: number) => Promise<void>;
+  /** 레일(축소) 여부 — 접힘 상태에선 목록이 숨겨지므로 active 자동 스크롤을 스킵한다 */
+  collapsed?: boolean;
 }
 
 /** 상태 뱃지 도출: 우선순위 1개만 반환. 없으면 null. */
@@ -55,8 +57,12 @@ export function ConversationSidebar({
   onSelect,
   onRename,
   onDelete,
+  collapsed = false,
 }: Props) {
   const list = conversations ?? [];
+
+  // active(현재) 대화 항목 ref — 펼침 상태에서 목록으로 진입/전환 시 화면 안으로 스크롤한다.
+  const activeItemRef = useRef<HTMLDivElement>(null);
 
   // 열린 더보기 메뉴 대화 id
   const [menuId, setMenuId] = useState<number | null>(null);
@@ -71,6 +77,12 @@ export function ConversationSidebar({
   const savingRef = useRef(false);
   // IME 조합 중 여부
   const composingRef = useRef(false);
+
+  // active 대화가 바뀌면 화면 안으로 스크롤(펼침 상태에서만). 접힘 상태는 목록이 숨겨져 스킵.
+  useEffect(() => {
+    if (collapsed || currentId == null) return;
+    activeItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [currentId, collapsed]);
 
   // 편집 진입 시 포커스 + 전체 선택
   useEffect(() => {
@@ -127,7 +139,7 @@ export function ConversationSidebar({
   return (
     <div className="sidebar-list" aria-label="대화 목록">
       {list.length === 0 && (
-        <div className="sidebar-list__empty">아직 대화가 없습니다</div>
+        <div className="sidebar-empty">아직 대화가 없어요</div>
       )}
 
       {list.map((c) => {
@@ -171,6 +183,7 @@ export function ConversationSidebar({
         return (
           <div
             key={c.id}
+            ref={active ? activeItemRef : undefined}
             className={`sidebar-item${active ? " active" : ""}`}
             role="button"
             tabIndex={0}

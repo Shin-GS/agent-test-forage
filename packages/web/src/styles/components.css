@@ -155,47 +155,59 @@
   color: var(--color-text-secondary);
 }
 
-/* --- Chat Message Bubble --- */
+/* --- Chat Message (중앙 clamp 컬럼, 좌측정렬 — 말풍선 아님) ---
+   메시지 목록·입력창·액션피커가 공유하는 중앙 clamp 컬럼 축에 맞춘다(디자인 chat.html .message).
+   .chat-messages 직접 자식으로 놓여 max-width(clamp) + margin auto + 좌우 패딩으로 입력창과 정렬선 일치.
+   사용자·AI 모두 좌측 정렬(아바타 + 본문). */
 .message {
   display: flex;
+  /* 아바타와 본문 첫 줄을 상단 기준으로 정렬(여러 줄이어도 아바타는 위에 고정). */
+  align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  width: 100%;
+  max-width: clamp(var(--chat-column-min), var(--chat-column-ideal), var(--chat-column-max));
+  margin: 0 auto;
+  padding: var(--space-4) var(--chat-column-padding-x);
+  transition: background var(--transition-fast);
 }
 
+/* 행 전체 hover 는 옅은 bg-hover */
+.message:hover {
+  background: var(--color-bg-hover);
+}
+
+/* 사용자 메시지: 옅은 배경 블록으로 AI 응답과 시각 구분(좌측 정렬 유지).
+   전용 토큰(--color-message-user-bg)으로 hover 톤과 별개 관리. */
 .message--user {
-  flex-direction: row-reverse;
+  background: var(--color-message-user-bg);
 }
 
+/* 사용자 메시지 hover: 전용 배경 위에 살짝 더 진하게(구분 유지) */
+.message--user:hover {
+  background: var(--color-bg-active);
+}
+
+/* 아바타: 본문 첫 줄 높이(line-height ~24.5px)와 세로 중심을 맞추기 위해 24px 로 둔다
+   (32px 원은 1줄 텍스트보다 커서 아바타가 처져 보이는 어긋남이 생김). */
 .message__avatar {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-full);
   background: var(--color-bg-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   flex-shrink: 0;
 }
 
+/* 본문: 컬럼의 나머지 폭을 차지. AI TEXT 는 배경 없음(카드/PROGRESS/RESULT 는 자체 컨테이너 유지). */
 .message__content {
-  max-width: 70%;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
+  flex: 1;
+  min-width: 0;
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
-}
-
-.message--user .message__content {
-  background: var(--color-accent);
-  color: #fff;
-  border-bottom-right-radius: var(--radius-sm);
-}
-
-.message--ai .message__content {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-bottom-left-radius: var(--radius-sm);
+  word-break: break-word;
 }
 
 /* --- Tool Call Card --- */
@@ -448,26 +460,27 @@
   margin-top: auto;
 }
 
-/* --- Chat Area (chat.html 로컬 style) --- */
-.chat-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+/* --- Chat Area ---
+   .chat-area 의 flex/min-width/overflow 정의는 base.css 가 단일 소스(중복 제거).
+   여기서는 채팅 영역 내부 요소(messages/input)만 다룬다. */
 
+/* 메시지 스크롤 영역: 세로 스크롤은 전체 폭, 내부 .message(clamp)가 컬럼 축을 잡는다.
+   좁은 화면에서 clamp 컬럼이 가용폭까지 축소될 때 박스가 가장자리에 붙지 않도록
+   바깥에 최소 좌우 여백을 둔다(넓은 화면에선 clamp+auto margin 으로 이미 중앙 정렬돼 무해). */
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-4);
 }
 
+/* 컬럼 축은 .message 가 담당하므로 컨테이너는 폭 제한 없음(전체 폭 흐름). */
 .messages-container {
-  max-width: 800px;
-  margin: 0 auto;
   width: 100%;
 }
 
+/* 입력 영역: 바깥은 전체 폭(배경/보더), 안쪽 wrapper 가 메시지와 동일 clamp 축을 잡는다.
+   좁은 화면에서 wrapper 가 가용폭까지 축소될 때 입력창 박스가 가장자리에 붙지 않도록
+   바깥에 최소 좌우 여백을 둔다(넓은 화면에선 clamp+auto margin 으로 이미 중앙 정렬돼 무해). */
 .chat-input-area {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border);
@@ -479,8 +492,10 @@
   display: flex;
   gap: var(--space-2);
   align-items: flex-end;
-  max-width: 800px;
+  width: 100%;
+  max-width: clamp(var(--chat-column-min), var(--chat-column-ideal), var(--chat-column-max));
   margin: 0 auto;
+  padding: 0 var(--chat-column-padding-x);
 }
 
 .chat-input {
@@ -508,8 +523,10 @@
 }
 
 .chat-input-hint {
-  max-width: 800px;
+  width: 100%;
+  max-width: clamp(var(--chat-column-min), var(--chat-column-ideal), var(--chat-column-max));
   margin: 0 auto var(--space-2);
+  padding: 0 var(--chat-column-padding-x);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
@@ -652,13 +669,13 @@
 .action-picker {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
+  /* 아래 max-width 는 메시지/입력창과 동일 clamp 컬럼 축으로 통일(하드코딩 800px 제거) */
   border-radius: var(--radius-xl);
   padding: var(--space-4) var(--space-5);
-  margin: var(--space-3) 0;
+  margin: var(--space-3) auto;
   box-shadow: var(--shadow-md);
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
+  width: 100%;
+  max-width: clamp(var(--chat-column-min), var(--chat-column-ideal), var(--chat-column-max));
 }
 
 .action-picker__title {
@@ -897,10 +914,12 @@ select.input {
 }
 
 /* --- Side Panel (독립 미니 페이지: 홈/레시피/히스토리 3탭)
-       docs/design/web/chat.html .side-panel__* 이식 --- */
+       docs/design/web/chat.html .side-panel__* 이식 ---
+   폭은 ChatPage 인라인 style(panelWidth) 또는 --panel-width 변수가 담당(하드코딩 320px 제거).
+   flex: 0 0 auto 로 고정폭 취급 → 중앙 채팅이 나머지를 흡수해 패널이 항상 우측 앵커. */
 .side-panel {
-  width: 320px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  width: var(--panel-width);
   display: flex;
   background: var(--color-bg-primary);
   border-left: 1px solid var(--color-border);
@@ -2266,7 +2285,9 @@ select.input {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: 0 var(--space-3) var(--space-2);
+  /* 좌우 margin 을 --space-2 로 두어 nav/대화 항목과 동일한 8px 컨테이너 여백을 공유.
+     내부 padding --space-3 로 아이콘 시작선(20px)을 항목들과 일치시킨다. */
+  margin: 0 var(--space-2) var(--space-2);
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -2330,18 +2351,52 @@ select.input {
   flex-shrink: 0;
 }
 
-/* 대화 목록 — 이 영역만 스크롤 */
-.sidebar-list {
+/* 스크롤 영역: 메뉴 nav + 관리 nav + "대화" 섹션 헤더 + 대화 목록 이 함께 스크롤.
+   상단(brand+new-chat)·하단(sidebar-user)만 고정. 하단이 마지막 항목을 가리지 않게 하단 여백. */
+.sidebar-scroll {
   flex: 1;
-  overflow-y: auto;
-  padding: var(--space-2) 0;
   min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--space-4);
 }
 
-.sidebar-list__empty {
-  padding: var(--space-3) var(--space-4);
+/* 대화 목록 (스크롤 영역 안, flex 로 늘어남). 항목 간 2px 로 nav 메뉴와 동일 리듬. */
+.sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) 0 0;
+}
+
+/* "관리"/"대화" 섹션 헤더: 좌우 구분선 + 라벨(대문자). 관리 divider 를 대체한다. */
+.sidebar-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-3) var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-section-label::before,
+.sidebar-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* 빈 대화 목록 안내 ("아직 대화가 없어요") — 대화 항목과 동일 좌측 시작 축. */
+.sidebar-empty {
+  padding: var(--space-4) calc(var(--space-2) + var(--space-3)) var(--space-2);
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
+  text-align: left;
 }
 
 /* ─── 대화 항목 ─── */
@@ -2583,15 +2638,18 @@ select.input {
   outline-offset: 2px;
 }
 
+/* 회원 아바타: 메뉴/대화 아이콘(--sidebar-icon-size)과 동일 폭에 맞춰
+   아바타 시작 x = 메뉴 아이콘 시작 x, 이름/이메일 시작 x = 라벨 시작 x 로 일치시킨다
+   (하단만 정렬 축이 어긋나 보이지 않게). */
 .sidebar-user__avatar {
-  width: 32px;
-  height: 32px;
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
   border-radius: var(--radius-full);
   background: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-2xs);
   color: #fff;
   flex-shrink: 0;
   font-weight: var(--font-weight-medium);
@@ -3356,18 +3414,10 @@ select.input {
    ─ 아래는 관리자 화면 전용 추가 스타일(토큰만 사용, 하드코딩 금지).
    ═══════════════════════════════════════════════════════════ */
 
-/* 사이드바 관리자 nav 구분선 */
+/* 사이드바 관리자 nav — 위 구분은 마크업의 "관리" 섹션 헤더(.sidebar-section-label)가 담당.
+   (기존 .sidebar-nav__divider 는 section-label 로 대체되어 제거됨) */
 .sidebar-nav--admin {
   margin-top: var(--space-1);
-}
-.sidebar-nav__divider {
-  height: 1px;
-  margin: var(--space-2) var(--space-3);
-  background: var(--color-border);
-}
-/* 레일(축소) 상태에서는 divider 여백만 축소 */
-.app-sidebar.collapsed .sidebar-nav__divider {
-  margin: var(--space-2) var(--space-2);
 }
 
 /* 스펙 목록 테이블: 행 클릭 가능, INACTIVE dimmed */

@@ -3,12 +3,22 @@
 // - 최근 실행: executionsApi.history(size 5)
 // 각 섹션 [전체 →] 로 해당 탭 전환(onGoRecipes / onGoHistory).
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { executionsApi, recipesApi } from "../../../api";
 import type { CursorPage, ExecutionSummaryView, RecipeSummary } from "../../../api/types";
+import { ConfirmModal } from "../../../components/common/ConfirmModal";
 import { formatRelative, formatTime, statusIcon } from "../shared/format";
 import type { PanelContext } from "../types";
+import { useServices } from "../recipes/useRecipes";
+
+/** 실행 확인 모달 대상 (레시피 ▶ 클릭 시 즉시 실행하지 않고 확인) */
+interface RunTarget {
+  id: number;
+  name: string;
+  serviceName: string | null;
+  description: string | null;
+}
 
 interface Props extends PanelContext {
   onGoRecipes: () => void;
@@ -40,6 +50,9 @@ export function HomeView({
 }: Props) {
   const busy = conversationStatus !== "idle";
 
+  // 실행 확인 모달 대상 (▶ 클릭 시 설정)
+  const [runTarget, setRunTarget] = useState<RunTarget | null>(null);
+
   const recipesQuery = useQuery<RecipeSummary[]>({
     queryKey: ["recipes", "home"],
     queryFn: () => recipesApi.list(),
@@ -49,6 +62,14 @@ export function HomeView({
     queryKey: ["executions", "home"],
     queryFn: () => executionsApi.history({ size: TOP_N }),
   });
+
+  // 서비스(스펙) 목록 — 레시피의 apiSpecId 를 사람이 읽는 서비스명으로 변환(레시피 탭과 캐시 공유).
+  const servicesQuery = useServices();
+  const serviceNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const s of servicesQuery.data ?? []) map.set(s.id, s.name);
+    return map;
+  }, [servicesQuery.data]);
 
   const topRecipes = useMemo(() => rankRecipes(recipesQuery.data ?? []), [recipesQuery.data]);
   const recent = recentQuery.data?.items ?? [];
@@ -72,17 +93,28 @@ export function HomeView({
           ) : (
             topRecipes.map((recipe) => {
               const relative = formatRelative(recipe.lastUsedAt);
+              // 서비스 표시명(레시피 탭과 동일 소스). 매핑 없으면 배지/부제 미표시.
+              const serviceBadge =
+                recipe.apiSpecId != null ? serviceNameById.get(recipe.apiSpecId) : undefined;
               return (
                 <div key={recipe.id} className="side-panel__recipe">
                   <div className="side-panel__recipe-top">
                     <span className="side-panel__recipe-name">{recipe.name}</span>
-                    <span className="badge badge--neutral">{recipe.visibility.description}</span>
+                    {serviceBadge && <span className="badge badge--neutral">{serviceBadge}</span>}
                     <button
                       type="button"
                       className="btn btn--secondary btn--sm side-panel__recipe-run"
                       disabled={busy}
                       title={busy ? "실행 중에는 사용할 수 없어요" : "실행"}
-                      onClick={() => onRunRecipe(recipe.id, recipe.name)}
+                      onClick={() =>
+                        setRunTarget({
+                          id: recipe.id,
+                          name: recipe.name,
+                          // 확인 모달 부제 = 실제 서비스명(레시피 탭과 일관). 없으면 null.
+                          serviceName: serviceBadge ?? null,
+                          description: recipe.description ?? null,
+                        })
+                      }
                     >
                       ▶
                     </button>
@@ -133,6 +165,31 @@ export function HomeView({
           )}
         </div>
       </div>
+
+      {/* 레시피 실행 확인 모달 (▶ → 확인 → onRunRecipe). 취소 기본 포커스, ESC/배경클릭 취소. */}
+      <ConfirmModal
+        open={runTarget != null}
+        title="실행할까요?"
+        description={
+          runTarget
+            ? [
+                [runTarget.name, runTarget.serviceName].filter(Boolean).join(" · "),
+                runTarget.description,
+              ]
+                .filter(Boolean)
+                .join("\n")
+            : undefined
+        }
+        confirmLabel="실행"
+        cancelLabel="취소"
+        initialFocus="cancel"
+        onCancel={() => setRunTarget(null)}
+        onConfirm={() => {
+          const target = runTarget;
+          setRunTarget(null);
+          if (target) onRunRecipe(target.id, target.name);
+        }}
+      />
     </div>
   );
 }

@@ -300,20 +300,35 @@
    Chat Message
    ═══════════════════════════════════ */
 
+/* 메시지 행: 메시지 목록·입력창·액션 피커가 공유하는 중앙 clamp 컬럼(.chat-column) 축에 맞춘다.
+   .chat-messages 의 직접 자식으로 놓이므로, 여기서 max-width + margin auto + 좌우 패딩(--chat-column-padding-x)을
+   부여해 입력창(.chat-column)과 좌우 정렬선을 정확히 일치시킨다(메시지만 좌측 쏠리는 어긋남 방지).
+   사용자·AI 모두 좌측 정렬(우측 말풍선 아님), 아바타 + 발신자 라벨로 구분한다. */
 .message {
   display: flex;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
+  width: 100%;
+  max-width: clamp(var(--chat-column-min), var(--chat-column-ideal), var(--chat-column-max));
+  margin: 0 auto;
+  padding: var(--space-4) var(--chat-column-padding-x);
   transition: background var(--transition-fast);
 }
 
 .message:hover {
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-hover);
 }
 
 .message--user {
-  /* 사용자 메시지 (Claude 스타일: 같은 정렬, 배경으로 구분) */
-  background: var(--color-bg-secondary);
+  /* 사용자 메시지: 옅은 배경 블록으로 AI 응답과 시각 구분(좌측 정렬 유지, 우측 말풍선 아님).
+     AI 의 순수 TEXT 본문은 배경 없음 — 단 AI 내부의 카드/PROGRESS/RESULT/references 는
+     각자 자체 컨테이너 스타일을 유지한다(이 배경 규칙의 예외).
+     전용 토큰으로 hover 톤과 별개 관리 — hover 시에도 구분이 사라지지 않게. */
+  background: var(--color-message-user-bg);
+}
+
+/* 사용자 메시지 hover: 전용 배경 위에 살짝 더 진하게(구분 유지) */
+.message--user:hover {
+  background: var(--color-bg-active);
 }
 
 .message__avatar {
@@ -660,58 +675,117 @@
 }
 
 /* ═══════════════════════════════════
-   Sidebar Structure (header, list, footer)
+   Sidebar Structure (통짜 스크롤: brand/new-chat 고정 → scroll → user 고정)
+   ChatGPT식: 상단(로고+새채팅)·하단(회원정보)만 고정, 그 사이 전체가 하나의 스크롤 컨테이너.
    ═══════════════════════════════════ */
 
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.sidebar-header__title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
-.sidebar-list {
+/* 스크롤 영역: 메뉴 nav + 관리 nav + "─ 대화 ─" 섹션 헤더 + 대화 목록 이 함께 스크롤.
+   하단 고정(.sidebar-user)이 마지막 항목을 가리지 않도록 하단 여백을 둔다. */
+.sidebar-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--space-2) 0;
-}
-
-.sidebar-footer {
-  padding: var(--space-2) var(--space-3);
-  border-top: 1px solid var(--color-border);
   display: flex;
-  justify-content: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  padding-bottom: var(--space-4);
 }
 
-.sidebar-footer__icon {
-  width: 36px;
-  height: 36px;
+/* 대화 목록 (스크롤 영역 안, flex 로 늘어남).
+   항목 간 2px 간격으로 nav 메뉴(.sidebar-nav gap:2px)와 동일 리듬을 유지. */
+.sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) 0 0;
+}
+
+/* "─ 대화 ─" 섹션 헤더: 관리 메뉴와 대화 목록 사이 구분선 + 라벨.
+   좌우 margin 을 --space-3 로 두어 항목 아이콘 시작선(20px) 안쪽에서 라벨이 시작하되,
+   과밀하지 않게 위(--space-3)·아래(--space-1) 리듬을 준다. 관리 구분선과 같은 --color-border 톤. */
+.sidebar-section-label {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-3) var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-section-label::before,
+.sidebar-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* 빈 대화 목록 안내 ("아직 대화가 없어요")
+   대화 항목(.sidebar-item)과 동일한 좌측 정렬·들여쓰기 축에 둔다(가운데 띄우지 않음 —
+   통짜 좌측 정렬과 일관). .sidebar-item 은 margin 0 --space-2 + padding --space-2 --space-3 이므로
+   좌측 시작선 = --space-2 + --space-3 로 맞춰 항목 텍스트와 같은 x에서 시작하게 한다. */
+.sidebar-empty {
+  padding: var(--space-4) calc(var(--space-2) + var(--space-3)) var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  text-align: left;
+}
+
+/* 회원정보 (최하단 고정) — 스크롤과 분리된 고정 영역.
+   위 메뉴/대화 항목과 동일한 좌측 시작 축을 공유하도록 좌우 패딩·gap 을 통일한다.
+   메뉴/대화 항목의 좌측 시작선 = 컨테이너 여백(--space-2) + 항목 패딩(--space-3) 이다
+   (.sidebar-nav 는 padding 0 --space-2 + .sidebar-nav__item padding --space-3,
+    .sidebar-item 은 margin 0 --space-2 + padding --space-3). .sidebar-user 는 컨테이너 여백이 없으므로
+   좌우 패딩을 (--space-2 + --space-3) 로 두어 아바타/텍스트 시작 x 를 항목들과 일치시킨다. gap 은 --space-2 로 동일. */
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  padding: var(--space-2) calc(var(--space-2) + var(--space-3));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
   cursor: pointer;
-  font-size: var(--font-size-base);
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast);
 }
 
-.sidebar-footer__icon:hover {
+.sidebar-user:hover {
   background: var(--color-bg-hover);
-  color: var(--color-text-primary);
 }
 
-.sidebar-footer__icon.active {
-  background: var(--color-accent-subtle);
-  color: var(--color-accent);
+/* 회원 아바타: 메뉴/대화 아이콘(--sidebar-icon-size)과 동일 폭에 맞춰
+   아바타 시작 x = 메뉴 아이콘 시작 x, 이름/이메일 시작 x = 라벨 시작 x 로 일치시킨다
+   (하단만 축이 어긋나 보이지 않게). .avatar 의 기본 크기(--sm=24px)를 icon-size 로 override. */
+.sidebar-user .avatar {
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+  font-size: var(--font-size-2xs);
+}
+
+.sidebar-user__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--line-height-tight);
+}
+
+.sidebar-user__name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-user__id {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ═══════════════════════════════════
@@ -793,36 +867,69 @@
   color: var(--color-text-primary);
 }
 
-/* [+ 새 채팅] */
+/* [+ 새 채팅]
+   좌측 정렬: 아이콘 + "새 채팅" 라벨이 나란히 좌측에서 시작.
+   좌우 margin 을 --space-2 로 두어 nav/대화 항목과 동일한 8px 컨테이너 여백을 공유하고,
+   내부 padding --space-3 로 아이콘 시작선(20px)을 항목들과 일치시킨다. */
 .sidebar-new-chat {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: 0 var(--space-3) var(--space-2);
+  margin: 0 var(--space-2) var(--space-2);
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent);
+  text-align: left;
+  background: var(--color-accent-subtle);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
   flex-shrink: 0;
 }
 
 .sidebar-new-chat:hover {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-light);
+  background: var(--color-accent-subtle-hover);
+  border-color: var(--color-accent);
 }
 
-/* 상단 흡수 메뉴 (레시피 관리 / 설정 등 별도 페이지 라우트) */
+/* 새 채팅 아이콘: 라벨과 같은 accent 톤으로 primary 액션임을 강조 */
+.sidebar-new-chat .sidebar-nav__icon {
+  color: var(--color-accent);
+}
+
+/* 새 채팅 라벨: 아이콘 오른쪽 좌측 정렬(중앙으로 밀리지 않도록 flex-grow 없음) */
+.sidebar-new-chat__label {
+  flex: 0 1 auto;
+  text-align: left;
+}
+
+/* 상단 흡수 메뉴 (레시피 관리 / 히스토리 / 설정 등 별도 페이지 라우트).
+   스크롤 영역 안에 놓이므로 flex-shrink 는 두지 않는다(통짜 스크롤). */
 .sidebar-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 0 var(--space-2) var(--space-2);
-  flex-shrink: 0;
+  padding: 0 var(--space-2);
+}
+
+/* 관리 메뉴 그룹 (스펙 관리 / 사용자 관리).
+   위쪽 구분은 마크업의 "─ 관리 ─" 섹션 헤더(.sidebar-section-label)가 담당하므로
+   여기서는 별도 divider/여백을 두지 않는다("대화" 그룹과 동일 패턴). */
+
+/* nav 항목 라벨 (레일에서 숨김 대상)
+   좌측 정렬: 아이콘 바로 오른쪽에 텍스트가 붙는다.
+   flex:1 / text-align:center 를 두지 않아 라벨이 남는 공간을 차지하며 중앙으로 밀리지 않게 한다.
+   길어질 때만 말줄임이 필요하므로 min-width:0 + ellipsis 는 유지하되,
+   부모 flex-grow 없이 자연 폭을 갖도록 flex:0 1 auto 로 둔다. */
+.sidebar-nav__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 
 .sidebar-nav__item {
@@ -832,9 +939,10 @@
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+  text-align: left;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .sidebar-nav__item:hover {
@@ -845,14 +953,29 @@
 .sidebar-nav__item.active {
   background: var(--color-accent-subtle);
   color: var(--color-accent);
+  font-weight: var(--font-weight-medium);
 }
 
 .sidebar-nav__icon {
-  width: 18px;
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+  font-size: var(--font-size-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  /* 페이지 이동 메뉴는 대화보다 낮은 시각무게: 아이콘을 tertiary 톤으로 낮춤.
+     hover/active 시에는 항목 색을 따라 또렷해지도록 아래에서 재지정. */
+  color: var(--color-text-tertiary);
+}
+
+/* hover/active 시 메뉴 아이콘은 항목 텍스트 색을 따라 또렷해진다 */
+.sidebar-nav__item:hover .sidebar-nav__icon {
+  color: var(--color-text-primary);
+}
+
+.sidebar-nav__item.active .sidebar-nav__icon {
+  color: var(--color-accent);
 }
 
 /* ═══════════════════════════════════
@@ -888,6 +1011,11 @@
   color: var(--color-accent);
 }
 
+/* active 대화: 제목도 accent 톤 + medium 위계로 통일(nav active 와 일관) */
+.sidebar-item.active .sidebar-item__text {
+  color: var(--color-accent);
+}
+
 .sidebar-item__row {
   display: flex;
   align-items: center;
@@ -896,13 +1024,15 @@
 }
 
 .sidebar-item__icon {
-  width: 18px;
-  height: 18px;
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: var(--font-size-xs);
+  /* 메뉴 아이콘(.sidebar-nav__icon)과 동일한 톤/크기로 통일 */
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
 }
 
 .sidebar-item__text {
@@ -916,7 +1046,7 @@
 }
 
 .sidebar-item__time {
-  font-size: 11px;
+  font-size: var(--font-size-2xs);
   color: var(--color-text-tertiary);
   flex-shrink: 0;
   white-space: nowrap;
@@ -926,8 +1056,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding-left: calc(18px + var(--space-2));
-  font-size: 11px;
+  padding-left: calc(var(--sidebar-icon-size) + var(--space-2));
+  font-size: var(--font-size-2xs);
 }
 
 .sidebar-item__service {
@@ -1080,11 +1210,50 @@
 }
 
 /* ═══════════════════════════════════
+   Chat Column (중앙 채팅 컬럼: 메시지영역+입력창 공유 축)
+   메시지 목록과 입력창을 동일 max-width 컬럼으로 묶어 가운데 정렬한다.
+   두 영역의 좌우 정렬선/패딩이 정확히 일치해야 한다(입력창만 좁아 보이는 어긋남 방지).
+   폭은 clamp(하한, 이상비율, 상한) — tokens 변수 참조(하드코딩 금지).
+   ═══════════════════════════════════ */
+
+/* 컬럼 내부(메시지/입력/온보딩)를 감싸 동일 max-width + 좌우 패딩을 부여하는 래퍼 */
+.chat-column {
+  width: 100%;
+  max-width: clamp(var(--chat-column-min), var(--chat-column-ideal), var(--chat-column-max));
+  margin: 0 auto;
+  padding-left: var(--chat-column-padding-x);
+  padding-right: var(--chat-column-padding-x);
+}
+
+/* 메시지 스크롤 영역: 세로 스크롤은 전체 폭, 내부 .chat-column 이 컬럼 축을 잡는다 */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) 0;
+}
+
+/* 온보딩(빠른 시작)도 같은 컬럼 축·폭에 맞춰 중앙 정렬 */
+.chat-welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: clamp(var(--chat-column-min), var(--chat-column-ideal), var(--chat-column-max));
+  margin: 0 auto;
+  padding: var(--space-8) var(--chat-column-padding-x);
+}
+
+/* ═══════════════════════════════════
    Chat Input Area
    ═══════════════════════════════════ */
 
+/* 입력 영역: 바깥은 전체 폭(배경/보더), 안쪽 .chat-column 이 메시지와 동일 축을 잡는다.
+   좌우 패딩은 .chat-column 이 담당하므로 여기서는 상하 패딩만. */
 .chat-input {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) 0;
   background: var(--color-bg-primary);
   border-top: 1px solid var(--color-border);
 }

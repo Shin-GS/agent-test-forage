@@ -21,6 +21,8 @@
   --color-bg-hover: #ececf0;
   --color-bg-active: #e4e4ea;
   --color-bg-overlay: rgba(17, 24, 39, 0.4);
+  /* 사용자 메시지 배경 (AI TEXT 본문과 시각 구분용 — hover 톤과 별개로 관리) */
+  --color-message-user-bg: #eef1f6;
 
   /* Text */
   --color-text-primary: #1f2430;
@@ -34,6 +36,7 @@
   --color-accent-hover: #4f46e5;
   --color-accent-active: #4338ca;
   --color-accent-subtle: rgba(99, 102, 241, 0.10);
+  --color-accent-subtle-hover: rgba(99, 102, 241, 0.18);
 
   /* Semantic */
   --color-success: #16a34a;
@@ -132,22 +135,39 @@
   --z-modal: 400;
   --z-toast: 500;
 
-  /* ─── Layout ─── */
+  /* ─── Layout (레이아웃 치수 단일 소스) ───
+     모든 레이아웃 치수는 여기서만 정의한다. CSS/JS는 이 변수를 참조하며
+     px 하드코딩·중복 정의를 금지한다(값 불일치로 인한 정렬 버그 예방). */
 
+  /* 좌측 사이드바 */
   --sidebar-width: 260px;
   --sidebar-width-collapsed: 60px;
-  --panel-width: 320px;
-  --panel-width-min: 240px;
-  --panel-width-max: 640px;
-  --panel-reveal-width: 20px;   /* 우측 패널 접힘 시 펼치기 핸들 폭 */
+  --sidebar-icon-size: 18px;    /* 사이드바 아이콘(메뉴/대화 항목) 고정 폭 */
+
+  /* 우측 사이드 패널 (앵커 고정 + 폭 clamp). 폭은 --panel-width(CSS 변수)로만 적용 — 인라인 px 금지 */
+  --panel-width: 320px;         /* 기본/현재 폭 (리사이즈·재-clamp의 기준값) */
+  --panel-width-min: 280px;     /* 최소 폭 (가용 폭 부족 판정에 사용) */
+  --panel-width-max: 640px;     /* 최대 폭 */
+  --panel-reveal-width: 20px;   /* 우측 패널 접힘 시 펼치기 핸들(◀) 폭 */
+
+  /* 중앙 채팅 */
+  --chat-min-width: 480px;      /* 중앙 채팅 최소폭 (양쪽이 침범 못 함) */
+  /* 채팅 컬럼: 메시지영역+입력창이 공유하는 중앙정렬 max-width 컬럼.
+     clamp(하한, 이상비율, 상한) — 좁으면 가용폭까지 축소, 넓으면 상한에서 멈춤(가독성). */
+  --chat-column-min: 680px;
+  --chat-column-ideal: 70%;
+  --chat-column-max: 920px;
+  --chat-column-padding-x: var(--space-6);  /* 메시지/입력창 좌우 패딩 (정렬선 일치) */
+
+  /* 공통 */
   --header-height: 56px;
   --input-area-min-height: 60px;
-  --chat-min-width: 480px;
 
   /* ─── Breakpoints (참조용, CSS에서는 media query로 사용) ─── */
-  /* < 768px  : 좌측 사이드바도 레일/오버레이 (Mobile) */
-  /* < 1200px : 우측 패널 자동 접힘/오버레이 (Tablet) */
-  /* >= 1200px: 3열 고정 (Desktop) */
+  /* < 480px  : 단일 컬럼 (채팅 480 보장 무력화, 패널 전체화면 시트) — Mobile */
+  /* < 768px  : 좌측 사이드바 아이콘 레일/오버레이 */
+  /* < 1200px : 우측 패널 자동 오버레이 (가용 폭 부족 근사 임계값) — Tablet */
+  /* >= 1200px: 3열 고정 — Desktop */
 }
 
 /* ===========================
@@ -162,6 +182,8 @@
   --color-bg-hover: #2d3140;
   --color-bg-active: #363b4d;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  /* 사용자 메시지 배경 (AI TEXT 본문과 시각 구분용 — hover 톤과 별개로 관리) */
+  --color-message-user-bg: #232735;
 
   /* Text */
   --color-text-primary: #f0f2f5;
@@ -175,6 +197,7 @@
   --color-accent-hover: #818cf8;
   --color-accent-active: #4f46e5;
   --color-accent-subtle: rgba(99, 102, 241, 0.15);
+  --color-accent-subtle-hover: rgba(99, 102, 241, 0.24);
 
   /* Semantic */
   --color-success: #22c55e;

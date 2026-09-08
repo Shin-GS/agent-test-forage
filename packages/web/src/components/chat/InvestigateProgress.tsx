@@ -21,6 +21,18 @@ interface Props {
   payload: InvestigateProgressPayload;
 }
 
+/**
+ * 이 investigate 진행 블록을 화면에 렌더할지 여부.
+ * 정상 종료(done)인데 조회 단계가 하나도 없으면 표시하지 않는다
+ * (조회를 시도했으나 붙일 소스가 없어 그냥 답한 경우 — 빈 카드/행이 남아 UX 낭비).
+ * DB 기록은 유지하고 화면에서만 숨긴다. failed/timeout 은 안내가 의미 있어 항상 표시.
+ * MessageItem 이 메시지 행(아바타 포함) 자체를 렌더할지 판단할 때도 재사용한다.
+ */
+export function shouldRenderInvestigate(payload: InvestigateProgressPayload): boolean {
+  const steps = payload.steps ?? [];
+  return !(payload.status === "done" && steps.length === 0);
+}
+
 /** 스텝 상태 → 아이콘/모디파이어 (chat.html .investigate-step) */
 function stepView(status: string): { icon: string; mod: string; srLabel: string } {
   switch (status) {
@@ -75,6 +87,11 @@ export function InvestigateProgress({ payload }: Props) {
   const finished = isFinished(payload.status);
   const { text, mod, notice } = headerView(payload.status);
   const announce = useStepTransitionAnnounce(steps, finished);
+
+  // 렌더 대상이 아니면(빈 done) 표시하지 않는다(방어 — MessageItem 이 행 자체를 이미 걸러냄).
+  if (!shouldRenderInvestigate(payload)) {
+    return null;
+  }
 
   return (
     <div className="investigate-progress" role="group" aria-label="정보 조회 진행">

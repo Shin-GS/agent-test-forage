@@ -168,12 +168,17 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
         </button>
       </div>
 
-      {/* + 새 채팅 */}
+      {/* + 새 채팅 (상단 고정) */}
       <button type="button" className="sidebar-new-chat" onClick={handleNew} aria-label="새 채팅" title="새 채팅">
-        <span aria-hidden>➕</span>
+        <span className="sidebar-nav__icon" aria-hidden>➕</span>
         <span className="sidebar-new-chat__label">새 채팅</span>
       </button>
 
+      {/* 스크롤 영역: 메뉴 nav + 관리 nav + "대화" 섹션 + 대화 목록 이 함께 스크롤.
+          상단(brand+new-chat)·하단(sidebar-user)만 고정. (디자인 chat.html .sidebar-scroll)
+          내부에 이미 <nav> landmark 와 개별 포커스 가능한 항목들이 있으므로, 순수 스크롤
+          컨테이너에는 role/aria-label/tabindex 를 두지 않는다(landmark 중첩·중복 정지점 방지). */}
+      <div className="sidebar-scroll">
       {/* 메뉴 nav (레시피 / 설정) — 레일에서도 아이콘으로 이동 가능.
           레일에서 라벨 span 이 숨겨져도 접근 이름이 남도록 aria-label/title 을 항상 부여한다. */}
       <nav className="sidebar-nav" aria-label="페이지 메뉴">
@@ -209,8 +214,9 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
       {/* 관리자 전용 메뉴 (role === ADMIN 일 때만 렌더). FE 게이팅은 UX 힌트이며
           실제 권한은 서버가 강제한다(비-admin URL 직접 접근 시 RequireAdmin 리다이렉트 + API 403). */}
       {user?.role === "ADMIN" && (
+        <>
+        <div className="sidebar-section-label">관리</div>
         <nav className="sidebar-nav sidebar-nav--admin" aria-label="관리자 메뉴">
-          <div className="sidebar-nav__divider" role="presentation" />
           <NavLink
             to="/admin/specs"
             aria-label="스펙 관리 (관리자)"
@@ -230,16 +236,22 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
             <span className="sidebar-nav__label">사용자 관리</span>
           </NavLink>
         </nav>
+        </>
       )}
 
-      {/* 대화 목록 (이 영역만 스크롤, 레일에서는 CSS 로 숨김) */}
+      {/* "대화" 섹션 헤더 (항상 표시, 레일에서는 CSS 로 숨김) */}
+      <div className="sidebar-section-label">대화</div>
+
+      {/* 대화 목록 (레일에서는 CSS 로 숨김). collapsed 전달로 접힘 시 active 자동 스크롤 스킵. */}
       <ConversationSidebar
         conversations={conversations}
         currentId={currentConversationId}
         onSelect={handleSelect}
         onRename={handleRename}
         onDelete={handleDelete}
+        collapsed={collapsed}
       />
+      </div>{/* /.sidebar-scroll */}
 
       {/* 회원정보 (하단 고정) + 드롭업 메뉴 */}
       <div className="sidebar-user" ref={userMenuRef}>

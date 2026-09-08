@@ -309,13 +309,15 @@ export function ChatPage() {
       </div>
 
       {/* ─── 리사이즈 핸들 (Desktop 펼침 상태에서만) ─── */}
+      {/* 더블클릭 시 기본폭(PANEL_WIDTH_DEFAULT)으로 리셋 */}
       {!rightIsOverlay && !rightHidden && (
         <div
           className={`resize-handle${resizing ? " active" : ""}`}
           role="separator"
           aria-orientation="vertical"
-          aria-label="사이드 패널 크기 조절"
+          aria-label="사이드 패널 크기 조절 (더블클릭 시 기본 폭으로 리셋)"
           onPointerDown={handleResizeStart}
+          onDoubleClick={() => setPanelWidth(PANEL_WIDTH_DEFAULT)}
         />
       )}
 

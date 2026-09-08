@@ -15,6 +15,8 @@ interface Props {
   cancelLabel?: string;
   /** 위험 액션이면 확인 버튼을 빨강으로 강조 */
   danger?: boolean;
+  /** 열릴 때 최초 포커스 대상 (기본 "confirm"). "cancel" 이면 취소 버튼에 포커스 */
+  initialFocus?: "cancel" | "confirm";
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -26,21 +28,26 @@ export function ConfirmModal({
   confirmLabel = "확인",
   cancelLabel = "취소",
   danger = false,
+  initialFocus = "confirm",
   onConfirm,
   onCancel,
 }: Props) {
   const modalRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const descId = useId();
 
-  // 열릴 때 확인 버튼 포커스 + ESC/Tab(focus trap) 키 처리 + 닫힐 때 포커스 복원
+  // 열릴 때 최초 포커스 대상(initialFocus) 포커스 + ESC/Tab(focus trap) 키 처리 + 닫힐 때 포커스 복원
   useEffect(() => {
     if (!open) return;
     // 열기 직전 포커스를 갖고 있던 요소를 저장 → 언마운트/닫힘 시 복원
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    // 다음 프레임에 포커스(애니메이션/마운트 후)
-    const raf = requestAnimationFrame(() => confirmRef.current?.focus());
+    // 다음 프레임에 포커스(애니메이션/마운트 후). initialFocus 에 따라 취소/확인 선택.
+    const raf = requestAnimationFrame(() => {
+      const target = initialFocus === "cancel" ? cancelRef.current : confirmRef.current;
+      target?.focus();
+    });
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -77,7 +84,7 @@ export function ConfirmModal({
         previouslyFocused.focus();
       }
     };
-  }, [open, onCancel]);
+  }, [open, onCancel, initialFocus]);
 
   if (!open) return null;
 
@@ -103,12 +110,12 @@ export function ConfirmModal({
           </h2>
         </div>
         {description && (
-          <div id={descId} className="modal__body">
+          <div id={descId} className="modal__body" style={{ whiteSpace: "pre-line" }}>
             {description}
           </div>
         )}
         <div className="modal__footer">
-          <button type="button" className="btn btn--secondary" onClick={onCancel}>
+          <button ref={cancelRef} type="button" className="btn btn--secondary" onClick={onCancel}>
             {cancelLabel}
           </button>
           <button

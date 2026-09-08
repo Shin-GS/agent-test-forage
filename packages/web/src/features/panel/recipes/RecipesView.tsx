@@ -6,6 +6,7 @@
 // - [▶] 클릭 → onRunRecipe(recipeId, name). 대화방 처리중이면 비활성.
 
 import { useEffect, useMemo, useState } from "react";
+import { ConfirmModal } from "../../../components/common/ConfirmModal";
 import { formatRelative } from "../shared/format";
 import type { PanelContext } from "../types";
 import { useRecipes, useServices, type RecipeFilter } from "./useRecipes";
@@ -16,6 +17,14 @@ const FILTERS: { key: RecipeFilter; label: string }[] = [
   { key: "common", label: "공통" },
 ];
 
+/** 실행 확인 모달 대상 (레시피 ▶ 클릭 시 즉시 실행하지 않고 확인) */
+interface RunTarget {
+  id: number;
+  name: string;
+  serviceName: string | null;
+  description: string | null;
+}
+
 export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
   const busy = conversationStatus !== "idle";
 
@@ -24,6 +33,9 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
   const [filter, setFilter] = useState<RecipeFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [keyword, setKeyword] = useState("");
+
+  // 실행 확인 모달 대상 (▶ 클릭 시 설정, [실행]/취소로 해제)
+  const [runTarget, setRunTarget] = useState<RunTarget | null>(null);
 
   // 검색어 디바운스 300ms
   useEffect(() => {
@@ -142,7 +154,14 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
                     className="btn btn--secondary btn--sm side-panel__recipe-run"
                     disabled={busy}
                     title={busy ? "실행 중에는 사용할 수 없어요" : "실행"}
-                    onClick={() => onRunRecipe(recipe.id, recipe.name)}
+                    onClick={() =>
+                      setRunTarget({
+                        id: recipe.id,
+                        name: recipe.name,
+                        serviceName: serviceBadge ?? null,
+                        description: recipe.description ?? null,
+                      })
+                    }
                   >
                     ▶
                   </button>
@@ -158,6 +177,31 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
           })
         )}
       </div>
+
+      {/* 레시피 실행 확인 모달 (▶ → 확인 → onRunRecipe). 취소 기본 포커스, ESC/배경클릭 취소. */}
+      <ConfirmModal
+        open={runTarget != null}
+        title="실행할까요?"
+        description={
+          runTarget
+            ? [
+                [runTarget.name, runTarget.serviceName].filter(Boolean).join(" · "),
+                runTarget.description,
+              ]
+                .filter(Boolean)
+                .join("\n")
+            : undefined
+        }
+        confirmLabel="실행"
+        cancelLabel="취소"
+        initialFocus="cancel"
+        onCancel={() => setRunTarget(null)}
+        onConfirm={() => {
+          const target = runTarget;
+          setRunTarget(null);
+          if (target) onRunRecipe(target.id, target.name);
+        }}
+      />
     </div>
   );
 }

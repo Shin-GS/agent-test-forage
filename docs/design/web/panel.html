@@ -12,9 +12,12 @@
       overflow: auto;
     }
 
-    /* 패널 단독 표시용 래퍼 */
+    /* 패널 단독 표시용 래퍼(데모 프레임). 폭은 패널 토큰 기준으로 정합화(하드코딩 금지).
+       실제 앱에서 패널 폭/앵커/리사이즈는 shared/base.css 의 .side-panel 이 소유한다. */
     .panel-demo {
-      width: 360px;
+      width: var(--panel-width);
+      max-width: var(--panel-width-max);
+      min-width: var(--panel-width-min);
       height: 700px;
       margin: var(--space-4) auto;
       background: var(--color-bg-secondary);
@@ -319,6 +322,8 @@
     <button class="case-switcher__btn" onclick="showCase('history-list')">3. 히스토리</button>
     <button class="case-switcher__btn" onclick="showCase('result-detail')">4. 결과 상세</button>
     <button class="case-switcher__btn" onclick="showCase('empty')">5. 빈 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('run-confirm')">6. 실행 확인 모달</button>
+    <button class="case-switcher__btn" onclick="showCase('rerun-confirm')">7. 재실행 확인 모달</button>
   </div>
 
   <!-- ═══ Case 1: 레시피 목록 ═══ -->
@@ -611,6 +616,99 @@ statusCode: 201</div>
             관리자에게 요청하거나 직접 만들어보세요.
           </p>
           <button class="btn btn--primary btn--sm">+ 레시피 만들기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 6: 레시피 실행 확인 모달 (ConfirmModal 재사용) ═══
+       패널 목록에서 [▶]를 누르면 바로 발화를 전송하지 않고 먼저 이 확인 모달을 연다(오클릭·탐색 방어).
+       - 구성: 레시피명 + [서비스 배지] + 설명 1줄(패널 목록 설명 재사용) + [취소]/[실행] 2버튼만.
+       - 중립 톤(삭제처럼 빨강 아님): [취소]=secondary, [실행]=primary. danger 미사용.
+       - 오클릭 방어 목적이라 초기 포커스는 [취소]에 둔다(Enter로 곧장 실행되지 않게 — autofocus).
+       - ESC / 배경 클릭으로 취소, focus trap 은 FE 구현 범위(정적 명세엔 마크업만).
+       삭제 확인 모달과 동일 컴포넌트(.modal / .modal-backdrop)를 재사용한다. -->
+  <div id="case-run-confirm" class="screen">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab active">레시피</button>
+        <button class="panel-tab">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <div class="recipe-item">
+          <div class="recipe-item__header">
+            <span class="recipe-item__name">입사지원</span>
+            <span class="badge badge--neutral">사람인</span>
+            <span class="recipe-item__star" style="opacity: 0.3;">☆</span>
+            <button class="recipe-item__play" title="바로 실행">▶</button>
+          </div>
+          <div class="recipe-item__meta">
+            <span>마지막 실행: 10분 전</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- ConfirmModal (실행 확인) — 데모에서는 항상 노출 -->
+    <div class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="run-confirm-title" style="max-width: 400px;">
+        <div class="modal__header">
+          <span class="modal__title" id="run-confirm-title">이 레시피를 실행할까요?</span>
+        </div>
+        <div class="modal__body">
+          <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);">
+            <span style="font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); color: var(--color-text-primary);">입사지원</span>
+            <span class="badge badge--neutral">사람인</span>
+          </div>
+          <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); line-height: var(--line-height-relaxed);">
+            사람인 채용공고에 이력서를 제출합니다.
+          </p>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary" autofocus>취소</button>
+          <button class="btn btn--primary">실행</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 7: 히스토리 재실행 확인 모달 (ConfirmModal 재사용) ═══
+       히스토리 [▶] 재실행 진입 시 제목만 분기한다: "이 레시피를 다시 실행할까요?".
+       재실행도 재개(resume)가 아니라 신규 실행 — 같은 레시피를 새 발화로 처음부터 실행.
+       나머지 구성(중립 톤 / 초기 포커스 [취소] / 2버튼)은 실행 확인 모달과 동일. -->
+  <div id="case-rerun-confirm" class="screen">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab">레시피</button>
+        <button class="panel-tab active">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <div class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__name">회원가입 × 5</span>
+            <span class="badge badge--warning" style="font-size: 10px;">부분실패</span>
+          </div>
+          <div class="history-item__summary">09:15 · 3/5 성공 · 사람인</div>
+        </div>
+      </div>
+    </div>
+    <!-- ConfirmModal (재실행 확인) — 제목만 "다시 실행할까요?"로 분기 -->
+    <div class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rerun-confirm-title" style="max-width: 400px;">
+        <div class="modal__header">
+          <span class="modal__title" id="rerun-confirm-title">이 레시피를 다시 실행할까요?</span>
+        </div>
+        <div class="modal__body">
+          <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);">
+            <span style="font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); color: var(--color-text-primary);">회원가입</span>
+            <span class="badge badge--neutral">사람인</span>
+          </div>
+          <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); line-height: var(--line-height-relaxed);">
+            사람인 서비스에 테스트 회원을 등록합니다.
+          </p>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary" autofocus>취소</button>
+          <button class="btn btn--primary">실행</button>
         </div>
       </div>
     </div>

@@ -70,7 +70,9 @@ body {
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* height:100vh 는 브라우저 확대(zoom)/OS 배율 환경에서 실제 가시 높이와 어긋나
+     하단(입력창)이 잘리는 문제가 있다. #root 가 이미 height:100% 라 이를 따르게 한다. */
+  height: 100%;
   overflow: hidden;
 }
 
@@ -276,6 +278,7 @@ body {
 /* 레일에서 숨기는 것: 대화 목록, 로고 텍스트, 메뉴/새채팅/회원 라벨.
    메뉴 nav 는 아이콘만 남겨 페이지 이동을 유지한다(기획: 레일에서도 이동 가능). */
 .app-sidebar.collapsed .sidebar-list,
+.app-sidebar.collapsed .sidebar-section-label,
 .app-sidebar.collapsed .sidebar-brand__logo,
 .app-sidebar.collapsed .sidebar-nav__label,
 .app-sidebar.collapsed .sidebar-new-chat__label,
@@ -414,6 +417,12 @@ body {
   .app-sidebar {
     width: var(--sidebar-width-collapsed);
     min-width: var(--sidebar-width-collapsed);
+  }
+
+  /* 중앙 채팅: 데스크톱 최소폭(--chat-min-width=480px)을 풀어 좁은 화면에서
+     가용폭까지 축소되게 한다(안 그러면 480px 고정이라 뷰포트를 넘쳐 잘림). */
+  .chat-area {
+    min-width: 0;
   }
 
   .chat-layout > .side-panel:not(.hidden) {
