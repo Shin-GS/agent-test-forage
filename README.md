@@ -21,6 +21,7 @@
 - [모노레포 구조](#-모노레포-구조)
 - [빠른 시작](#-빠른-시작)
 - [클라이언트 라이브러리](#-클라이언트-라이브러리)
+- [설계 결정과 근거](#-설계-결정과-근거)
 - [문서](#-문서)
 
 ---
@@ -219,6 +220,62 @@ cd packages/library/java/21
 | PHP | — | 🔜 추후 |
 
 회사가 다양한 언어/버전을 사용하므로 언어·버전별로 확장한다. 가이드: [docs/library/README.md](docs/library/README.md)
+
+---
+
+## 🧭 설계 결정과 근거
+
+주요 설계 선택과 그 이유, 검토했지만 채택하지 않은 대안을 정리한다.
+
+<details open>
+<summary><b>1. 레시피 API 실행을 FE 브라우저에서 직접 한다</b></summary>
+
+- **결정**: 레시피 스텝의 실제 외부 API 호출을 BE 프록시 없이 **사용자 브라우저(FE)** 에서 `credentials`로 직접 수행한다. 스텝 결과만 BE에 보고한다.
+- **근거**: 외부 서버에 이미 있는 사용자 로그인 세션(쿠키)을 그대로 활용할 수 있고, BE가 모든 트래픽을 중계하며 세션·토큰을 대신 들고 있는 부담과 보안 위험을 피한다. CORS는 라이브러리가 AI Test Forge 도메인을 자동 허용한다.
+- **대안(반려)**: BE 프록시 실행 — 세션 위임·토큰 보관 복잡도와 프록시 병목 때문에 반려.
+</details>
+
+<details>
+<summary><b>2. AI 호출에 Spring AI를 쓰지 않는다</b></summary>
+
+- **결정**: OpenAI 호환 Chat Completions API를 Spring `RestClient`로 직접 호출하고 `tool_calls`를 직접 파싱한다. 확장 경계는 `IntentResolver` 인터페이스(키 미설정 시 규칙 기반 목으로 폴백).
+- **근거**: 현재 규모에선 tool 스키마·파싱을 직접 제어하는 편이 단순하고 투명하다. OpenAI·OpenRouter 등 공급자 교체는 base-url/key/model 설정으로 충분하다.
+- **대안(반려)**: Spring AI 추상화 — 지금 필요 없는 계층을 더한다. 임베딩/RAG(시맨틱 레시피 검색)가 필요해지면 `IntentResolver` 뒤에서 부분 도입 검토.
+</details>
+
+<details>
+<summary><b>3. 의도 해석을 Tool Use 1회 호출로 처리한다</b></summary>
+
+- **결정**: 발화에 대해 AI를 1회 호출해 의도 분석과 tool 선택을 동시에 한다(별도 분류 단계 없음). tool 7종으로 실행/플랜/서비스선택/후보/되묻기/불일치/일반대화를 분기한다.
+- **근거**: 분류→선택 2단계를 1회로 합쳐 지연·비용을 줄인다. 할루시네이션은 `clarify`/`no_match` tool로 구조적으로 차단한다.
+- **대안(반려)**: 사전 분류 단계 분리 — 왕복이 늘고 두 단계 정합성 관리 부담.
+</details>
+
+<details>
+<summary><b>4. 결과 메시지는 BE가 Handlebars로 1회 렌더해 마크다운으로 저장한다</b></summary>
+
+- **결정**: 실행 완료 시 BE가 결과 템플릿을 Handlebars로 렌더해 마크다운 문자열을 `content`로 저장하고, FE는 렌더만 한다(`react-markdown` + `remark-gfm` + `rehype-sanitize`). 원본 값은 구조화 데이터로 함께 보존한다.
+- **근거**: 렌더를 BE에서 1회로 고정하면 여러 탭·재조회·히스토리에서 결과가 항상 동일하다. 헬퍼는 화이트리스트(`formatNumber`/`eq`/`gt`/`lt`/`default`)만 등록해 임의 함수 실행을 차단하고, XSS는 FE `rehype-sanitize`가 최종 차단한다.
+- **대안(반려)**: FE 렌더 — 렌더 결과가 클라이언트마다 갈릴 수 있고 저장본과 표시본이 어긋난다.
+</details>
+
+<details>
+<summary><b>5. 실행 카드·진행·결과를 한 턴(아바타 1개)으로 묶는다</b></summary>
+
+- **결정**: 실행을 촉발한 카드와 이어지는 진행(PROGRESS)·결과(RESULT)를 같은 턴 `[CARD, PROGRESS, RESULT]`로 묶는다. 연결 고리는 `TRIGGER_PART_ID`(촉발 카드 파트 ID)이며, PROGRESS/RESULT는 `executionId` 역조회로 같은 턴에 append한다.
+- **근거**: DB 문서 설계(`TRIGGER_PART_ID`)에 맞춰 아바타 분리를 없애고 대화 흐름을 자연스럽게 만든다. 재개(resumeFrom)는 새 턴으로 남긴다.
+- **대안(반려)**: 케이스별 분기(증상만 덮음) / 스키마 컬럼 추가(필드가 이미 있어 불필요).
+</details>
+
+<details>
+<summary><b>6. 정보 조회(investigate) 루프에 상한과 SSRF 방어를 둔다</b></summary>
+
+- **결정**: investigate agentic 루프는 **커넥터 조회 최대 5회 · 루프 전체 120초 · 커넥터 개별 5초**의 2층 타임아웃으로 제한한다. 조회 범위는 현재 대화방 서비스 스펙(`apiSpecId`)으로 한정한다.
+- **근거**: 무한 루프·과금 폭주를 막고, 조회 대상을 등록된 스펙으로 묶어 SSRF를 방지한다. 조회 결과는 "데이터이며 지시가 아님" 가드로 간접 프롬프트 인젝션을 방어한다. 타임아웃/실패 시 AI 비의존 고정 안내로 폴백한다.
+- **대안(반려)**: 무제한 루프 — 비용·지연·안전성 모두 위험.
+</details>
+
+> GIF 데모(채팅→실행→결과 흐름)는 발표 후 추가 예정이다.
 
 ---
 
