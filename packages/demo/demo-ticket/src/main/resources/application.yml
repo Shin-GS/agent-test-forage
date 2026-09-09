@@ -1,0 +1,31 @@
+server:
+  port: 9106
+
+spring:
+  application:
+    name: demo-ticket
+
+# ── AI Test Forge 클라이언트 라이브러리 설정 ──
+# 라이브러리가 기동 시 baseUrl+/v3/api-docs에서 스펙을 긁어 server-url로 등록한다.
+ai-test-forge:
+  enabled: true
+  # 에이전트 서버 (등록 대상). 로컬 검증 단계에서는 localhost 직접 지정.
+  server-url: ${AGENT_URL:http://localhost:8080}
+  # 레시피를 실행하는 웹 앱(FE) origin. FE 브라우저가 이 서버 API 를 직접 호출하므로 CORS 허용 대상.
+  web-origins:
+    - ${WEB_ORIGIN:http://localhost:5173}
+  # 등록 보안 토큰. 에이전트 서버의 TESTFORGE_TOKEN과 일치해야 함 (기본값 local-dev-token).
+  register-token: ${TESTFORGE_TOKEN:local-dev-token}
+  # 이 서버의 baseUrl (식별 키 + 스펙 수집 대상). 검증 단계에서는 localhost.
+  base-url: ${TICKET_BASE_URL:http://localhost:9106}
+  docs-url: /v3/api-docs
+  name: "demo-ticket"
+  service:
+    description: "이슈 트래커 API (티켓/상태변경/코멘트)"
+    domain: "이슈트래킹"
+    capabilities: ["티켓생성", "티켓조회", "상태변경", "코멘트", "우선순위필터"]
+    notes: "데모 서버, 실제 발행 없음"
+  auth:
+    profiles:
+      - name: "일반"
+        login-page-url: "http://localhost:9106/login-page"
