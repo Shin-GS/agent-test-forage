@@ -44,6 +44,7 @@ last-updated: 2026-09-19
   - 값 채워짐 → 값 + 출처 아이콘 (🗣️ 발화 / 📌 기본값)
   - 미충족 필수값 → "(입력 필요)" (✏️ 미입력)
 - **버튼 동작**: [바로 실행]=발화/기본값으로 즉시 진행, [값 확인 후 실행]=액션 피커로 전체 값 확인·수정 후 진행
+- **한 턴 귀속**: [바로 실행]으로 실행이 시작되면 진행/결과(PROGRESS/RESULT)가 **이 카드 파트가 속한 턴에** 이어 붙어, 카드와 진행·결과가 하나의 AI 턴(아바타 1개) `[CARD, PROGRESS, RESULT]`로 렌더된다(카드 파트는 CONSUMED). 연결은 `EXECUTION.TRIGGER_PART_ID`(촉발 카드 파트). [값 확인 후 실행](액션 피커 경유)도 동일 카드 턴에 귀속된다. 상세: [messaging.md 한 턴 귀속 규칙](../common/messaging.md#턴과-파트의-대응-서버--클라이언트)
 - 카드 필드 구조: [messaging.md execution_mode 카드 상세](../common/messaging.md#execution_mode-카드-상세)
 - 동작 정의: [recipe/execution.md 실행 모드](../recipe/execution.md#실행-모드)
 - **패널 [▶]로 진입한 경우**: 이 카드가 뜨기 전에 사이드 패널에서 "실행 확인 모달"을 한 번 거친다(발화 전송 여부 확인). 그 모달과 이 카드의 모드 선택은 **층위가 다르다**(발화 전송 여부 ↔ 실행 방식) — [panel/overview.md 확인 모달과 실행 카드의 층위 구분](../panel/overview.md#확인-모달과-실행-카드의-층위-구분-이중-확인-아님).

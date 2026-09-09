@@ -1,7 +1,15 @@
 package com.testforge;
 
 import com.testforge.entity.conversation.Conversation;
+import com.testforge.entity.conversation.Message;
+import com.testforge.entity.conversation.MessagePart;
 import com.testforge.entity.conversation.enums.ConversationStatus;
+import com.testforge.entity.conversation.enums.MessageRole;
+import com.testforge.entity.conversation.enums.MessageStatus;
+import com.testforge.entity.conversation.enums.PartStatus;
+import com.testforge.entity.conversation.enums.PartType;
+import com.testforge.repository.conversation.MessagePartRepository;
+import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.entity.execution.Execution;
 import com.testforge.entity.execution.enums.ExecutionRecipeStatus;
 import com.testforge.entity.execution.enums.ExecutionStatus;
@@ -72,6 +80,12 @@ class ExecutionIntegrationTest {
     private ConversationLock conversationLock;
 
     @Autowired
+    private MessageRepository messageRepository;
+
+    @Autowired
+    private MessagePartRepository messagePartRepository;
+
+    @Autowired
     private TestAuthSupport testAuth;
 
     private MockMvc mockMvc;
@@ -83,6 +97,8 @@ class ExecutionIntegrationTest {
         executionStepRepository.deleteAll();
         executionRecipeRepository.deleteAll();
         executionRepository.deleteAll();
+        messagePartRepository.deleteAll();
+        messageRepository.deleteAll();
         recipeRepository.deleteAll();
         conversationRepository.deleteAll();
         // 인증 주체와 동일 id의 ACTIVE 계정 보장
@@ -561,5 +577,80 @@ class ExecutionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].title").value("오늘건"));
+    }
+
+    // ── 한 턴 귀속: 카드 [바로 실행] → CARD/PROGRESS/RESULT가 같은 턴(messageId) ──
+
+    /** execution_mode 카드 파트를 하나 만들어(ASSISTANT 턴) 그 파트 ID를 반환한다(실행 촉발 파트 시뮬레이션). */
+    private Long newExecutionModeCardPart(Long conversationId) {
+        Message turn = messageRepository.save(
+                new Message(conversationId, MessageRole.ASSISTANT, MessageStatus.COMPLETE));
+        MessagePart card = new MessagePart(turn.getId(), PartType.CARD, PartStatus.PENDING);
+        card.setCardType("execution_mode");
+        card.setPayloadJson("{\"cardType\":\"execution_mode\"}");
+        card.setSchemaVersion(2);
+        return messagePartRepository.save(card).getId();
+    }
+
+    @Test
+    void cardTriggeredExecution_cardProgressResult_shareSameTurn() throws Exception {
+        Long specId = 10L;
+        Long recipeId = newRecipe(specId);
+        Long conversationId = newConversation(specId, ConversationStatus.IDLE);
+
+        // 실행을 촉발한 execution_mode 카드 파트 (그 턴에 진행/결과가 귀속되어야 함)
+        Long cardPartId = newExecutionModeCardPart(conversationId);
+        Long cardTurnId = messagePartRepository.findById(cardPartId).orElseThrow().getMessageId();
+
+        // 카드 [바로 실행] = 실행 시작 요청에 messageId(=카드 파트 id) 전달
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId
+                                + ",\"mode\":\"AUTO\",\"messageId\":" + cardPartId + "}"))
+                .andExpect(status().isCreated());
+        Long executionId = executionRepository.findAll().get(0).getId();
+
+        // 실행 완료 (모든 스텝 SUCCESS → RESULT append)
+        reportAllStepsSuccess(executionId);
+
+        // TRIGGER_PART_ID는 촉발 카드 파트를 가리켜야 한다(PROGRESS 파트 id로 덮어쓰지 않음)
+        assertThat(executionRepository.findById(executionId).orElseThrow().getTriggerPartId())
+                .isEqualTo(cardPartId);
+
+        // CARD/PROGRESS/RESULT 파트가 모두 카드 턴(cardTurnId)에 속한다(한 턴 = 아바타 1개)
+        List<MessagePart> cardTurnParts = messagePartRepository.findByMessageIdOrderByIdAsc(cardTurnId);
+        List<PartType> types = cardTurnParts.stream().map(MessagePart::getType).toList();
+        assertThat(types).containsExactly(PartType.CARD, PartType.PROGRESS, PartType.RESULT);
+
+        // 카드 파트는 CONSUMED(재활성화 방지)
+        assertThat(cardTurnParts.get(0).getStatus()).isEqualTo(PartStatus.CONSUMED);
+        // PROGRESS/RESULT는 executionId로 실행을 정참조
+        assertThat(cardTurnParts.get(1).getExecutionId()).isEqualTo(executionId);
+        assertThat(cardTurnParts.get(2).getExecutionId()).isEqualTo(executionId);
+    }
+
+    @Test
+    void directExecution_withoutCard_createsNewTurnForProgressResult() throws Exception {
+        Long specId = 10L;
+        Long recipeId = newRecipe(specId);
+        Long conversationId = newConversation(specId, ConversationStatus.IDLE);
+
+        // 카드 없이 실행 (messageId 미전달) — 패널 직접 실행 등
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + ",\"mode\":\"AUTO\"}"))
+                .andExpect(status().isCreated());
+        Long executionId = executionRepository.findAll().get(0).getId();
+        reportAllStepsSuccess(executionId);
+
+        // 촉발 카드가 없으므로 TRIGGER_PART_ID는 null (폴백: 새 턴)
+        assertThat(executionRepository.findById(executionId).orElseThrow().getTriggerPartId()).isNull();
+
+        // PROGRESS/RESULT가 새 ASSISTANT 턴에 함께 존재한다(둘은 같은 턴, 카드는 없음)
+        MessagePart progress = messagePartRepository
+                .findTopByExecutionIdAndTypeOrderByIdDesc(executionId, PartType.PROGRESS).orElseThrow();
+        List<MessagePart> turnParts = messagePartRepository.findByMessageIdOrderByIdAsc(progress.getMessageId());
+        List<PartType> types = turnParts.stream().map(MessagePart::getType).toList();
+        assertThat(types).containsExactly(PartType.PROGRESS, PartType.RESULT);
     }
 }

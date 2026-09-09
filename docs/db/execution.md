@@ -37,7 +37,7 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 | `ID` | BIGINT PK | |
 | `USER_ID` | BIGINT FK | 실행한 사용자 |
 | `CONVERSATION_ID` | BIGINT FK NULL | 실행된 대화방. 대화방은 소프트 삭제라 **연결 유지**(끊지 않음). 히스토리 독립성은 USER_ID 기준 조회로 확보. NULL은 대화 없이 시작된 실행(추후) 대비 |
-| `TRIGGER_PART_ID` | BIGINT FK NULL | **실행을 촉발한 MESSAGE_PART** ID (예: execution_mode 카드 파트). 파트-실행 정규 연결(어느 파트에서 나온 실행인지). **한 턴에 실행이 여러 개여도** 각 실행이 자기 촉발 파트를 특정한다(턴 단위 링크로는 구분 불가). 턴은 part→message_id로 유도. NULL은 대화 없이 시작된 실행(추후) 대비 |
+| `TRIGGER_PART_ID` | BIGINT FK NULL | **실행을 촉발한 MESSAGE_PART** ID (예: execution_mode·plan 카드 파트). 파트-실행 정규 연결(어느 파트에서 나온 실행인지). **한 턴에 실행이 여러 개여도** 각 실행이 자기 촉발 파트를 특정한다(턴 단위 링크로는 구분 불가). 턴은 part→message_id로 유도 — **진행/결과 파트는 이 촉발 파트가 속한 턴에 append되어 `[CARD, PROGRESS, RESULT]`가 한 턴이 된다.** 이 값은 촉발 파트 id로 고정하며 **진행(PROGRESS) 파트 id로 덮어쓰지 않는다**(진행 파트 조회는 `MESSAGE_PART.EXECUTION_ID` 역참조 사용). NULL은 대화 없이 시작된 실행(직접 실행/재개 등) 대비 |
 | `API_SPEC_ID` | BIGINT FK NULL | 대상 서비스 (참조용, 스펙 삭제 대비 NULL 허용) |
 | `TYPE` | VARCHAR(20) | SINGLE(단일 레시피) / PLAN(복합) |
 | `TITLE` | VARCHAR(200) | 표시명 (예: "회원가입 × 5", "플랜: 입사지원") |

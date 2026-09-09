@@ -56,9 +56,11 @@ public class Execution extends BaseEntity {
     private Long conversationId;
 
     /**
-     * 실행을 촉발한 {@code MESSAGE_PART} ID(예: execution_mode 카드 파트 또는 진행 파트). 한 턴에 실행이
-     * 여러 개여도 각 실행이 자기 촉발 파트를 특정한다(db/execution.md 새로고침 복원/분석). NULL은 대화
-     * 없이 시작된 실행(추후) 대비.
+     * 실행을 촉발한 {@code MESSAGE_PART} ID(예: execution_mode·plan 카드 파트). 진행/결과 파트는 이
+     * 촉발 파트가 속한 턴에 append되어 한 턴({@code [CARD, PROGRESS, RESULT]})이 된다. 이 값은 촉발 카드
+     * 파트를 가리키며 <b>진행(PROGRESS) 파트 id로 덮어쓰지 않는다</b>(진행 파트 조회는 {@code
+     * MESSAGE_PART.EXECUTION_ID} 역참조 사용 — db/execution.md). 한 턴에 실행이 여러 개여도 각 실행이
+     * 자기 촉발 파트를 특정한다. NULL은 대화 없이 시작된 실행(직접 실행/재개 등) 대비.
      */
     @Column(name = "TRIGGER_PART_ID")
     private Long triggerPartId;

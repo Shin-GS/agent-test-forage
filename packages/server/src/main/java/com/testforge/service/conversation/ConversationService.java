@@ -615,18 +615,23 @@ public class ConversationService {
      * execution 레코드와 원자적으로 커밋되도록 기본 전파(REQUIRED)다. 대화방이 없으면(삭제) no-op으로
      * {@code null}을 반환한다.
      *
-     * <p>새 ASSISTANT 턴(COMPLETE)에 PROGRESS 파트 1개를 append하고 그 <b>파트 ID</b>를 반환한다.
-     * 반환한 파트 ID는 EXECUTION.TRIGGER_PART_ID로 저장되고 이후 갱신 대상으로 쓰인다. PROGRESS 파트는
-     * {@code executionId}로 실행을 가리킨다(렌더 정참조).
+     * <p><b>턴 귀속(messaging.md 한 턴 귀속 규칙):</b> 실행을 촉발한 카드 파트({@code triggerPartId})가
+     * 속한 턴을 찾으면 <b>그 턴에 PROGRESS 파트를 append</b>하고 {@code message_update}(턴 전체 스냅샷)를
+     * 발행한다 → 카드와 진행/결과가 한 턴({@code [CARD, PROGRESS, RESULT]})으로 묶인다. 촉발 파트가
+     * 없거나(직접 실행/재개) 조회 불가면 <b>새 ASSISTANT 턴을 생성</b>하고 {@code message_new}를 발행한다(폴백).
+     * 어느 경우든 생성된 PROGRESS <b>파트 ID</b>를 반환한다. PROGRESS 파트는 {@code executionId}로 실행을
+     * 가리키며(렌더 정참조), 이후 갱신/결과 append는 executionId 역조회로 이 파트를 찾는다(TRIGGER_PART_ID에
+     * 의존하지 않음).
      *
      * @param conversationId 진행 블록을 남길 대화방
      * @param executionId    이 진행 블록이 가리키는 실행 ID
+     * @param triggerPartId  실행을 촉발한 카드 파트 ID (있으면 그 턴에 append, 없으면 새 턴 폴백)
      * @param payloadJson    진행 payload (JSON 문자열, kind:"progress")
      * @param content        진행 요약 본문 (Markdown, 표시용)
-     * @return 생성된 PROGRESS 파트 ID (EXECUTION.TRIGGER_PART_ID로 저장), 대화방 없으면 null
+     * @return 생성된 PROGRESS 파트 ID, 대화방 없으면 null
      */
     @Transactional
-    public Long createProgressMessage(Long conversationId, Long executionId,
+    public Long createProgressMessage(Long conversationId, Long executionId, Long triggerPartId,
                                       String payloadJson, String content) {
         Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
                 .orElse(null);
@@ -636,28 +641,38 @@ public class ConversationService {
         }
 
         Long ownerId = conversation.getUserId();
-        Message turn = new Message(conversationId, MessageRole.ASSISTANT, MessageStatus.COMPLETE);
-        Message savedTurn = messageRepository.save(turn);
 
-        MessagePart part = new MessagePart(savedTurn.getId(), PartType.PROGRESS, PartStatus.COMPLETE);
+        // 촉발 카드 파트가 속한 턴을 찾으면 그 턴에 PROGRESS를 이어 붙인다(한 턴 = [CARD, PROGRESS, RESULT]).
+        // 없으면(직접 실행/재개) 새 턴 폴백. 카드가 CONSUMED로 전이됐어도 파트/턴 조회에는 문제없다.
+        Message turn = resolveTurnByPart(triggerPartId, PartType.CARD);
+        boolean appendToExisting = turn != null;
+        if (turn == null) {
+            turn = messageRepository.save(new Message(conversationId, MessageRole.ASSISTANT, MessageStatus.COMPLETE));
+        }
+
+        MessagePart part = new MessagePart(turn.getId(), PartType.PROGRESS, PartStatus.COMPLETE);
         part.setExecutionId(executionId);
         part.setPayloadJson(payloadJson);
         part.setContent(content);
         part.setSchemaVersion(2);
         MessagePart savedPart = messagePartRepository.save(part);
-        savedTurn.setContentPreview(preview(content));
-        messageRepository.save(savedTurn);
+        turn.setContentPreview(preview(content));
+        Message savedTurn = messageRepository.save(turn);
 
         conversation.setLastMessageAt(savedTurn.getCreatedAt());
         Conversation savedConversation = conversationRepository.save(conversation);
 
+        // 기존 카드 턴에 붙였으면 message_update(턴 스냅샷), 새 턴이면 message_new.
         MessageResponse messageView = toMessage(savedTurn);
-        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, messageView);
+        publishAfterCommit(ownerId,
+                appendToExisting ? SseEventType.MESSAGE_UPDATE : SseEventType.MESSAGE_NEW,
+                conversationId,
+                appendToExisting ? MessageUpdatePayload.of(conversationId, messageView) : messageView);
         publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
                 SessionListUpdatePayload.upsert(toListSnapshot(savedConversation)));
 
-        log.info("Progress part created: conversationId={}, messageId={}, partId={}",
-                conversationId, savedTurn.getId(), savedPart.getId());
+        log.info("Progress part created: conversationId={}, messageId={}, partId={}, appendToCardTurn={}",
+                conversationId, savedTurn.getId(), savedPart.getId(), appendToExisting);
         return savedPart.getId();
     }
 
@@ -666,17 +681,26 @@ public class ConversationService {
      * (messaging.md 실행 SSE 흐름 — 스텝 보고/완료). 같은 메시지를 갱신하므로 새 메시지를 쌓지 않는다.
      * payloadJson이 진실이고 content는 표시용 요약이다.
      *
-     * <p>파트가 없거나(삭제/미존재) PROGRESS 타입이 아니면 no-op. 갱신 payload는 그 턴의 파트 배열 전체
-     * 스냅샷이다(멱등). 호출측 트랜잭션에 참여한다(REQUIRED).
+     * <p>갱신 대상 PROGRESS 파트는 {@code executionId}로 역조회한다(최신 1개 — 재개로 여러 개면 최신 것).
+     * 파트가 없거나(삭제/미존재) 대화방이 없으면 no-op. 갱신 payload는 그 턴의 파트 배열 전체 스냅샷이다
+     * (멱등). 호출측 트랜잭션에 참여한다(REQUIRED).
      *
      * @param conversationId 대화방 ID (발행 대상/소유자 도출)
-     * @param partId         갱신 대상 PROGRESS 파트 ID
+     * @param executionId    갱신 대상 PROGRESS 파트를 가리키는 실행 ID
      * @param payloadJson    갱신된 진행 payload (JSON 문자열)
      * @param content        갱신된 진행 요약 본문 (Markdown)
      */
     @Transactional
-    public void updateProgressMessage(Long conversationId, Long partId, String payloadJson, String content) {
-        updatePart(conversationId, partId, PartType.PROGRESS, payloadJson, content, null);
+    public void updateProgressMessage(Long conversationId, Long executionId, String payloadJson, String content) {
+        MessagePart progress = messagePartRepository
+                .findTopByExecutionIdAndTypeOrderByIdDesc(executionId, PartType.PROGRESS)
+                .orElse(null);
+        if (progress == null) {
+            log.info("Progress update skipped (no progress part): conversationId={}, executionId={}",
+                    conversationId, executionId);
+            return;
+        }
+        updatePart(conversationId, progress.getId(), PartType.PROGRESS, payloadJson, content, null);
     }
 
     /**
@@ -686,22 +710,21 @@ public class ConversationService {
      * payloadJson}이 진실(kind/schemaVersion/executionId/recipeName/resultValues/template?)이고 {@code
      * content}는 표시용 결과 요약(파생물)이다.
      *
-     * <p>연결 고리는 {@code progressPartId}(EXECUTION.TRIGGER_PART_ID = PROGRESS 파트 ID)다. 이 파트가
-     * 속한 턴({@code messageId})을 조회해 그 턴에 RESULT 파트를 append한다. 진행 파트가 없거나(삭제)
-     * PROGRESS 타입이 아니거나 {@code progressPartId}가 null이면, 같은 턴을 찾을 수 없으므로 <b>새 턴</b>에
-     * RESULT 파트를 남기는 폴백({@link #createResultMessageInNewTurn})으로 처리한다(결과 유실 방지).
+     * <p>연결 고리는 {@code executionId}다. 그 실행의 PROGRESS 파트(최신 1개)를 역조회해 파트가 속한
+     * 턴({@code messageId})에 RESULT 파트를 append한다 → PROGRESS와 같은 턴(따라서 카드까지 같은 턴)이 된다.
+     * 진행 파트가 없으면(삭제 등) 같은 턴을 특정할 수 없으므로 <b>새 턴</b>에 RESULT 파트를 남기는
+     * 폴백({@link #createResultMessageInNewTurn})으로 처리한다(결과 유실 방지).
      *
      * <p>여기서는 <b>메시지 저장/발행만</b> 담당하고, 대화방 상태 전이(idle)와 락 해제는 호출측이 이어서
      * 수행한다(중복 종결 방지). 호출측 트랜잭션에 참여한다(REQUIRED). 대화방이 없거나 content가 비면 no-op.
      *
      * @param conversationId 결과를 남길 대화방
-     * @param executionId    이 결과 블록이 가리키는 실행 ID
-     * @param progressPartId 같은 턴에 append할 기준이 되는 PROGRESS 파트 ID (없으면 새 턴 폴백)
+     * @param executionId    이 결과 블록이 가리키는 실행 ID (PROGRESS 파트 역조회 키)
      * @param payloadJson    결과 payload (JSON 문자열, kind:"result")
      * @param content        결과 요약 본문 (Markdown, 표시용)
      */
     @Transactional
-    public void appendResultToTurn(Long conversationId, Long executionId, Long progressPartId,
+    public void appendResultToTurn(Long conversationId, Long executionId,
                                    String payloadJson, String content) {
         if (conversationId == null || content == null || content.isBlank()) {
             return;
@@ -713,10 +736,14 @@ public class ConversationService {
             return;
         }
 
-        // 같은 턴을 찾는 연결 고리: PROGRESS 파트 → 그 파트가 속한 턴(messageId).
-        Message turn = resolveTurnByPart(progressPartId, PartType.PROGRESS);
+        // 같은 턴을 찾는 연결 고리: executionId → 그 실행의 PROGRESS 파트(최신) → 그 파트가 속한 턴(messageId).
+        MessagePart progress = messagePartRepository
+                .findTopByExecutionIdAndTypeOrderByIdDesc(executionId, PartType.PROGRESS)
+                .orElse(null);
+        Message turn = progress == null ? null
+                : messageRepository.findById(progress.getMessageId()).orElse(null);
         if (turn == null) {
-            // 진행 파트가 없거나 타입 불일치/미전달 → 같은 턴을 특정할 수 없으므로 새 턴 폴백(결과 유실 방지).
+            // 진행 파트가 없거나 턴 유실 → 같은 턴을 특정할 수 없으므로 새 턴 폴백(결과 유실 방지).
             createResultMessageInNewTurn(conversation, executionId, payloadJson, content);
             return;
         }
@@ -743,8 +770,8 @@ public class ConversationService {
         publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
                 SessionListUpdatePayload.upsert(toListSnapshot(savedConversation)));
 
-        log.info("Result part appended to turn: conversationId={}, messageId={}, progressPartId={}",
-                conversationId, turn.getId(), progressPartId);
+        log.info("Result part appended to turn: conversationId={}, messageId={}, executionId={}",
+                conversationId, turn.getId(), executionId);
     }
 
     /**

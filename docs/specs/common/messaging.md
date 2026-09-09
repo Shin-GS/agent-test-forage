@@ -149,9 +149,9 @@ last-updated: 2026-09-08
 - 조회 답변: `[INVESTIGATE, TEXT(+REFERENCES)]`
 - 레시피 실행: `[TEXT, PROGRESS, RESULT, TEXT]`
 - 한 턴 다중 실행: `[TEXT, PROGRESS(exec A), RESULT(A), PROGRESS(exec B), RESULT(B)]`
-- 카드 제안: `[TEXT, CARD(plan)]` → 사용자가 [자동 실행] 누르면 그 파트 CONSUMED + **후속 AI 턴**에서 PROGRESS/RESULT
+- 카드 실행: `[CARD(execution_mode)]` → 사용자가 [바로 실행] 누르면 **그 카드 파트가 속한 턴에** PROGRESS/RESULT를 이어 append(카드 CONSUMED) → 한 턴 = `[CARD, PROGRESS, RESULT]`. 플랜 카드([자동 실행])도 동일하게 그 카드 턴에 PROGRESS/RESULT를 붙인다.
 
-> **현재 구현 참고 (한 턴 다중 실행):** 위 "한 턴 다중 실행" 예시는 파트 모델의 목표 형태다. 현재는 대화방 단위 락으로 한 대화방에 동시 실행이 1개로 제한되고(실행 시작 시 `beginProgressMessage`가 항상 새 ASSISTANT 턴을 생성), 실질적으로 **실행 1개 = 턴 1개(`[PROGRESS, RESULT]`)**로 동작한다. RESULT는 그 실행의 PROGRESS 파트와 **같은 턴**에 append된다(EXECUTION.TRIGGER_PART_ID로 연결). 한 발화가 여러 실행을 한 턴에 묶는 형태는 동시 실행/순차 다중 실행을 도입할 때 `beginProgressMessage`가 열린 턴에 append하도록 확장하며 활성화한다.
+> **한 턴 귀속 규칙 (촉발 파트의 턴):** 실행의 진행/결과(PROGRESS/RESULT)는 **그 실행을 촉발한 파트(`EXECUTION.TRIGGER_PART_ID`, 예: execution_mode·plan 카드 파트)가 속한 턴에 append**된다. 그 결과 카드와 진행/결과가 **하나의 AI 턴(아바타 1개)** 으로 묶여 `[CARD, PROGRESS, RESULT]`로 렌더된다. 촉발 파트가 없는 실행(대화 없이/직접 실행 등)은 새 ASSISTANT 턴을 만들어 append(폴백). 재개(이어서 실행/respond)는 새 진행 블록이므로 새 턴을 만든다. 진행 블록 자체(PROGRESS 파트)는 `executionId`로 실행을 정참조하며(갱신/RESULT append 시 executionId로 역조회), `TRIGGER_PART_ID`는 촉발 카드 파트를 가리키는 값으로 유지한다(PROGRESS 파트 id로 덮어쓰지 않음). 대화방 단위 락으로 한 대화방 동시 실행은 1개이며, 한 발화가 여러 실행을 한 턴에 묶는 형태(exec A/B)는 순차 다중 실행 도입 시 활성화한다.
 
 - **SYSTEM 안내**(취소/중지, 대상 서비스 설정/해제 등)는 `role=system` 턴 + `TEXT` 파트 1개로 표현한다(별도 SYSTEM 파트 타입 없음). 서비스 설정 알림은 `PATCH /conversations/{id}/service` 성공 시 발행되며, 카드 선택·패널 드롭다운 어느 경로든 동일하게 남는다(새 대화 미생성 상태는 제외 — 대화방이 없어 남길 곳이 없고 pending으로만 보관).
 - **빈 ASSISTANT 턴**: AI 응답을 시작할 때 `status=streaming`인 빈 턴을 먼저 만들고 파트를 append한다(기존 "PENDING 자리 미리 INSERT" 패턴의 대체). 완료 시 턴 `status=complete`.
@@ -428,7 +428,7 @@ investigate 답변 뒤에 붙는 `REFERENCES` 파트의 `payloadJson`. 파트로
 
 | 시점 | 이벤트 | 대상 |
 |------|--------|------|
-| 실행 시작 | `message_update` | (이미 열린 AI 턴에) PROGRESS 파트 append (`status:"running"`, steps 초기 상태). 턴 자체가 없으면 `message_new`로 빈 AI 턴 생성 후 append |
+| 실행 시작 | `message_update` | **촉발 카드 파트가 속한 턴에** PROGRESS 파트 append (`status:"running"`, steps 초기 상태) → 그 턴의 파트 배열 전체 스냅샷 재전송. 촉발 파트가 없으면(직접 실행/재개) `message_new`로 새 AI 턴 생성 후 append |
 | 스텝 보고 | `message_update` | **그 턴**의 PROGRESS 파트 `steps[]`/`status` 갱신(턴 전체 스냅샷 재전송) |
 | 완료 | `message_update` | PROGRESS 파트 `status`를 `success`/`failed`로 확정 + RESULT 파트 append |
 

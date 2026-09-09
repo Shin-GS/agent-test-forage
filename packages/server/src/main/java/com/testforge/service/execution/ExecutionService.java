@@ -233,6 +233,13 @@ public class ExecutionService {
             // (messaging.md 인터랙티브 파트 CONSUMED — 새로고침 후 재활성화 방지). partId 없으면 no-op.
             conversationService.consumeInteractivePart(conversationId, triggerPartId);
 
+            // 촉발 카드 파트 id를 EXECUTION.TRIGGER_PART_ID로 저장(db/execution.md: 실행을 촉발한 파트).
+            // 진행/결과 파트는 이 카드 파트가 속한 턴에 append되어 한 턴([CARD, PROGRESS, RESULT])이 된다.
+            if (triggerPartId != null) {
+                savedExecution.setTriggerPartId(triggerPartId);
+                savedExecution = executionRepository.save(savedExecution);
+            }
+
             // 2) EXECUTION_RECIPE N개 생성 + 스냅샷 저장 (원본 독립). 순서 = sequence. 전부 PENDING으로 둔다.
             //    값 사전 편집(plan.md): 그 sequence의 recipeInputs를 스냅샷 안에 함께 보관해, 각 레시피가
             //    RUNNING으로 전이될 때 자기 sequence 편집값을 꺼내 시드한다(발화값보다 우선). 미편집/미전달은 빈 맵.
@@ -281,8 +288,8 @@ public class ExecutionService {
             conversation.setStatus(ConversationStatus.EXECUTING);
             conversationRepository.save(conversation);
 
-            // 진행 블록(PROGRESS) 파트 생성 + message_new. 그 파트 ID를 EXECUTION.TRIGGER_PART_ID로 저장.
-            beginProgressMessage(savedExecution, conversationId);
+            // 진행 블록(PROGRESS) 파트 생성. 촉발 카드 파트가 속한 턴에 append(한 턴), 없으면 새 턴 폴백.
+            beginProgressMessage(savedExecution, conversationId, savedExecution.getTriggerPartId());
 
             publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
                     com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.EXECUTING));
@@ -957,8 +964,9 @@ public class ExecutionService {
         Long ownerId = conversation.getUserId();
         Long executionId = execution.getId();
 
-        // 실행 진행 블록(PROGRESS) 파트 생성 + message_new (재개 시점이 실제 실행 시작). TRIGGER_PART_ID 채움.
-        beginProgressMessage(execution, conversationId);
+        // 실행 진행 블록(PROGRESS) 파트 생성 (액션 피커 값 입력 후 실제 실행 시작). 촉발 카드 파트가
+        // 있으면 그 턴에 귀속(값 확인 후 실행도 카드 턴 — card-ui.md), 없으면 새 턴 폴백.
+        beginProgressMessage(execution, conversationId, execution.getTriggerPartId());
 
         publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
                 com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.EXECUTING));
@@ -1075,9 +1083,10 @@ public class ExecutionService {
             }
 
             // 대화방 EXECUTING 전이 (락 유지 → 종료 시 해제) + 새 PROGRESS 메시지(기존과 별개) 발행.
+            // 재개(이어서 실행)는 새 진행 블록이므로 triggerPartId=null로 새 턴에 만든다(messaging.md 한 턴 귀속 규칙).
             conversation.setStatus(ConversationStatus.EXECUTING);
             conversationRepository.save(conversation);
-            beginProgressMessage(execution, conversationId);
+            beginProgressMessage(execution, conversationId, null);
             publishAfterCommit(ownerId, SseEventType.SESSION_STATUS, conversationId,
                     com.testforge.dto.conversation.SessionStatusPayload.of(conversationId, ConversationStatus.EXECUTING));
 
@@ -1171,10 +1180,10 @@ public class ExecutionService {
 
             String payloadJson = buildResultPayload(execution.getId(), execution.getTitle(),
                     progressStatusOf(execution.getStatus()), resultRecipes);
-            // RESULT 파트를 진행(PROGRESS) 파트와 같은 턴에 append한다(messaging.md 한 턴 = PROGRESS+RESULT).
-            // 연결 고리는 EXECUTION.TRIGGER_PART_ID(= PROGRESS 파트 ID). 없으면 새 턴 폴백(ConversationService).
+            // RESULT 파트를 진행(PROGRESS) 파트와 같은 턴에 append한다(messaging.md 한 턴 = [CARD, PROGRESS, RESULT]).
+            // 연결 고리는 executionId(그 실행의 PROGRESS 파트를 역조회 → 그 턴에 append). 없으면 새 턴 폴백.
             conversationService.appendResultToTurn(conversationId, execution.getId(),
-                    execution.getTriggerPartId(), payloadJson, content);
+                    payloadJson, content);
         } catch (Exception e) {
             // 결과 발행 실패가 실행 종료(상태 확정/idle/락 해제)를 막지 않도록 방어적으로 삼킨다.
             log.warn("Failed to publish result message: executionId={}, conversationId={}",
@@ -1245,7 +1254,7 @@ public class ExecutionService {
      * 저장한다. payload는 {@code status:"running"} + 스텝 스냅샷(전부 pending)으로 구성하고, content는
      * "레시피 실행 중 (0/N)" 형식의 표시용 요약이다. 발행(message_new)은 ConversationService가 커밋 후 한다.
      */
-    private void beginProgressMessage(Execution execution, Long conversationId) {
+    private void beginProgressMessage(Execution execution, Long conversationId, Long triggerPartId) {
         if (conversationId == null) {
             return;
         }
@@ -1253,30 +1262,29 @@ public class ExecutionService {
         String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), "running", recipes);
         String content = progressContent(execution.getTitle(), "running", recipes);
 
-        Long partId = conversationService.createProgressMessage(
-                conversationId, execution.getId(), payloadJson, content);
-        if (partId != null) {
-            // 진행 파트 id를 실행의 촉발 파트로 저장(이후 갱신 대상 + 새로고침 복원 링크).
-            execution.setTriggerPartId(partId);
-            executionRepository.save(execution);
-        }
+        // 촉발 카드 파트(triggerPartId)가 있으면 그 턴에 PROGRESS를 이어 붙인다(한 턴 = [CARD, PROGRESS, RESULT]).
+        // 없으면(직접 실행/재개) 새 턴 폴백. PROGRESS 파트 조회는 이후 executionId 역참조를 쓰므로,
+        // TRIGGER_PART_ID(촉발 카드 파트)는 덮어쓰지 않고 그대로 둔다(db/execution.md).
+        conversationService.createProgressMessage(
+                conversationId, execution.getId(), triggerPartId, payloadJson, content);
     }
 
     /**
      * 진행 블록(PROGRESS) 메시지를 현재 스텝 상태로 다시 그려 {@code message_update}로 갱신한다.
      * 스텝 상태는 EXECUTION_STEP 레코드에서 읽어(pending은 그대로) 반영하고, 실행 전체 status는 인자로 받는다
-     * (진행 중이면 "running", 종료 시 최종 상태). TRIGGER_PART_ID가 없으면(진행 블록 미생성) no-op.
+     * (진행 중이면 "running", 종료 시 최종 상태). 갱신 대상 PROGRESS 파트는 executionId로 역조회하며,
+     * PROGRESS 파트가 없으면(진행 블록 미생성) no-op.
      */
     private void refreshProgressMessage(Execution execution, String overallStatus) {
         Long conversationId = execution.getConversationId();
-        Long partId = execution.getTriggerPartId();
-        if (conversationId == null || partId == null) {
+        if (conversationId == null) {
             return;
         }
         List<ProgressRecipe> recipes = progressRecipes(execution.getId());
         String payloadJson = buildProgressPayload(execution.getId(), execution.getTitle(), overallStatus, recipes);
         String content = progressContent(execution.getTitle(), overallStatus, recipes);
-        conversationService.updateProgressMessage(conversationId, partId, payloadJson, content);
+        // 갱신 대상 PROGRESS 파트는 executionId로 역조회한다(TRIGGER_PART_ID는 촉발 카드 파트라 사용 불가).
+        conversationService.updateProgressMessage(conversationId, execution.getId(), payloadJson, content);
     }
 
     /** 실행 최종 상태 → PROGRESS payload의 status 코드(소문자). RUNNING은 "running". */
