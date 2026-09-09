@@ -460,6 +460,11 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   font-family: var(--font-family);
+  /* 레시피 이름이 길어도 버튼이 과도하게 늘어나지 않도록 제한 + 말줄임 */
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .quick-action:hover {

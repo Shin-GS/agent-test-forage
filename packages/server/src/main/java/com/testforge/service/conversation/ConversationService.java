@@ -260,10 +260,21 @@ public class ConversationService {
         if (changed) {
             // 서비스 설정/해제를 대화방에 SYSTEM 안내로 남긴다(사용자 인지 + 새로고침/다른 탭 복원).
             // 카드 선택이든 패널 드롭다운이든 이 API를 거치므로 경로 무관하게 일관되게 남는다.
+            //
+            // 카드 경로(triggerPartId != null)로 서비스를 "지정"한 경우엔, 원래 실행하려던 요청이
+            // 아직 처리되지 않고 멈춰 있으므로 "다시 입력" 안내를 덧붙여 다음 행동을 명확히 한다.
+            // (자동 이어실행은 후속 개선 — 지금은 재입력 유도로 멈춤만 해소한다.)
+            // 패널 경로(triggerPartId == null)나 해제(apiSpecId == null)는 실행 맥락이 없어 안내만 남긴다.
             String serviceName = serviceNameOf(apiSpecId);
-            String notice = apiSpecId == null
-                    ? "대상 서비스 설정이 해제되었어요."
-                    : "대상 서비스가 '" + serviceName + "'(으)로 설정되었어요.";
+            String notice;
+            if (apiSpecId == null) {
+                notice = "대상 서비스 설정이 해제되었어요.";
+            } else if (triggerPartId != null) {
+                notice = "대상 서비스가 '" + serviceName + "'(으)로 설정되었어요. "
+                        + "이어서 진행하려면 원하시는 작업을 다시 입력해 주세요.";
+            } else {
+                notice = "대상 서비스가 '" + serviceName + "'(으)로 설정되었어요.";
+            }
             Message savedNotice = saveTurn(id, MessageRole.SYSTEM, MessageStatus.COMPLETE,
                     List.of(PartDraft.text(notice)));
             conversation.setLastMessageAt(savedNotice.getCreatedAt());
