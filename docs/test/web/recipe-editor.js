@@ -425,6 +425,68 @@ const RECIPE_EDITOR_TESTS = {
         "결과 카운트가 0으로 표시되는지 확인"
       ],
       expected: "레시피 없음/필터 결과 없음 각각에 대해 적절한 빈 상태 안내가 표시됨"
+    },
+
+    // === ⑤ 결과 메시지 템플릿 (Handlebars + 마크다운) ===
+    {
+      id: "RECIPE-037",
+      priority: "high",
+      title: "⑤ 결과 메시지 템플릿 — 작성 도움말 툴팁",
+      precondition: "레시피 편집/생성 화면, ⑤ 결과 메시지 템플릿 섹션 표시",
+      steps: [
+        "⑤ 결과 메시지 템플릿 라벨 옆 ⓘ 아이콘을 확인한다",
+        "ⓘ에 마우스 hover 또는 키보드 포커스(tab)한다",
+        "툴팁에 문법 요약(값/반복/조건/헬퍼/표)이 표시되는지 확인",
+        "aria-label로 스크린리더에 도움말임이 안내되는지 확인"
+      ],
+      expected: "라벨 옆 ⓘ 도움말이 hover/포커스 시 문법 요약 툴팁을 표시하고, 키보드 접근(tabindex)과 aria-label이 적용됨"
+    },
+    {
+      id: "RECIPE-038",
+      priority: "high",
+      title: "⑤ 결과 메시지 템플릿 — placeholder/힌트 문구",
+      precondition: "레시피 편집/생성 화면, ⑤ 섹션 textarea 비어 있음",
+      steps: [
+        "textarea placeholder에 마크다운+변수 예시가 표시되는지 확인",
+        "하단 힌트가 '마크다운 + Handlebars 문법 지원 / 사용 가능 변수: ④ 결과 정의 + ② 사용자 입력 / 미입력 시 결과값 자동 요약'로 표시되는지 확인",
+        "구 문구('[변수명]으로 삽입', 'AI가 자동 요약')가 남아 있지 않은지 확인"
+      ],
+      expected: "placeholder는 {{변수}} 마크다운 예시, 힌트는 정정된 문구(값 자동 요약)로 표시되고 구 표기가 없음"
+    },
+    {
+      id: "RECIPE-039",
+      priority: "medium",
+      title: "④ 결과 정의 — 배열/객체 값 허용",
+      precondition: "레시피 편집 모드, 목록/배열을 반환하는 스텝 존재",
+      steps: [
+        "④ 결과 정의에 배열/객체 소스를 매핑한다",
+        "저장 시 스칼라가 아니라는 이유로 배제되지 않는지 확인",
+        "⑤ 템플릿에서 {{#each}}로만 표시 가능함을 안내(문서/힌트)로 확인"
+      ],
+      expected: "결과 정의가 배열/객체 값을 보존하며 저장되고, 템플릿에서 {{#each}}로 반복 표시 가능"
+    },
+    {
+      id: "RECIPE-040",
+      priority: "high",
+      title: "③ extract — JSONPath 표현식 지원",
+      precondition: "API 스텝 편집, 응답에서 변수 추출(extract) 정의",
+      steps: [
+        "extract 경로에 $.field, $.a.b(중첩)를 입력하여 값이 추출되는지 확인",
+        "$[0].field(배열 인덱스), $[*].field(프로젝션)로 배열 접근이 되는지 확인",
+        "$(전체)로 응답 전체를 담을 수 있는지 확인"
+      ],
+      expected: "extract가 JSONPath 표준(필드/중첩/인덱스/프로젝션/전체)을 지원하여 배열·중첩 응답에서 값을 추출함"
+    },
+    {
+      id: "RECIPE-041",
+      priority: "medium",
+      title: "스텝 표시명(name) 폴백 — 목록/편집 표기",
+      precondition: "name(표시명)이 비어 있는 스텝이 포함된 레시피",
+      steps: [
+        "스텝 목록에서 name 미입력 스텝이 '이름 없음'이 아니라 label/summary/method+path로 폴백 표기되는지 확인",
+        "저장 시 name=label로 채워지는지(또는 FE가 label 폴백하는지) 확인"
+      ],
+      expected: "스텝 표시명이 비어도 label → 엔드포인트 summary → method+path 순으로 폴백되어 '이름 없음'이 노출되지 않음"
     }
   ]
 };

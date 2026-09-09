@@ -802,7 +802,33 @@
                 <div class="message__body">
                   <div class="message__actions"><button class="btn btn--ghost btn--icon btn--sm" title="복사">📋</button></div>
                   <span class="message__sender">AI Test Forge</span>
-                  <div class="message__content"><p>회원가입 레시피 5건 실행이 완료되었습니다.</p></div>
+                  <!-- 결과 메시지 본문: BE에서 결과 템플릿(Handlebars)을 렌더한 마크다운을 content로 저장,
+                       FE는 <Markdown>(react-markdown + remark-gfm + rehype-sanitize)로 렌더만.
+                       아래는 마크다운 렌더 결과(HTML)를 표현한 예시 — 강조/표 지원. -->
+                  <div class="message__content markdown-body">
+                    <p>회원가입 레시피 <strong>5건</strong> 실행이 완료되었습니다.</p>
+                    <table>
+                      <thead><tr><th>#</th><th>이메일</th><th>회원 ID</th><th>상태</th></tr></thead>
+                      <tbody>
+                        <tr><td>1</td><td>user1@example.com</td><td>10001</td><td>✓ 성공</td></tr>
+                        <tr><td>2</td><td>user2@example.com</td><td>10002</td><td>✓ 성공</td></tr>
+                        <tr><td>3</td><td>user3@example.com</td><td>10003</td><td>✓ 성공</td></tr>
+                        <tr><td>4</td><td>user4@example.com</td><td>—</td><td>✕ 프로필 실패</td></tr>
+                        <tr><td>5</td><td>user5@example.com</td><td>—</td><td>✕ 프로필 실패</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <!-- 결과값 목록(단건 SingleResult): 마크다운 결과와 중복되는 보조/원본 확인용 정보라 기본 접힘.
+                       content(마크다운)가 있으면 접힘, 없으면 펼침. 배열/객체 값은 목록에서 "N건" 요약으로 표기.
+                       플랜 결과(레시피별 한 줄)는 접기 대상 아님. -->
+                  <details class="result-values">
+                    <summary class="result-values__toggle">상세 값 보기</summary>
+                    <ul class="result-values__list">
+                      <li><span class="result-values__key">예금주</span><span class="result-values__val">이영희</span></li>
+                      <li><span class="result-values__key">잔액</span><span class="result-values__val">500000</span></li>
+                      <li><span class="result-values__key">거래 내역</span><span class="result-values__val">12건</span></li>
+                    </ul>
+                  </details>
                   <div class="result-card">
                     <div class="result-card__header"><span class="result-card__title">📋 회원가입 × 5</span><span class="result-card__time">09:15</span></div>
                     <div class="result-card__summary">

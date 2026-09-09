@@ -98,6 +98,8 @@ public class ExecutionService {
     private final RecipeAccessPolicy recipeAccessPolicy;
     // 결과 메시지(message_new) 발행용. ConversationService ↔ ExecutionService 상호 의존이라 @Lazy로 끊는다.
     private final ConversationService conversationService;
+    // ⑤ 결과 메시지 템플릿(Handlebars) 렌더러. 값치환/반복/조건 + 헬퍼 화이트리스트.
+    private final ResultTemplateRenderer resultTemplateRenderer;
 
     // 스냅샷 직렬화용 로컬 매퍼 (공용 빈에 의존하지 않는 기존 패턴과 일관)
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -112,6 +114,7 @@ public class ExecutionService {
                             ConversationLock conversationLock,
                             SseEventPublisher ssePublisher,
                             RecipeAccessPolicy recipeAccessPolicy,
+                            ResultTemplateRenderer resultTemplateRenderer,
                             @Lazy ConversationService conversationService) {
         this.executionRepository = executionRepository;
         this.executionRecipeRepository = executionRecipeRepository;
@@ -123,6 +126,7 @@ public class ExecutionService {
         this.conversationLock = conversationLock;
         this.ssePublisher = ssePublisher;
         this.recipeAccessPolicy = recipeAccessPolicy;
+        this.resultTemplateRenderer = resultTemplateRenderer;
         this.conversationService = conversationService;
     }
 
@@ -1142,7 +1146,7 @@ public class ExecutionService {
                 } else {
                     String template = snapshot == null ? null : asString(snapshot.get("resultTemplate"));
                     if (template != null && !template.isBlank()) {
-                        recipeContent = renderTemplate(template, resultValues, userInput);
+                        recipeContent = resultTemplateRenderer.render(template, resultValues, userInput);
                     } else {
                         recipeContent = buildFallbackSummary(recipeName, resultValues, resultLabels);
                     }
@@ -1559,9 +1563,10 @@ public class ExecutionService {
             }
         }
 
-        // fallback: 정의가 없거나 매칭이 하나도 안 됐으면 context 최상위 스칼라 + userInput
+        // fallback: 정의가 없거나 매칭이 하나도 안 됐으면 context 최상위 값 + userInput.
+        // 스칼라뿐 아니라 배열/객체도 담는다(목록 조회 대응 — authoring.md ④ 배열/목록 값).
         for (Map.Entry<String, Object> e : context.entrySet()) {
-            if (!"userInput".equals(e.getKey()) && isScalar(e.getValue())) {
+            if (!"userInput".equals(e.getKey()) && e.getValue() != null) {
                 resultValues.put(e.getKey(), e.getValue());
             }
         }
@@ -1630,39 +1635,6 @@ public class ExecutionService {
         String variable = idx >= 0 ? source.substring(idx + 1) : source;
         variable = variable.trim();
         return variable.isEmpty() ? key : variable;
-    }
-
-    /**
-     * ⑤ 템플릿 치환. {@code {{key}}}를 resultValues 우선(없으면 userInput)으로 치환한다. 매칭되는 값이
-     * 없으면 플레이스홀더 원문을 유지한다(오염 방지). 치환 범위는 ④ 결과 정의 + ② 사용자 입력으로 한정된다
-     * (스텝 extract 원시 변수는 resultValues 경유로만 들어온다 — authoring.md ⑤).
-     */
-    private String renderTemplate(String template, Map<String, Object> resultValues,
-                                  Map<String, Object> userInput) {
-        java.util.regex.Matcher matcher =
-                java.util.regex.Pattern.compile("\\{\\{\\s*([^}\\s]+)\\s*}}").matcher(template);
-        StringBuilder sb = new StringBuilder();
-        while (matcher.find()) {
-            String rawKey = matcher.group(1);
-            // "userInput.quantity" 형태도 지원: 점 뒤 마지막 토큰으로 userInput에서 조회
-            Object value = resolveTemplateKey(rawKey, resultValues, userInput);
-            String replacement = value == null ? matcher.group(0) : String.valueOf(value);
-            matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(replacement));
-        }
-        matcher.appendTail(sb);
-        return sb.toString();
-    }
-
-    /** 템플릿 키 조회: {@code userInput.x}면 userInput에서, 아니면 resultValues → userInput 순으로. */
-    private Object resolveTemplateKey(String rawKey, Map<String, Object> resultValues,
-                                      Map<String, Object> userInput) {
-        if (rawKey.startsWith("userInput.")) {
-            return userInput.get(rawKey.substring("userInput.".length()));
-        }
-        if (resultValues.containsKey(rawKey)) {
-            return resultValues.get(rawKey);
-        }
-        return userInput.get(rawKey);
     }
 
     /**

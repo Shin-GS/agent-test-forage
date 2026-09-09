@@ -316,6 +316,33 @@
   text-align: left;
 }
 
+/* --- Result Values (결과값 목록 — 접기) ---
+   단건 결과의 보조/원본 확인용 값 목록. 마크다운 결과 메시지와 중복되므로
+   details/summary로 기본 접힘(content 있을 때). 배열/객체 값은 "N건" 요약으로 표기. */
+.result-values {
+  font-size: var(--font-size-sm);
+}
+.result-values__toggle {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: var(--space-1) 0;
+  list-style: none;
+  user-select: none;
+}
+.result-values__toggle::-webkit-details-marker {
+  display: none;
+}
+.result-values__toggle::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: var(--space-1);
+  transition: transform 0.15s ease;
+  color: var(--color-text-tertiary);
+}
+.result-values[open] .result-values__toggle::before {
+  transform: rotate(90deg);
+}
+
 /* --- Tool Call Card --- */
 .tool-call {
   background: var(--color-bg-tertiary);

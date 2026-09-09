@@ -197,9 +197,9 @@ AI: 📋 입사지원 (사람인)
 ```
 스텝 전부 종료
     │
-    ├─ ⑤ 템플릿 있음 → BE가 실행 context로 {{변수}} 치환 (AI 미호출)
+    ├─ ⑤ 템플릿 있음 → BE가 Handlebars로 렌더 (④ 결과값 + ② 사용자 입력, AI 미호출)
     │
-    └─ ⑤ 템플릿 없음 → [fast] AI 요약 (입력: steps summary + resultValues)
+    └─ ⑤ 템플릿 없음 → 값 요약 폴백 (resultValues를 "- 표시명: 값" 나열)
     │
     ▼
 PROGRESS 파트 확정(message_update) + RESULT 파트 append(message_update) + 결과 제공형 카드
@@ -208,19 +208,22 @@ PROGRESS 파트 확정(message_update) + RESULT 파트 append(message_update) + 
 session_status: idle + 히스토리 refresh
 ```
 
-### (a) 템플릿이 있는 경우 — BE 치환 (AI 미호출)
+결과 메시지는 **마크다운**으로 저장·렌더된다(표/리스트/강조). 렌더는 실행 완료 시 서버에서 1회 수행하고, FE는 저장된 마크다운을 렌더만 한다.
 
-- BE가 ⑤ 템플릿의 `{{변수}}`를 실행 context 값으로 치환해 결과 메시지(`message_new`)를 발행한다.
-- 치환에 쓰는 변수 범위는 **④ 결과 정의 변수 + ② 사용자 입력 변수**로 한정한다. (규칙: [authoring.md ⑤ 결과 메시지 템플릿](authoring.md#⑤-결과-메시지-템플릿))
+### (a) 템플릿이 있는 경우 — BE Handlebars 렌더 (AI 미호출)
+
+- BE가 ⑤ 템플릿을 **Handlebars로 렌더**해 결과 메시지(`message_new`)를 발행한다. 값 치환 `{{key}}` + 반복 `{{#each}}` + 조건 `{{#if}}` + 등록된 헬퍼(`formatNumber`/`eq`/`gt`/`lt`/`default`)를 지원한다. 목록은 전량 렌더하되 배열당 최대 500개 하드 상한을 렌더러가 강제하고, 초과 시 `…외 N건`을 자동 덧붙인다.
+- 렌더 컨텍스트(값 범위)는 **④ 결과 정의 변수 + ② 사용자 입력 변수(`userInput.*`)** 로 한정한다. (규칙: [authoring.md ⑤ 결과 메시지 템플릿](authoring.md#-결과-메시지-템플릿))
   - 스텝의 extract 원시 변수를 템플릿에서 직접 참조하지 않는다. 템플릿에서 쓰려는 값은 반드시 ④ 결과 정의에 등록해 경유한다.
-- AI를 호출하지 않으므로 원시 응답을 AI에 넘기는 일이 없다.
+  - 결과 정의 값은 스칼라뿐 아니라 **배열/객체**도 허용된다(목록 조회 → `{{#each}}` 반복 렌더).
+- 헬퍼는 서버가 화이트리스트로 등록한 것만 동작한다(임의 코드 실행 차단). AI를 호출하지 않으므로 원시 응답을 AI에 넘기는 일이 없다.
+- 렌더 결과는 마크다운 문자열이며, 결과 메시지 `content`(단일은 `summary`)로 저장된다. 구조화 `resultValues`도 함께 보존한다(드릴다운·재사용).
 
-### (b) 템플릿이 없는 경우 — fast AI 요약
+### (b) 템플릿이 없는 경우 — 값 요약 폴백
 
-- `[fast]` 모델로 결과를 요약한다. AI 입력은 **스텝별 summary(steps)** · **resultValues**(④ 결과 정의로 추린 값) · **resultLabels**(결과 key → 표시명 맵)만 전달한다.
-- **원시 응답(raw response) 전체를 AI에 넘기지 않는다.** 스텝 summary와 결과 정의 값·표시명만 전달하여 토큰/민감정보 노출을 최소화한다.
-- **표시명 전달**: AI가 원본 key를 사람말로 임의 창작하지 않도록, [표시명 폴백 체인](structure.md#표시명label-폴백-체인)으로 결정된 표시명을 함께 넘긴다. `steps[].name`은 서버가 실행 시점에 폴백 체인으로 확정한 사람말 이름이고, `resultLabels`는 ④ 결과 정의에 `label`이 등록된 key만 포함한다(없으면 AI는 원본 key 사용). 규칙: [response-guide.md 표시명 폴백 체인](../common/response-guide.md#표시명label-폴백-체인)
-- 상세 입력/출력/프롬프트: [시나리오: 결과 요약](../chat/scenarios/result-summary.md)
+- 템플릿을 비우면 결과값을 자동 요약한다: `"{레시피명} 실행이 완료되었습니다"` + `resultValues`를 `- 표시명: 값` 마크다운 목록으로 나열([표시명 폴백 체인](structure.md#표시명label-폴백-체인) 적용).
+- 원시 응답(raw response) 전체는 노출하지 않는다(④ 결과 정의로 추린 값·표시명만).
+- **AI 자동 요약은 후속 확장**이다(현재 미구현). 확장 시 입력은 스텝 summary + resultValues + resultLabels만 전달하고 원시 응답은 넘기지 않는다. 상세(후속): [시나리오: 결과 요약](../chat/scenarios/result-summary.md)
 
 ### 결과 표시 (프로토타입 스코프)
 

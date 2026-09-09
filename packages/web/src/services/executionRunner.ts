@@ -28,6 +28,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { JSONPath } from "jsonpath-plus";
+
 import { executionsApi, specsApi } from "../api";
 import type {
   ActionPickerVariable,
@@ -643,7 +645,15 @@ function coerce(raw: string): string | number | boolean {
   return raw;
 }
 
-/** extract 정의(맵 또는 배열)를 응답에 적용해 값 추출 */
+/**
+ * extract 정의(맵 또는 배열)를 응답에 적용해 값을 추출한다. JSONPath 표준을 지원한다:
+ * `$.field`, `$.a.b`(중첩), `$[0].field`(인덱스), `$[*].field`(프로젝션), `$`(전체) 등.
+ *
+ * JSONPath는 항상 "매칭 배열"을 반환하므로, 결과를 다음 규칙으로 정규화한다:
+ * - 경로가 다중 매칭 성격(`[*]` / `..` / 필터 `?(` / `,` 유니온)이면 → 배열 그대로 유지(목록 조회 대응).
+ * - 그 외 단일 경로면 → 매칭이 1건일 때 언랩(스칼라/객체 하나), 0건이면 undefined.
+ * - `$`(전체)는 응답 전체를 그대로 담는다.
+ */
 function applyExtract(
   extract: SnapshotStep["extract"],
   response: any
@@ -656,11 +666,37 @@ function applyExtract(
     : Object.entries(extract).map(([name, path]) => ({ name, path }));
 
   for (const { name, path } of entries) {
-    // JSONPath 전체 지원 대신 단순 dot 경로만 (선행 "$." 제거)
-    const cleaned = path.replace(/^\$\.?/, "");
-    out[name] = resolvePath(response, cleaned);
+    out[name] = evaluateJsonPath(response, path);
   }
   return out;
+}
+
+/** 다중 매칭(배열 유지)으로 볼 경로인지 — 프로젝션/재귀/필터/유니온이 있으면 true. */
+function isMultiMatchPath(path: string): boolean {
+  return /\[\s*\*\s*\]|\.\.|\?\(|,/.test(path);
+}
+
+/** JSONPath 표현식을 응답에 적용하고 위 정규화 규칙으로 값을 낸다. 실패 시 undefined. */
+function evaluateJsonPath(response: any, rawPath: string): any {
+  const path = (rawPath ?? "").trim();
+  if (!path) return undefined;
+  // "$" 전체는 응답 그대로.
+  if (path === "$") return response;
+
+  // "$"가 없는 레거시 표기(dot 경로)는 앞에 "$." 를 붙여 JSONPath로 승격.
+  const normalized = path.startsWith("$") ? path : `$.${path}`;
+
+  try {
+    const matches = JSONPath({ path: normalized, json: response, wrap: true }) as any[];
+    if (!Array.isArray(matches) || matches.length === 0) {
+      return undefined;
+    }
+    // 다중 매칭 성격의 경로는 배열 유지(목록), 그 외 단일 경로는 첫 매칭 언랩.
+    return isMultiMatchPath(normalized) ? matches : matches[0];
+  } catch {
+    // 잘못된 JSONPath 표현식은 값 없음으로 처리(실행 자체는 계속).
+    return undefined;
+  }
 }
 
 // ---------------------------------------------------------------------------

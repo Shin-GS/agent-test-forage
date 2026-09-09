@@ -69,7 +69,7 @@ ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/spe
 - ② 변수: 빈 테이블 + [+ 변수 추가]
 - ③ 스텝: 빈 상태 + [+ 스텝 추가] 버튼 (타입 선택 드롭다운)
 - ④ 결과 정의: 빈 테이블 (변수명 | 표시명(선택) | 소스)
-- ⑤ 결과 메시지: textarea
+- ⑤ 결과 메시지: textarea + 라벨 옆 도움말 툴팁(ⓘ)
 
 ### Case 3: 스텝 편집 (API 타입)
 
@@ -92,6 +92,16 @@ ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/spe
 - 표시명 입력은 모두 선택 필드 — 비우면 위 순서로 자동 폴백하여 표기가 깨지지 않음
 - 중첩/배열 key(`items[0].price`)는 label 없으면 경로 그대로, 값이 null이면 "값 없음"으로 표기
 - 참조 기획: [authoring.md ④ 결과 정의](../../specs/recipe/authoring.md#-결과-정의), [response-guide.md 표시명 폴백 체인](../../specs/common/response-guide.md#표시명label-폴백-체인)
+
+### ⑤ 결과 메시지 템플릿 (문법 + 도움말 툴팁)
+
+결과 메시지 템플릿은 **마크다운 + Handlebars** 문법으로 작성한다. textarea 라벨 바로 옆에 도움말 툴팁(ⓘ, 기존 `.tooltip` 컴포넌트 재사용)을 두어 작성 위치 근처에서 문법을 안내한다.
+
+- **툴팁 내용**(요약): 값 `{{key}}` / 사용자 입력 `{{userInput.x}}` / 반복 `{{#each items}}...{{/each}}` / 조건 `{{#if x}}...{{/if}}` / 헬퍼 `{{formatNumber v}}`·`{{limit items 20}}`·`{{default v "-"}}` / 마크다운 표 `| |`. 쓸 수 있는 값은 ④ 결과 정의 + ② 사용자 입력.
+- **placeholder**: 마크다운+변수 예시(예: `**{{ownerName}}**님의 잔액은 {{formatNumber balance}}원입니다.`)
+- **힌트 문구**: "마크다운 + Handlebars 문법 지원(반복·조건·표). 사용 가능한 변수: ④ 결과 정의 + ② 사용자 입력. 미입력 시 결과값을 자동 요약합니다." (기존 "AI가 자동 요약"에서 정정 — AI 요약은 후속)
+- 목록 조회 레시피는 마크다운 표/리스트로 결과를 표현한다(배열 값 + `{{#each}}`).
+- 참조 기획: [authoring.md ⑤ 결과 메시지 템플릿](../../specs/recipe/authoring.md#-결과-메시지-템플릿)
 
 ### Case 4: 스텝 편집 (스크립트 타입)
 

@@ -7,6 +7,7 @@
 import type { ResultPayload, ResultRecipePayload } from "../../api/types";
 import { usePanelStore } from "../../features/panel/panelStore";
 import { resultKeyLabel, resultValueDisplay, statusIcon } from "../../features/panel/shared/format";
+import { Markdown } from "./Markdown";
 
 interface Props {
   payload: ResultPayload;
@@ -23,12 +24,17 @@ export function ResultMessage({ payload, content }: Props) {
 
   return (
     <div className="result-message" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-      {content && <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{content}</div>}
+      {/* content 는 BE에서 결과 템플릿(Handlebars)을 1회 렌더한 마크다운 문자열.
+          FE는 <Markdown>(remark-gfm + rehype-sanitize)으로 렌더만 한다(강조/목록/표 + XSS 방어). */}
+      {content && <Markdown content={content} />}
 
       {isPlan ? (
+        // 플랜 결과(레시피별 한 줄)는 그 자체가 요약이라 접기 대상이 아니다(card-ui.md 결과 제공형 상세).
         <PlanResult recipes={recipes} />
       ) : (
-        <SingleResult recipe={recipes[0]} />
+        // 단건 결과값 목록은 마크다운 결과 메시지와 중복되는 보조 정보.
+        // content(마크다운)가 있으면 기본 접힘, 없으면 펼침(유일 정보).
+        <SingleResult recipe={recipes[0]} collapsible={Boolean(content)} />
       )}
 
       <div>
@@ -46,10 +52,22 @@ export function ResultMessage({ payload, content }: Props) {
   );
 }
 
-/** 단일 레시피: 결과값 목록 표시 */
-function SingleResult({ recipe }: { recipe: ResultRecipePayload | undefined }) {
+/**
+ * 채팅 결과값 목록 표시용 요약. 배열/객체는 원문 JSON 대신 "N건" 요약으로 표기해
+ * 채팅에 raw JSON 덩어리가 노출되지 않게 한다(실제 내용은 마크다운 결과/패널 드릴다운).
+ * 스칼라/빈값은 공용 resultValueDisplay 규칙을 따른다.
+ */
+function chatResultValueDisplay(value: unknown): string {
+  if (Array.isArray(value)) return `${value.length}건`;
+  if (value != null && typeof value === "object") {
+    return `${Object.keys(value as Record<string, unknown>).length}개 항목`;
+  }
+  return resultValueDisplay(value);
+}
+
+/** 결과값 key-value 목록 (표시명 폴백 + 배열/객체는 "N건" 요약) */
+function ResultValueList({ recipe }: { recipe: ResultRecipePayload | undefined }) {
   const entries = Object.entries(recipe?.resultValues ?? {});
-  if (entries.length === 0) return null;
   return (
     <ul style={listStyle}>
       {entries.map(([key, value]) => (
@@ -57,10 +75,39 @@ function SingleResult({ recipe }: { recipe: ResultRecipePayload | undefined }) {
           <span style={{ color: "var(--color-text-secondary)", minWidth: 90 }}>
             {resultKeyLabel(key, recipe?.resultLabels)}
           </span>
-          <span style={{ color: "var(--color-text-primary)" }}>{resultValueDisplay(value)}</span>
+          <span style={{ color: "var(--color-text-primary)" }}>{chatResultValueDisplay(value)}</span>
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * 단일 레시피 결과값 목록.
+ * - collapsible=true(결과 메시지 content가 있는 경우): 기본 접힘 details 토글("상세 값 보기").
+ * - collapsible=false(content 없음): 목록을 그대로 펼쳐 표시(유일 정보).
+ */
+function SingleResult({
+  recipe,
+  collapsible,
+}: {
+  recipe: ResultRecipePayload | undefined;
+  collapsible: boolean;
+}) {
+  const entries = Object.entries(recipe?.resultValues ?? {});
+  if (entries.length === 0) return null;
+
+  if (!collapsible) {
+    return <ResultValueList recipe={recipe} />;
+  }
+
+  return (
+    <details className="result-values">
+      <summary className="result-values__toggle">상세 값 보기</summary>
+      <div style={{ marginTop: "var(--space-2)" }}>
+        <ResultValueList recipe={recipe} />
+      </div>
+    </details>
   );
 }
 

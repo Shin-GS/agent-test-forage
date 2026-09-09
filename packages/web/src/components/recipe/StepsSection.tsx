@@ -15,6 +15,17 @@ import { ApiStepEditor } from "./steps/ApiStepEditor";
 import { ScriptStepEditor } from "./steps/ScriptStepEditor";
 import { SubRecipeStepEditor } from "./steps/SubRecipeStepEditor";
 
+/**
+ * 스텝 카드 표시명 폴백. API 스텝은 표시명(label) 우선, 없으면 name, 그래도 없으면 "스텝 N".
+ * 표시명 폴백 체인(엔드포인트 summary → method+path)은 스텝 편집기 내부에서 안내하며,
+ * 여기서는 목록 표기가 "(이름 없음)"으로 비지 않도록 최소 폴백만 보장한다(authoring.md 표시명 폴백).
+ */
+function stepDisplayName(step: RecipeStep, index: number): string {
+  if (step.type === "api" && step.label && step.label.trim()) return step.label;
+  if (step.name && step.name.trim()) return step.name;
+  return `스텝 ${index + 1}`;
+}
+
 interface StepsSectionProps {
   steps: RecipeStep[];
   onChange: (next: RecipeStep[]) => void;
@@ -87,7 +98,7 @@ export function StepsSection({
               style={isOpen ? { background: "var(--color-accent-subtle)" } : undefined}
             >
               <span className="step-card__number">{index + 1}</span>
-              <span className="step-card__name">{step.name || "(이름 없음)"}</span>
+              <span className="step-card__name">{stepDisplayName(step, index)}</span>
               <span className="step-card__type">{stepTypeLabel(step.type)}</span>
               <div className="step-card__controls">
                 <button

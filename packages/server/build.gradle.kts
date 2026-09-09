@@ -34,6 +34,10 @@ dependencies {
     // OpenAPI 3.0/3.1 파싱 (specJson의 paths → endpoint 분해)
     implementation("io.swagger.parser.v3:swagger-parser:2.1.22")
 
+    // 레시피 결과 메시지 템플릿(⑤) 렌더: Handlebars(로직리스 + 헬퍼 화이트리스트).
+    // 4.4+는 Java 17+ 요구(server=Java 25). 임의 코드 실행 없이 반복/조건/등록 헬퍼만 허용.
+    implementation("com.github.jknack:handlebars:4.4.0")
+
     // AI는 OpenAI 호환 API를 RestClient(spring-boot-starter-web 포함)로 직접 호출한다.
     // Spring AI는 미채택 (IntentResolver 추상화가 이미 확장 경계라 프로바이더 추상화가 중복).
 

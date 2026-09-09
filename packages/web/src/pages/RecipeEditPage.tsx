@@ -329,17 +329,35 @@ export function RecipeEditPage() {
           <div className="section">
             <div className="section__title">
               <span className="section__number">5</span> 결과 메시지 템플릿
+              {/* 작성 도움말 툴팁: 라벨 옆 ⓘ, 기존 .tooltip 컴포넌트 재사용(작성 위치 근처). */}
+              <span
+                className="tooltip"
+                tabIndex={0}
+                aria-label="결과 메시지 템플릿 작성 도움말"
+                style={{ marginLeft: "var(--space-1)", cursor: "help", color: "var(--color-text-tertiary)" }}
+              >
+                ⓘ
+                <span className="tooltip__content" style={{ textAlign: "left", whiteSpace: "normal", width: 280 }}>
+                  마크다운 + Handlebars 문법으로 작성해요.
+                  <br />• 값: <code>{"{{orderId}}"}</code>, <code>{"{{userInput.수량}}"}</code>
+                  <br />• 반복: <code>{"{{#each items}}- {{this.name}}{{/each}}"}</code>
+                  <br />• 조건: <code>{"{{#if balance}}...{{/if}}"}</code>
+                  <br />• 헬퍼: <code>{"{{formatNumber amount}}"}</code>(콤마), <code>{'{{default v "-"}}'}</code>
+                  <br />• 표: 마크다운 표 <code>| 열 |</code> 사용 가능
+                  <br />쓸 수 있는 값은 ④ 결과 정의 + ② 사용자 입력 변수예요.
+                </span>
+              </span>
             </div>
             <textarea
               className="textarea"
               style={{ minHeight: "80px" }}
-              placeholder="레시피 성공 시 표시할 메시지. 변수는 [변수명]으로 삽입."
+              placeholder="예: **{{ownerName}}**님의 잔액은 {{formatNumber balance}}원입니다. (마크다운 + {{변수}})"
               aria-label="결과 메시지 템플릿"
               value={form.resultTemplate}
               onChange={(e) => patchForm({ resultTemplate: e.target.value })}
             />
             <p className="recipe-hint" style={{ marginTop: "var(--space-2)" }}>
-              미입력 시 AI가 자동 요약합니다. 사용 가능한 변수: 결과 정의(④) + 사용자 입력 변수(②).
+              마크다운 + Handlebars 문법 지원(반복·조건·표). 사용 가능한 변수: 결과 정의(④) + 사용자 입력 변수(②). 미입력 시 결과값을 자동 요약합니다.
             </p>
           </div>
         </fieldset>

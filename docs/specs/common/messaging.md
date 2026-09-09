@@ -244,11 +244,11 @@ payload는 **레시피별 구조**다(플랜 결과 카드 = chat.html Case 21 �
 - `title`: 실행 제목. 플랜 결과 헤더("📋 플랜 완료 (N/N)")·단일 결과 표시에 쓰인다.
 - `overallStatus`: 실행 전체 최종 상태(`success`/`partial`). RESULT 파트는 정상 종료(SUCCESS/PARTIAL)에서만 append된다(FAILED는 결과 미발행).
 - `recipes[]`: 레시피별 결과. `sequence`(0-base), `recipeName`(스냅샷 이름), `status`(레시피 상태 소문자 코드), `resultValues`, `resultLabels`(선택), `summary`(레시피별 결과 요약 텍스트 = 템플릿 치환 결과 또는 최소 요약).
-- `recipes[].resultValues`: ④ 결과 정의로 추린 결과 값(진실). key는 결과 정의 변수명(원본 key) 그대로. 그 레시피 스냅샷 정의 기준으로 산출한다.
+- `recipes[].resultValues`: ④ 결과 정의로 추린 결과 값(진실). key는 결과 정의 변수명(원본 key) 그대로. 그 레시피 스냅샷 정의 기준으로 산출한다. 값은 스칼라(문자열/숫자/불리언)뿐 아니라 **배열/객체도 가능**하다(목록 조회 결과 등). 배열/객체 값은 `summary`(마크다운) 렌더 시 `{{#each}}`로 표시되고, 사이드 패널 상세 드릴다운에서도 노출된다.
 - `recipes[].resultLabels`: 결과 key → 표시명(사람말) 맵. **결과 정의(④)에 `label`이 등록된 key만 포함**한다(선택). 값 자체(`resultValues`)와 표기(`resultLabels`)를 분리해, 스키마를 깨지 않고 표시명을 동반한다.
 - **표시명 폴백**: FE는 값을 표기할 때 `resultLabels[key]`가 있으면 표시명, 없으면 **원본 key 그대로** 쓴다. 중첩/배열 key(`items[0].price`)는 label 없으면 key 경로 그대로, 값이 없거나 null이면 "값 없음"으로 표시한다(폴백 체인: [structure.md](../recipe/structure.md#표시명label-폴백-체인)).
-- `recipes[].summary`: 그 레시피의 결과 요약 텍스트(레시피 스냅샷 `resultTemplate`이 있으면 `{{key}}` 치환 결과, 없으면 최소 요약). 생성 방식은 [execution.md 실행 완료/결과 요약](../recipe/execution.md#실행-완료--결과-요약) 참조.
-- **`content` 텍스트 분기**: 플랜(N≥2)이면 "{title} 플랜 N개 레시피를 완료했습니다" + 레시피별 한 줄("✓ 1. 이름 — 결과") 나열, 단일(N=1)이면 그 레시피의 `summary`를 그대로 담는다.
+- `recipes[].summary`: 그 레시피의 결과 요약 텍스트. 레시피 스냅샷 `resultTemplate`이 있으면 **Handlebars로 렌더한 마크다운 문자열**(값 치환 `{{key}}` + 반복 `{{#each}}` + 조건 `{{#if}}` + 헬퍼), 없으면 최소 요약(값 나열). 서버가 실행 완료 시 1회 렌더해 저장하며, FE는 이 값을 **마크다운으로 렌더**한다(표/리스트/강조). 생성 방식은 [execution.md 실행 완료/결과 요약](../recipe/execution.md#실행-완료--결과-요약), 템플릿 문법은 [authoring.md ⑤ 결과 메시지 템플릿](../recipe/authoring.md#-결과-메시지-템플릿) 참조.
+- **`content` 텍스트 분기**: 플랜(N≥2)이면 "{title} 플랜 N개 레시피를 완료했습니다" + 레시피별 한 줄("✓ 1. 이름 — 결과") 나열, 단일(N=1)이면 그 레시피의 `summary`를 그대로 담는다. `content`/`summary`는 **마크다운**이며 FE가 마크다운으로 렌더한다(rehype-sanitize로 HTML/스크립트 차단).
 - 표시명은 사람말 요약(`content`/`summary`)을 보강할 뿐, 상세·히스토리에서 원본 key 노출을 막지 않는다([파트 단위 이원화](#content-vs-payloadjson-파트-단위-이원화) 유지).
 
 ### INVESTIGATE (정보 조회 진행 블록)
