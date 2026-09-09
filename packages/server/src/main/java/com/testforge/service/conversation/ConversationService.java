@@ -15,6 +15,7 @@ import com.testforge.dto.conversation.MessageUpdatePayload;
 import com.testforge.dto.conversation.MessageSendResponse;
 import com.testforge.dto.conversation.PartDraft;
 import com.testforge.dto.conversation.PartResponse;
+import com.testforge.dto.conversation.SessionDeletedPayload;
 import com.testforge.dto.conversation.SessionListUpdatePayload;
 import com.testforge.dto.conversation.SessionStatusPayload;
 import com.testforge.entity.conversation.Conversation;
@@ -324,9 +325,10 @@ public class ConversationService {
         // 그대로 유지한다 — 히스토리는 USER_ID 기준 조회라 대화 삭제와 무관하게 독립적으로 유지되고
         // (history.md), 연결을 남겨 두면 "이 실행이 나온 대화" 추적/복구가 가능하다. FK를 끊지 않는다.
 
-        // SSE: 목록에서 제거 (모든 탭). 보고 있던 탭은 "삭제됨" 안내 후 목록 이동
-        publishAfterCommit(conversation.getUserId(), SseEventType.SESSION_LIST_UPDATE, id,
-                SessionListUpdatePayload.removed(id));
+        // SSE: 삭제 이벤트 (모든 탭). 보고 있던 탭은 홈으로 이탈 + 안내, 목록은 재조회로 제거된다.
+        // (목록 갱신 session_list_update와 분리한 별도 SIGNAL — messaging.md)
+        publishAfterCommit(conversation.getUserId(), SseEventType.SESSION_DELETED, id,
+                SessionDeletedPayload.of(id));
 
         log.info("Conversation soft-deleted: conversationId={}", id);
     }

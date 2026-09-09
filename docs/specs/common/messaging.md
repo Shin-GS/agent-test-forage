@@ -416,7 +416,8 @@ investigate 답변 뒤에 붙는 `REFERENCES` 파트의 `payloadJson`. 파트로
 | `message_new` | CHAT | DATA | 새 턴 도착 | 턴 JSON 전체(`parts[]` 포함) |
 | `message_update` | CHAT | DATA | 기존 턴 갱신 (파트 append/상태 변경 — 진행 블록 갱신 등) | `{ sessionId, messageId, message: {...parts 전체 스냅샷} }` |
 | `session_status` | SESSION | SIGNAL | 대화방 **처리 상태** 변경 (입력 영역 구동, 고빈도) | `{ sessionId, status }` (아래 상태값) |
-| `session_list_update` | SESSION | SIGNAL | 대화방 **목록 한 줄** 갱신 (추가/삭제/이름·서비스·읽음·상태 전부 흡수) | `{ op, conversation }` (아래) |
+| `session_list_update` | SESSION | SIGNAL | 대화방 **목록 한 줄** 갱신 (추가/이름·서비스·읽음·상태 흡수 — upsert 전용) | `{ op, conversation }` (아래) |
+| `session_deleted` | SESSION | SIGNAL | 대화방 **삭제**. 보고 있던 탭은 홈으로 이탈 + 안내, 목록은 재조회로 제거 | `{ conversationId }` |
 | `heartbeat` | SYSTEM | SIGNAL | 연결 유지용 | `{}` |
 
 > **폐지**: 기존 `execution_progress` / `execution_complete`(EXECUTION 카테고리)는 사용하지 않는다. 실행 진행/완료는 아래 "실행 SSE 흐름"대로 PROGRESS/RESULT 파트의 `message_new`/`message_update`(턴 갱신)로 대체된다.
@@ -481,7 +482,7 @@ PARTIAL(실패/중단) 종료된 실행을 [이어서 실행]으로 재개할 �
 
 ### 대화방 목록 갱신 (session_list_update)
 
-대화방 목록에 영향을 주는 변경(추가/삭제/이름변경/서비스변경/읽음/상태)을 **하나의 이벤트로 통합**한다. 별도 read/rename 이벤트를 두지 않아 파편화를 막는다.
+대화방 목록에 영향을 주는 변경(추가/이름변경/서비스변경/읽음/상태)을 **하나의 이벤트로 통합**한다. 별도 read/rename 이벤트를 두지 않아 파편화를 막는다. **삭제는 이 이벤트가 아니라 별도 [`session_deleted`](#대화방-삭제-session_deleted)로 발행**한다(관심사 분리 — 목록 갱신 vs 삭제 이탈).
 
 **FE 소비 방식 = 목록 재조회(SIGNAL).** 이 이벤트는 SIGNAL(갱신 트리거)이므로, FE는 payload의 `conversation` 한 줄을 목록에 **직접 병합/정렬하지 않고** 목록 API(`GET /api/v1/conversations`)를 재조회한다. 이유:
 
@@ -493,7 +494,7 @@ payload의 `conversation` 스냅샷은 BE 계약(아래 스키마)으로 유지�
 
 ```json
 {
-  "op": "upsert | removed",
+  "op": "upsert",
   "conversation": {
     "id": 123,
     "title": "회원가입 테스트",
@@ -512,13 +513,27 @@ payload의 `conversation` 스냅샷은 BE 계약(아래 스키마)으로 유지�
 | op | 의미 | conversation |
 |----|------|--------------|
 | `upsert` | 추가·갱신 통합 (생성/이름변경/서비스변경/읽음/상태변경) | 목록 한 줄 전체 스냅샷 |
-| `removed` | 삭제 | `{ id }`만 |
 
 **발행 시점 / 규칙**
 - **추가(upsert)**: 대화방 row 생성 순간이 아니라 **첫 메시지 전송 시점**에 발행 (빈 대화는 목록에 안 쌓임 — overview.md)
 - **읽음**: 대화방 진입 시 읽음 API → `LAST_READ_AT` 갱신 → `upsert`(unread=false)로 모든 탭 뱃지 동기화
-- **삭제(removed)**: 모든 탭 목록에서 제거. **다른 탭이 방금 삭제된 대화방을 보고 있으면** "이 대화는 삭제되었습니다" 안내 + 목록으로 이동
+- **삭제**: 이 이벤트가 아니라 [`session_deleted`](#대화방-삭제-session_deleted)로 발행한다.
 - `session_status`(고빈도 처리상태)는 목록 이벤트와 **분리 유지** — 입력 영역 구동용. 목록 뱃지는 session_list_update의 `status`로 반영. 성격(저빈도 목록 vs 고빈도 상태)이 달라 분리
+
+### 대화방 삭제 (session_deleted)
+
+대화방 삭제는 목록 갱신과 **분리된 별도 SIGNAL 이벤트**로 발행한다. `session_list_update`가 "살아있는 방 한 줄 갱신"만 담당하고, 삭제는 이 이벤트가 담당한다(관심사 분리).
+
+```json
+{ "conversationId": 123 }
+```
+
+**발행**: 대화방 소프트 삭제(`DELETE /api/v1/conversations/{id}`) 성공 시 모든 탭(같은 사용자 Global SSE)에 발행한다.
+
+**FE 처리**:
+- 수신한 `conversationId`가 **현재 보고 있는 대화방**이면 → 홈(`/`)으로 이동 + "보고 있던 대화가 삭제되었어요" 안내(토스트).
+- 그리고 **목록을 재조회**(`loadConversations`)해 삭제된 방을 목록에서 제거한다(별도 `session_list_update` 불필요 — 이 이벤트 처리가 재조회를 겸함).
+- **본인이 이 탭에서 직접 삭제한 경우**: 삭제 요청 직후 FE가 이미 현재 대화를 정리(`clearConversation`)하므로 `currentConversationId`가 불일치해 이탈/안내가 발생하지 않는다. **다른 탭에서 삭제된 경우에만** 이탈+안내가 뜬다(`currentConversationId` 비교로 자연 구분).
 
 ### 상태 해제 (취소 / 중지 / 완료)
 
@@ -558,7 +573,8 @@ payload의 `conversation` 스냅샷은 BE 계약(아래 스키마)으로 유지�
 | `message_new` | 채팅에 즉시 렌더링 (턴+파트, 파트 타입별) | 상태 뱃지(🔵) 업데이트 |
 | `message_update` | 해당 턴을 파트 배열 전체로 교체 (진행 파트 갱신 포함). 파트 `id`를 key로 안정 렌더 | 무시 (진입 시 로드) |
 | `session_status` | **입력 영역 상태 반영** (idle/ai_responding/executing/input_waiting) | 목록 뱃지 업데이트 |
-| `session_list_update` | 목록 재조회로 반영. 보고 있는 방이 removed면 재조회 결과에서 사라짐(+"삭제됨" 안내/이동은 별도) | 목록 재조회로 반영 (upsert/removed 모두) |
+| `session_list_update` | 목록 재조회로 반영 (upsert 전용) | 목록 재조회로 반영 |
+| `session_deleted` | 보고 있는 방이면 홈 이동 + 안내, 그 후 목록 재조회 | 목록 재조회로 반영(삭제된 방 제거) |
 
 > **여러 탭 동기화**: 같은 대화방을 여러 탭에서 열어도 모두 같은 Global SSE로 `session_status`를 받으므로, 한 탭에서 실행/응답이 진행되면 **다른 탭의 입력 영역도 즉시 잠기고 이유가 표시된다.** (탭이 "현재 보고 있는 대화방"이면 입력 영역 반영, 아니면 목록 뱃지)
 

@@ -21,8 +21,10 @@ public enum SseEventType implements EnumColumn {
     MESSAGE_UPDATE(SseCategory.CHAT, SseEventNature.DATA, "메시지 업데이트"),
     /** 대화방 처리 상태 변경 (입력 영역 구동, 고빈도) */
     SESSION_STATUS(SseCategory.SESSION, SseEventNature.SIGNAL, "대화방 상태 변경"),
-    /** 대화방 목록 한 줄 갱신 (추가/삭제/이름·서비스·읽음·상태 흡수) */
+    /** 대화방 목록 한 줄 갱신 (추가/이름·서비스·읽음·상태 흡수 — upsert 전용). 삭제는 SESSION_DELETED */
     SESSION_LIST_UPDATE(SseCategory.SESSION, SseEventNature.SIGNAL, "대화방 목록 갱신"),
+    /** 대화방 삭제 (data: {conversationId}). 보고 있던 탭은 홈으로 이탈, 목록은 재조회로 제거 */
+    SESSION_DELETED(SseCategory.SESSION, SseEventNature.SIGNAL, "대화방 삭제"),
     // 실행 진행/완료는 별도 EXECUTION 이벤트가 아니라 CHAT 메시지(PROGRESS/RESULT)의 message_new/
     // message_update로 흐른다(messaging.md). 기존 execution_progress/execution_complete는 폐지됨.
     /** 연결 유지용 heartbeat */

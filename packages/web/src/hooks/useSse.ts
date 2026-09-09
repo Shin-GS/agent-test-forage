@@ -8,10 +8,12 @@
 // - 재연결/Last-Event-ID 는 브라우저 EventSource 기본 동작 사용
 
 import { useEffect } from "react";
+import { useNavigate, type NavigateFunction } from "react-router-dom";
 import { API_BASE } from "../api/client";
 import type { SseEnvelope } from "../api/types";
 import { useChatStore } from "../store/chatStore";
 import { useAuthStore } from "../store/authStore";
+import { useToastStore } from "../store/toastStore";
 
 interface UseSseOptions {
   /** false 면 구독하지 않음 (예: 로그인 전) */
@@ -24,6 +26,7 @@ const SSE_EVENT_TYPES = [
   "message_update",
   "session_status",
   "session_list_update",
+  "session_deleted",
 ] as const;
 
 /**
@@ -34,6 +37,7 @@ const SSE_EVENT_TYPES = [
 export function useSse(options: UseSseOptions = {}): void {
   const { enabled = true } = options;
   const authStatus = useAuthStore((state) => state.status);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!enabled || authStatus !== "authenticated") {
@@ -50,7 +54,7 @@ export function useSse(options: UseSseOptions = {}): void {
       } catch {
         return;
       }
-      routeEnvelope(envelope);
+      routeEnvelope(envelope, navigate);
     };
 
     // SSE 연결/재연결 시 목록 재동기화.
@@ -86,11 +90,11 @@ export function useSse(options: UseSseOptions = {}): void {
       source.close();
     };
     // enabled/인증 상태 변경 시 재연결
-  }, [enabled, authStatus]);
+  }, [enabled, authStatus, navigate]);
 }
 
 /** envelope.type 에 따라 스토어 액션 호출 */
-function routeEnvelope(envelope: SseEnvelope): void {
+function routeEnvelope(envelope: SseEnvelope, navigate: NavigateFunction): void {
   const store = useChatStore.getState();
   const data = envelope.data;
 
@@ -116,6 +120,21 @@ function routeEnvelope(envelope: SseEnvelope): void {
     case "session_list_update":
       store.onSessionListUpdate(data);
       return;
+
+    case "session_deleted": {
+      // BE 계약(SessionDeletedPayload): { conversationId }.
+      // 보고 있던 방이 삭제됐으면 홈으로 이탈 + 안내. 그 뒤 목록을 재조회해 삭제된 방을 제거한다.
+      // 본인이 이 탭에서 직접 삭제한 경우엔 AppSidebar.handleDelete 가 삭제 API 호출 "전에"
+      // clearConversation 을 실행하므로 currentConversationId 가 이미 null 이라 아래 조건에
+      // 안 걸린다(다른 탭에서 삭제된 경우에만 이탈/안내 — 자연 구분).
+      const deletedId: number | undefined = data?.conversationId;
+      if (deletedId != null && deletedId === store.currentConversationId) {
+        navigate("/");
+        useToastStore.getState().show("보고 있던 대화가 삭제되었어요.", "info");
+      }
+      void store.loadConversations();
+      return;
+    }
 
     default:
       // 알 수 없는 타입은 무시 (전방 호환)

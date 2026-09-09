@@ -102,15 +102,23 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
     [conversations, setConversations, showToast, loadConversations]
   );
 
-  // 삭제 확정: 낙관적 제거 + 현재 방이면 초기화. 실패 시 재조회 롤백.
+  // 삭제 확정: 낙관적 제거 + 현재 방이면 먼저 초기화 → 그 다음 API 호출. 실패 시 재조회 롤백.
+  // 초기화(clearConversation)를 API 호출보다 앞에 두는 이유:
+  //   BE 는 삭제 처리 중 session_deleted SSE 를 발행하는데, 로컬처럼 지연이 거의 없으면
+  //   그 이벤트가 remove() 의 await 가 풀리기 전에 이 탭에 도착할 수 있다. 그 시점에
+  //   currentConversationId 가 아직 삭제 대상이면 useSse 가 "보고 있던 대화가 삭제됨"으로
+  //   오인해 홈 이탈 + 토스트를 띄운다(내가 방금 지운 방인데 안내가 뜨는 어색함).
+  //   API 호출 전에 currentConversationId 를 null 로 만들어 이 race 를 원천 차단한다
+  //   (다른 탭에서의 삭제만 이탈/안내 대상으로 남는다).
   const handleDelete = useCallback(
     async (conversationId: number) => {
+      const wasCurrent = currentConversationId === conversationId;
+      setConversations(conversations.filter((c) => c.id !== conversationId));
+      if (wasCurrent) {
+        clearConversation();
+      }
       try {
         await conversationsApi.remove(conversationId);
-        setConversations(conversations.filter((c) => c.id !== conversationId));
-        if (currentConversationId === conversationId) {
-          clearConversation();
-        }
       } catch (err) {
         showToast(
           err instanceof Error ? `삭제 실패: ${err.message}` : "삭제에 실패했습니다",

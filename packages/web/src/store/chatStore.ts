@@ -40,7 +40,8 @@ export interface ConversationListSnapshot {
 }
 
 export interface SessionListUpdatePayload {
-  op: "upsert" | "removed";
+  // 삭제는 session_deleted 이벤트로 분리됨. session_list_update 는 upsert 전용.
+  op: "upsert";
   conversation: ConversationListSnapshot;
 }
 
@@ -263,7 +264,7 @@ export const useChatStore = create<ChatState>((set) => ({
     // - 대화방 목록은 낙관적 UI 대상이 아니다(messaging.md: 낙관적 표시는 사용자 발신 메시지에만).
     // - FE 정렬 제거로 REST/SSE 날짜 포맷 불일치 등으로 정렬이 깨지는 클래스의 버그가 원천 소멸.
     // - 규모(대화방 200건 상한)상 재조회 왕복 비용은 무시할 수준이며 실시간성 손해도 체감 없다.
-    // removed(현재 보던 방 삭제 시 안내/이동)는 재조회 후 목록에서 사라지는 것으로 반영된다.
+    // 삭제는 이 이벤트가 아니라 session_deleted 로 분리 처리한다(useSse: 이탈 + 재조회).
     const snap = payload?.conversation;
     if (!snap || snap.id == null) {
       return;
