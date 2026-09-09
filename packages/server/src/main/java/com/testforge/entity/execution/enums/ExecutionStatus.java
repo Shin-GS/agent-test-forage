@@ -9,8 +9,8 @@ import com.testforge.common.EnumColumn;
  * <p><b>중지와 취소는 상태로 구분한다.</b> 히스토리는 "무슨 일이 있었나"의 기록이므로, 사용자가
  * [중지]한 것(STOPPED)과 [취소]한 것(CANCELLED)을 다른 사건으로 남긴다. 이렇게 하면 사용자가
  * 히스토리에서 "이건 내가 취소한 것", "이건 중지한 것"을 구분해 볼 수 있고, 필터/집계도 가능하다.
- * (재개(이어서 실행) 로직의 세분은 그 기능 도입 시 다룬다 — 지금은 재개 미구현이라 두 상태 모두
- * "처음부터 다시"만 제공한다.)
+ * (이어서 실행(resume)은 PARTIAL/STOPPED 실행을 레시피 단위로 재개한다 — 첫 미완료 레시피부터
+ * 처음 다시. CANCELLED는 재개 대상이 아니다. 스텝 단위 부분 재개는 백로그.)
  */
 public enum ExecutionStatus implements EnumColumn {
 
