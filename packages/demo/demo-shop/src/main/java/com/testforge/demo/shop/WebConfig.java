@@ -19,7 +19,11 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // SessionInterceptor가 GET/OPTIONS는 통과시키므로, prefix 전체를 걸어도
+        // 조회(GET /coupons, GET /shipments/{id}, GET /cart)는 공개로 유지되고
+        // 쓰기 메서드(POST 등)만 세션 검증 대상이 된다.
         registry.addInterceptor(new SessionInterceptor(store))
-                .addPathPatterns("/orders/**", "/payments/**");
+                .addPathPatterns("/orders/**", "/payments/**",
+                        "/coupons/**", "/shipments/**", "/cart/**");
     }
 }

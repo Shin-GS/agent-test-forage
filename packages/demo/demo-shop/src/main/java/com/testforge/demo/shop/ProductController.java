@@ -27,10 +27,12 @@ public class ProductController {
         this.store = store;
     }
 
-    @Operation(summary = "상품 목록 조회", description = "등록된 상품 목록을 조회한다. keyword로 이름 부분 검색.")
+    @Operation(summary = "상품 목록 조회",
+            description = "등록된 상품 목록을 조회한다. keyword로 이름 부분 검색, category로 카테고리(ELECTRONICS/OFFICE/ETC) 필터. 둘 다 선택.")
     @GetMapping
-    public List<ShopStore.Product> list(@RequestParam(required = false) String keyword) {
-        return store.listProducts(keyword);
+    public List<ShopStore.Product> list(@RequestParam(required = false) String keyword,
+                                        @RequestParam(required = false) String category) {
+        return store.listProducts(keyword, category);
     }
 
     @Operation(summary = "상품 단건 조회", description = "상품 ID로 단건 상품을 조회한다. 없으면 404.")
