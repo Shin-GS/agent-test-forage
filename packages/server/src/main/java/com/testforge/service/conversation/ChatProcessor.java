@@ -103,7 +103,7 @@ public class ChatProcessor {
                     log.info("investigate without service -> select_service (hard guard): conversationId={}",
                             conversationId);
                     conversationService.completeAssistantTurn(conversationId,
-                            AssistantMessageDraft.card(serviceSelectCard(List.of())));
+                            serviceSelectDraft(List.of()));
                     return;
                 }
                 // 루프가 진행 블록/최종 답변/종결(idle+락 해제)을 자체 try/finally로 보장한다.
@@ -402,7 +402,7 @@ public class ChatProcessor {
             case EXECUTE_RECIPE -> AssistantMessageDraft.card(
                     executionModeCard(result.recipeId(), result.extractedValues()));
             case PROPOSE_PLAN -> AssistantMessageDraft.card(planCard(result.recipeIds(), result.rationale()));
-            case SELECT_SERVICE -> AssistantMessageDraft.card(serviceSelectCard(result.suggestedServices()));
+            case SELECT_SERVICE -> serviceSelectDraft(result.suggestedServices());
             case SHOW_CANDIDATES -> AssistantMessageDraft.card(candidatesCard(result.candidates()));
             // investigate는 process()에서 InvestigateLoop로 위임되어 여기 도달하지 않는다(방어적 처리).
             case INVESTIGATE -> throw new IllegalStateException(
@@ -585,6 +585,36 @@ public class ChatProcessor {
      */
     private List<Map<String, Object>> buildVariableSchema(String variablesJson) {
         return RecipeJsonUtil.parseSteps(variablesJson);
+    }
+
+    /**
+     * service_select 안내 draft: 안내 TEXT + service_select 카드(TEXT+CARD 파트).
+     * 서비스 미지정 상태에서 실행성 발화가 오면, "먼저 서비스를 선택하라"는 안내와 함께 선택 목록을 준다.
+     *
+     * <p><b>후보 fallback</b>: 추천 후보가 비어 있으면(AI가 유추 못 함 / investigate hard guard 등)
+     * 전체 ACTIVE 서비스({@link #loadServices()})를 담아 사용자가 어쨌든 고를 수 있게 한다.
+     * 등록된 서비스 자체가 없으면 카드는 빈 목록이 되고 안내 문구로 등록을 유도한다.
+     * 어느 경로든 사용자가 "무엇을 해야 하는지"가 명확하도록 안내를 강화한다.
+     */
+    private AssistantMessageDraft serviceSelectDraft(List<ServiceOption> suggested) {
+        List<ServiceOption> services = (suggested == null || suggested.isEmpty())
+                ? loadServices()   // 추천이 없으면 전체 ACTIVE 서비스로 폴백(선택 자체는 가능하게)
+                : suggested;
+
+        String guide;
+        if (services.isEmpty()) {
+            // 등록된 서비스가 아예 없음 — 선택이 불가하므로 등록을 유도한다.
+            guide = "아직 사용할 수 있는 대상 서비스가 없어요. 관리자에게 서비스 등록을 요청해 주세요.";
+        } else if (suggested != null && !suggested.isEmpty()) {
+            // 발화에서 추천 후보를 찾은 경우.
+            guide = "먼저 대상 서비스를 선택해 주세요. 요청하신 작업은 아래 서비스 중 하나로 보여요. "
+                    + "원하는 서비스를 고르시면 이어서 진행할게요. 찾는 서비스가 없으면 우측 패널에서 직접 선택할 수 있어요.";
+        } else {
+            // 추천은 못 찾았지만 선택 가능한 서비스가 있는 경우(전체 목록 폴백).
+            guide = "먼저 대상 서비스를 선택해 주세요. 아래에서 고르거나 우측 패널에서 직접 선택할 수 있어요.";
+        }
+
+        return AssistantMessageDraft.cardWithText(guide, serviceSelectCard(services));
     }
 
     /** service_select 카드: 서비스 선택 버튼 (messaging.md: services:[{name,label}]) */

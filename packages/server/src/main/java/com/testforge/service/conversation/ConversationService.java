@@ -250,20 +250,42 @@ public class ConversationService {
             throw ApiException.invalidRequest("유효하지 않은 서비스입니다");
         }
 
+        // 실제로 값이 바뀔 때만 SYSTEM 안내를 남긴다(같은 값 재설정 시 알림 중복/폭주 방지 — 멱등).
+        boolean changed = !java.util.Objects.equals(conversation.getApiSpecId(), apiSpecId);
         conversation.setApiSpecId(apiSpecId);
+
+        Long ownerId = conversation.getUserId();
+        MessageResponse noticeView = null;
+        if (changed) {
+            // 서비스 설정/해제를 대화방에 SYSTEM 안내로 남긴다(사용자 인지 + 새로고침/다른 탭 복원).
+            // 카드 선택이든 패널 드롭다운이든 이 API를 거치므로 경로 무관하게 일관되게 남는다.
+            String serviceName = serviceNameOf(apiSpecId);
+            String notice = apiSpecId == null
+                    ? "대상 서비스 설정이 해제되었어요."
+                    : "대상 서비스가 '" + serviceName + "'(으)로 설정되었어요.";
+            Message savedNotice = saveTurn(id, MessageRole.SYSTEM, MessageStatus.COMPLETE,
+                    List.of(PartDraft.text(notice)));
+            conversation.setLastMessageAt(savedNotice.getCreatedAt());
+            noticeView = toMessage(savedNotice);
+        }
+
         Conversation saved = conversationRepository.save(conversation);
 
-        // SSE: 목록 한 줄 갱신 (서비스 배지/표시명 변경을 모든 탭에 동기화)
-        publishAfterCommit(saved.getUserId(), SseEventType.SESSION_LIST_UPDATE, saved.getId(),
+        // SSE: (변경 시) 안내 메시지(message_new) + 목록 한 줄 갱신(서비스 배지/표시명·lastMessageAt 동기화)
+        if (noticeView != null) {
+            publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, saved.getId(), noticeView);
+        }
+        publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, saved.getId(),
                 SessionListUpdatePayload.upsert(toListSnapshot(saved)));
 
         // 촉발 카드 파트가 있으면 CONSUMED로 전이(재활성화 방지). 없거나 타입 불일치면 no-op.
+        // (값이 안 바뀌었어도 카드를 눌렀으면 소진 처리는 해야 하므로 changed와 무관하게 수행.)
         if (triggerPartId != null) {
             consumeInteractivePart(id, triggerPartId);
         }
 
-        log.info("Conversation service updated: conversationId={}, apiSpecId={}, triggerPartId={}",
-                id, apiSpecId, triggerPartId);
+        log.info("Conversation service updated: conversationId={}, apiSpecId={}, changed={}, triggerPartId={}",
+                id, apiSpecId, changed, triggerPartId);
         return toDetail(saved);
     }
 

@@ -177,7 +177,8 @@ last-updated: 2026-09-08
 
 ### 설정 방법
 - **사용자가 직접 선택/변경**: 우측 패널 최상단 대상 서비스 블록의 드롭다운(▾)에서 선택. 드롭다운 목록은 `GET /api/v1/specs`(라벨 = `serviceDescription` 우선, 없으면 `name`).
-- **AI가 자동 제안**: 서비스 미지정 상태에서 레시피 실행 시, AI가 `select_service`로 서비스 후보 카드를 제안한다(아래 AI 동작 표).
+- **AI가 자동 제안**: 서비스 미지정 상태에서 레시피 실행 시, AI가 `select_service`로 **안내 문구 + 서비스 선택 카드**를 제시한다(카드만 두지 않고 "먼저 서비스를 선택하라"는 안내 TEXT를 함께 발행 — [service-selection.md 안내 강화](scenarios/service-selection.md#안내-강화-구현)). 추천 후보가 없으면 전체 ACTIVE 서비스를 폴백으로 담고, 목록 외 서비스는 우측 패널 드롭다운에서 직접 선택할 수 있다.
+- **서비스 설정 알림**: 서비스가 설정/변경되면(카드·패널 어느 경로든 `PATCH /service`) 대화방에 **SYSTEM 안내 턴**("대상 서비스가 'XX'(으)로 설정되었어요")을 남겨 사용자가 인지하게 한다([service-selection.md 서비스 설정 알림](scenarios/service-selection.md#서비스-설정-알림-system)). 새 대화(미생성)는 pending만 보관하고 알림은 남기지 않는다.
 
 ### 실제 동작 (더미 제거)
 

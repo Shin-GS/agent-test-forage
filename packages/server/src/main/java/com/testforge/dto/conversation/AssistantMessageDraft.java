@@ -51,4 +51,13 @@ public record AssistantMessageDraft(
         return new AssistantMessageDraft(MessageRole.ASSISTANT,
                 List.of(PartDraft.card(null, payloadJson)));
     }
+
+    /**
+     * 안내 문구를 동반하는 카드: ASSISTANT 턴 = TEXT 파트 + CARD 파트 (순서대로 렌더).
+     * 카드만으로는 사용자가 무엇을 해야 할지 모호한 경우(예: service_select) 앞에 안내 TEXT를 붙인다.
+     */
+    public static AssistantMessageDraft cardWithText(String text, String payloadJson) {
+        return new AssistantMessageDraft(MessageRole.ASSISTANT,
+                List.of(PartDraft.text(text), PartDraft.card(null, payloadJson)));
+    }
 }

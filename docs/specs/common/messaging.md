@@ -153,7 +153,7 @@ last-updated: 2026-09-08
 
 > **현재 구현 참고 (한 턴 다중 실행):** 위 "한 턴 다중 실행" 예시는 파트 모델의 목표 형태다. 현재는 대화방 단위 락으로 한 대화방에 동시 실행이 1개로 제한되고(실행 시작 시 `beginProgressMessage`가 항상 새 ASSISTANT 턴을 생성), 실질적으로 **실행 1개 = 턴 1개(`[PROGRESS, RESULT]`)**로 동작한다. RESULT는 그 실행의 PROGRESS 파트와 **같은 턴**에 append된다(EXECUTION.TRIGGER_PART_ID로 연결). 한 발화가 여러 실행을 한 턴에 묶는 형태는 동시 실행/순차 다중 실행을 도입할 때 `beginProgressMessage`가 열린 턴에 append하도록 확장하며 활성화한다.
 
-- **SYSTEM 안내**(취소/중지 등)는 `role=system` 턴 + `TEXT` 파트 1개로 표현한다(별도 SYSTEM 파트 타입 없음).
+- **SYSTEM 안내**(취소/중지, 대상 서비스 설정/해제 등)는 `role=system` 턴 + `TEXT` 파트 1개로 표현한다(별도 SYSTEM 파트 타입 없음). 서비스 설정 알림은 `PATCH /conversations/{id}/service` 성공 시 발행되며, 카드 선택·패널 드롭다운 어느 경로든 동일하게 남는다(새 대화 미생성 상태는 제외 — 대화방이 없어 남길 곳이 없고 pending으로만 보관).
 - **빈 ASSISTANT 턴**: AI 응답을 시작할 때 `status=streaming`인 빈 턴을 먼저 만들고 파트를 append한다(기존 "PENDING 자리 미리 INSERT" 패턴의 대체). 완료 시 턴 `status=complete`.
 
 ## 클라이언트 → 서버 (사용자 액션)
@@ -167,7 +167,7 @@ last-updated: 2026-09-08
 | execution_mode 카드 [바로 실행]/[값 확인 후 실행] | 카드 파트 CONSUMED + 실행 시작 | `POST /conversations/{id}/executions` (mode=AUTO/MANUAL) |
 | plan 카드 [자동 실행] | 카드 파트 CONSUMED + 플랜 실행 | `POST /conversations/{id}/plan-executions` |
 | candidates 카드 후보 선택 | 카드 파트 CONSUMED + 실행 시작 | `POST /conversations/{id}/executions` |
-| service_select 카드 | 카드 파트 CONSUMED + 서비스 설정(사용자가 이어서 `PATCH /service` 호출 — 자동 반영은 [overview.md](../chat/overview.md) 기준 백로그) | `PATCH /conversations/{id}/service` |
+| service_select 카드 | 카드 파트 CONSUMED + 대화방 서비스 설정 + **SYSTEM 알림 턴** append("대상 서비스가 'XX'(으)로 설정되었어요") | `PATCH /conversations/{id}/service` |
 | 실패/중단 카드 [이어서 실행] | 재개 | `POST /executions/{id}/resume` |
 | [취소] / [중지] | 실행 취소/중지 | `POST /conversations/{id}/cancel` / `/stop` |
 
