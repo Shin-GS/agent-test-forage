@@ -1,25 +1,26 @@
 /* QA Test Checklist - 공통 스타일 */
 
 :root {
-  /* 다크 테마 — 포털/디자인(docs/design/shared/tokens.css)과 색 통일 */
-  --color-bg: #0f1117;
-  --color-surface: #1a1d27;
-  --color-surface-hover: #242834;
-  --color-border: #2d3140;
-  --color-text: #f0f2f5;
-  --color-text-muted: #9ca3b4;
+  /* 라이트 테마 — 포털/디자인(docs/design/shared/tokens.css :root 라이트 팔레트)과 색 통일 */
+  --color-bg: #ffffff;
+  --color-surface: #f7f8fa;
+  --color-surface-hover: #ececf0;
+  --color-border: #e3e5ea;
+  --color-text: #1f2430;
+  --color-text-muted: #5b6472;
   --color-primary: #6366f1;
-  --color-primary-hover: #818cf8;
-  --color-pass: #22c55e;
-  --color-pass-bg: rgba(34, 197, 94, 0.15);
-  --color-fail: #ef4444;
-  --color-fail-bg: rgba(239, 68, 68, 0.15);
-  --color-skip: #f59e0b;
-  --color-skip-bg: rgba(245, 158, 11, 0.15);
-  --color-pending: #6b7280;
-  --color-pending-bg: #242834;
+  --color-primary-hover: #4f46e5;
+  --color-primary-subtle: rgba(99, 102, 241, 0.10);
+  --color-pass: #16a34a;
+  --color-pass-bg: rgba(22, 163, 74, 0.12);
+  --color-fail: #dc2626;
+  --color-fail-bg: rgba(220, 38, 38, 0.10);
+  --color-skip: #d97706;
+  --color-skip-bg: rgba(217, 119, 6, 0.12);
+  --color-pending: #8b93a1;
+  --color-pending-bg: #f0f1f4;
   --radius: 8px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -136,7 +137,7 @@ body {
 }
 
 .feature-item:hover { border-color: var(--color-primary); }
-.feature-item.active { border-color: var(--color-primary); background: rgba(99, 102, 241, 0.15); }
+.feature-item.active { border-color: var(--color-primary); background: var(--color-primary-subtle); }
 
 .feature-item__name {
   font-size: 0.8rem;
@@ -180,7 +181,7 @@ body {
 .controls select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 2px var(--color-primary-subtle);
 }
 
 .btn-reset {
@@ -207,7 +208,7 @@ body {
   transition: all 0.15s;
 }
 
-.btn-compact.active { border-color: var(--color-primary); color: var(--color-primary-hover); background: rgba(99, 102, 241, 0.15); }
+.btn-compact.active { border-color: var(--color-primary); color: var(--color-primary-hover); background: var(--color-primary-subtle); }
 
 /* ─── Case Cards ─── */
 .case-list {
