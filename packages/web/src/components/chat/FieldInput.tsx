@@ -12,6 +12,20 @@ export function initialValue(v: ActionPickerVariable): unknown {
   return "";
 }
 
+/**
+ * select/radio 옵션 정규화.
+ * BE 레시피 스키마는 옵션을 문자열 배열(["CARD","BANK"])로 저장하지만,
+ * 렌더는 {label,value} 객체를 기대한다. 문자열이면 label=value 로 승격하고,
+ * 이미 객체면 그대로 사용한다. (둘 다 안전하게 처리)
+ */
+function normalizeOptions(
+  options: ActionPickerVariable["options"],
+): { label: string; value: string }[] {
+  return (options ?? []).map((opt) =>
+    typeof opt === "string" ? { label: opt, value: opt } : opt,
+  );
+}
+
 /** 변수 타입별 입력 렌더 */
 export function FieldInput({
   variable,
@@ -69,7 +83,7 @@ export function FieldInput({
           <option value="" disabled>
             {variable.placeholder ?? "선택하세요"}
           </option>
-          {(variable.options ?? []).map((opt) => (
+          {normalizeOptions(variable.options).map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
@@ -79,7 +93,7 @@ export function FieldInput({
     case "radio":
       return (
         <div className="radio-group">
-          {(variable.options ?? []).map((opt) => (
+          {normalizeOptions(variable.options).map((opt) => (
             <label className="radio-group__item" key={opt.value}>
               <input
                 type="radio"

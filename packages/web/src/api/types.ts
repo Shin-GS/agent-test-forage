@@ -261,7 +261,9 @@ export interface ActionPickerVariable {
   required?: boolean;
   default?: any;
   placeholder?: string;
-  options?: { label: string; value: string }[];
+  // 옵션은 문자열 배열(["CARD","BANK"]) 또는 객체 배열([{label,value}]) 둘 다 허용.
+  // BE 레시피 스키마는 문자열 배열로 저장되므로 렌더 시 FieldInput 에서 정규화한다.
+  options?: (string | { label: string; value: string })[];
   min?: number;
   max?: number;
   [key: string]: any;
