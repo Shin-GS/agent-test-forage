@@ -38,8 +38,10 @@ logs/
 # === Temp ===
 temp/
 
-# === 대회 자료 빌드 아티팩트 (PPT 생성 도구/의존성/슬라이드 조각) ===
-docs/competition/_build/
+# === 대회 자료 빌드 아티팩트 (PPT 생성 슬라이드 조각/의존성) ===
+# 빌드 스크립트/설정(build-pptx.mjs, package*.json)은 커밋, 산출물(slides PNG)·node_modules는 제외
+docs/*/_build/slides/
+docs/*/_build/node_modules/
 
 # === Playwright MCP (브라우저 자동화 로그/스냅샷) ===
 .playwright-mcp/

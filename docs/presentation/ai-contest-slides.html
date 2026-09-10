@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>테스트메이트 — 발표 자료</title>
+<style>
+  /* 제품 디자인 토큰(packages/web/src/styles/tokens.css) 라이트 팔레트와 동기화 */
+  :root {
+    --bg:        #ffffff;
+    --bg-soft:   #f7f8fa;
+    --bg-soft-2: #f0f1f4;
+    --line:      #e3e5ea;
+    --line-2:    #eceef2;
+
+    --text:   #1f2430;
+    --text-2: #5b6472;
+    --text-3: #8b93a1;
+
+    --accent:      #6366f1;
+    --accent-2:    #4f46e5;
+    --accent-soft: rgba(99, 102, 241, 0.10);
+    --accent-line: rgba(99, 102, 241, 0.28);
+
+    --ok:      #16a34a;
+    --ok-soft: rgba(22, 163, 74, 0.10);
+    --ok-line: rgba(22, 163, 74, 0.28);
+    --warn:    #d97706;
+    --err:     #dc2626;
+
+    --font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+    --mono: 'JetBrains Mono', 'Consolas', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  h1, h2, h3, p, li, span, div { word-break: keep-all; overflow-wrap: break-word; }
+
+  body {
+    background: #dfe3ea;
+    font-family: var(--font);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 32px 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 16:9 슬라이드 */
+  .slide {
+    width: 1280px;
+    height: 720px;
+    margin: 0 auto 28px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 40px rgba(31,36,48,0.12);
+  }
+  .slide-inner { flex: 1; padding: 56px 64px; display: flex; flex-direction: column; min-height: 0; }
+  .brandbar { position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+  .kicker { display: inline-flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: var(--accent-2); }
+  .kicker::before { content: ""; width: 22px; height: 2px; background: var(--accent-2); display: inline-block; }
+
+  h1 { font-size: 52px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.14; }
+  h2 { font-size: 36px; font-weight: 800; letter-spacing: -0.015em; line-height: 1.2; }
+  h3 { font-size: 20px; font-weight: 700; }
+
+  .muted { color: var(--text-2); }
+  .accent { color: var(--accent-2); }
+  .ok { color: var(--ok); }
+
+  .page-no { position: absolute; bottom: 22px; right: 30px; font-size: 12px; color: var(--text-3); font-family: var(--mono); }
+  .foot-brand { position: absolute; bottom: 22px; left: 30px; font-size: 12px; color: var(--text-3); }
+  .appx-badge { position: absolute; top: 22px; right: 30px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+    color: var(--accent-2); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 999px; padding: 4px 12px; }
+
+  .slide-head { margin-bottom: 32px; }
+  .slide-head h2 { margin-top: 12px; }
+  /* 제목 아래 콘텐츠를 남은 세로 공간의 중앙에 배치 (하단 여백 균형) */
+  .body-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+  .grid.tall { gap: 22px; }
+  .grid.tall .card { padding: 30px 28px; }
+  .roadmap.tall { gap: 22px; }
+  .roadmap.tall .rm { padding: 24px 28px; }
+
+  .cols { display: flex; gap: 40px; flex: 1; min-height: 0; align-items: center; }
+  .col { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .center { justify-content: center; }
+
+  /* 표지 */
+  .cover { justify-content: center; }
+  .logo-mark { width: 66px; height: 66px; border-radius: 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center; font-size: 34px;
+    margin-bottom: 30px; box-shadow: 0 14px 32px rgba(99,102,241,0.35); }
+  .cover h1 { margin-bottom: 16px; max-width: 980px; }
+  .cover .tag { font-size: 24px; font-weight: 700; color: var(--accent-2); margin-bottom: 20px; }
+  .cover .lead { font-size: 19px; color: var(--text-2); max-width: 820px; margin-bottom: 44px; line-height: 1.6; }
+  .meta-row { display: flex; gap: 46px; }
+  .meta-item .label { font-size: 12px; color: var(--text-3); letter-spacing: 0.06em; margin-bottom: 8px; }
+  .meta-item .val { font-size: 18px; font-weight: 700; }
+
+  /* 블록 카드 */
+  .block { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; }
+  .block + .block { margin-top: 18px; }
+  .block .tag { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; margin-bottom: 12px; display: inline-block; }
+  .tag.problem { color: var(--text-3); }
+  .tag.solve { color: var(--accent-2); }
+  .block p { color: var(--text-2); font-size: 18px; line-height: 1.62; }
+  .block p strong { color: var(--text); font-weight: 700; }
+  .block.emph { background: var(--accent-soft); border-color: var(--accent-line); }
+
+  /* 스크린샷 */
+  .shot { border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden; background: var(--bg-soft);
+    box-shadow: 0 14px 34px rgba(31,36,48,0.12); }
+  .shot img { width: 100%; display: block; }
+  .shot-cap { font-size: 13px; color: var(--text-3); margin-top: 12px; text-align: center; }
+  .shot-wrap { margin: auto 0; }
+
+  /* 큰 원칙 (한 줄 메시지) */
+  .big-msg { font-size: 30px; font-weight: 800; line-height: 1.4; letter-spacing: -0.01em; }
+  .big-msg .hl { color: var(--accent-2); }
+
+  /* 시나리오 스텝 */
+  .scenario { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 16px; padding: 30px 34px; display: flex; flex-direction: column; }
+  .say { background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 12px;
+    padding: 18px 22px; font-size: 21px; font-weight: 700; margin-bottom: 24px; color: var(--text); line-height: 1.5; }
+  .say .q { color: var(--accent-2); }
+  .flow { display: flex; flex-direction: column; gap: 12px; }
+  .srv { font-size: 13px; font-weight: 800; color: var(--accent-2); letter-spacing: 0.03em; margin: 8px 0 2px; }
+  .step { display: flex; align-items: center; gap: 15px; font-size: 17px; color: var(--text-2); }
+  .step .n { flex: none; width: 27px; height: 27px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line-2);
+    display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent-2); font-family: var(--mono); }
+  .result-line { margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--line-2); font-size: 18px; color: var(--text); font-weight: 600; }
+  .result-line .ok { font-weight: 800; }
+
+  /* 대조표 */
+  table { width: 100%; border-collapse: collapse; font-size: 17.5px; }
+  th, td { text-align: left; padding: 17px 20px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--accent-2); font-weight: 700; font-size: 15px; background: var(--bg-soft); border-bottom: 2px solid var(--line); }
+  td { color: var(--text-2); }
+  td strong { color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  .tbl-wrap { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .tm { color: var(--accent-2); font-weight: 700; }
+
+  /* AI 활용 리스트 */
+  .ai-list { display: flex; flex-direction: column; gap: 16px; }
+  .ai-item { display: flex; gap: 16px; align-items: flex-start; }
+  .ai-item .dot { flex: none; width: 30px; height: 30px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-2);
+    display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; }
+  .ai-item .txt { font-size: 18px; color: var(--text-2); line-height: 1.6; padding-top: 3px; }
+  .ai-item .txt strong { color: var(--text); font-weight: 700; }
+
+  /* 정량 지표 카드 */
+  .metrics { display: flex; gap: 22px; }
+  .metric { flex: 1; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 16px; padding: 30px 24px; text-align: center; }
+  .metric.hl { background: linear-gradient(160deg, var(--accent-soft), var(--bg-soft)); border-color: var(--accent-line); }
+  .metric .big { font-size: 44px; font-weight: 800; color: var(--accent-2); letter-spacing: -0.02em; line-height: 1.1; }
+  .metric .lab { font-size: 15px; color: var(--text-2); margin-top: 10px; }
+  .metric .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+  /* 설계 카드 그리드 */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .card { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; }
+  .card .ico { font-size: 22px; margin-bottom: 10px; }
+  .card h3 { margin-bottom: 8px; font-size: 19px; }
+  .card p { font-size: 16px; color: var(--text-2); line-height: 1.58; }
+  .card.hl { border-color: var(--accent-line); background: linear-gradient(160deg, var(--accent-soft), var(--bg-soft)); }
+
+  /* 로드맵 타임라인 */
+  .roadmap { display: flex; flex-direction: column; gap: 16px; margin-bottom: 8px; }
+  .rm { display: flex; gap: 18px; align-items: flex-start; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 14px; padding: 18px 24px; }
+  .rm .badge { flex: none; font-size: 13px; font-weight: 800; color: var(--accent-2); background: var(--accent-soft);
+    border: 1px solid var(--accent-line); border-radius: 999px; padding: 5px 14px; }
+  .rm .txt { font-size: 16px; color: var(--text-2); line-height: 1.5; padding-top: 3px; }
+  .rm .txt strong { color: var(--text); }
+
+  .note { margin-top: 16px; background: var(--ok-soft); border: 1px solid var(--ok-line); border-radius: 12px; padding: 14px 20px; font-size: 14.5px; color: var(--text-2); line-height: 1.55; }
+  .note strong { color: var(--ok); }
+  .closing { margin-top: auto; text-align: center; font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.5;
+    background: linear-gradient(160deg, var(--accent-soft), transparent); border: 1px solid var(--accent-line); border-radius: 14px; padding: 22px; }
+  .closing .hl { color: var(--accent-2); }
+
+  ul.plain { list-style: none; }
+  ul.plain li { font-size: 18px; color: var(--text-2); margin-bottom: 14px; padding-left: 26px; position: relative; line-height: 1.6; }
+  ul.plain li::before { content: ""; position: absolute; left: 4px; top: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  ul.plain li strong { color: var(--text); }
+
+  code { font-family: var(--mono); font-size: 0.9em; background: var(--bg-soft-2); color: var(--accent-2); padding: 2px 6px; border-radius: 5px; }
+
+  @page { size: A4 landscape; margin: 0; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .slide { margin: 0; border-radius: 0; border: none; width: 100%; height: 100vh; box-shadow: none;
+      page-break-after: always; break-after: page; }
+    .slide:last-child { page-break-after: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1 : 표지 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner cover">
+    <div class="logo-mark">⚡</div>
+    <div class="kicker">다우키움 AI 활용 경진대회 · 내부 업무 AI 활용(AX)</div>
+    <h1 style="margin-top:22px;">테스트메이트</h1>
+    <div class="tag" style="margin-top:14px;">가라사대, 테스트 데이터가 있으라</div>
+    <p class="lead">채팅으로 원하는 상황을 말하면, AI가 필요한 API를 골라 실제로 실행해 테스트 데이터를 만들어 줍니다.</p>
+    <div class="meta-row">
+      <div class="meta-item"><div class="label">참가 분야</div><div class="val">내부 업무 AI 활용 (AX)</div></div>
+      <div class="meta-item"><div class="label">상태</div><div class="val">동작하는 프로토타입</div></div>
+    </div>
+  </div>
+  <div class="page-no">01 / 10</div>
+</section>
+
+<!-- 2 : 문제 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">문제</span><h2>테스트 데이터, 매번 손으로 만든다</h2></div>
+    <div class="cols center">
+      <div class="col">
+        <div class="say">“결제까지 마친 회원 데이터, 또 만들어야 해.”</div>
+        <p class="muted" style="font-size:19px;line-height:1.65;">서류합격 지원자, 결제를 마친 회원… <strong style="color:var(--text)">상황마다 다른 데이터</strong>가 필요합니다. 어떤 기능을 어떤 순서로 거쳐야 하는지 알아야 하고, 경우의 수가 많아 미리 만들 수도 없습니다.</p>
+      </div>
+      <div class="col center">
+        <div class="metric hl" style="padding:40px 30px;">
+          <div class="big">매번 반복</div>
+          <div class="lab" style="font-size:17px;margin-top:14px;">여러 화면을 오가는 수작업<br/>테스트 <strong>시작 전</strong>에 시간이 녹는다</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">02 / 10</div>
+</section>
+
+<!-- 3 : 해결 + 스크린샷 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">해결</span><h2>말하면, 만들어집니다</h2></div>
+    <div class="cols">
+      <div class="col center">
+        <div class="big-msg">원하는 상황을 말하면<br/><span class="hl">AI가 실제 API로 실행</span>해<br/>테스트 데이터를 만듭니다.</div>
+        <ul class="plain" style="margin-top:28px;">
+          <li>방법을 몰라도, 처음 보는 요청이어도 OK</li>
+          <li>여러 API를 <strong>순서대로 조합</strong>해 한 번에</li>
+        </ul>
+      </div>
+      <div class="col center">
+        <div class="shot-wrap">
+          <div class="shot"><img src="assets/shot-chat-result.png" alt="채팅으로 주문·결제 데이터를 생성한 실제 화면" /></div>
+          <div class="shot-cap">실제 화면 — 한 문장으로 주문 생성 + 결제까지 실행, 결과를 정리해 표시</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">03 / 10</div>
+</section>
+
+<!-- 4 : 핵심 원칙 (DB 안 건드림) -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">핵심 원칙</span><h2>DB를 직접 건드리지 않는다</h2></div>
+    <div class="cols center">
+      <div class="col">
+        <div class="block" style="border-color:var(--line);">
+          <span class="tag problem">❌ DB에 직접 INSERT</span>
+          <p>결제·차감 같은 실제 로직을 건너뜀 → <strong>현실에 없는 데이터</strong>, 위험</p>
+        </div>
+        <div class="block emph">
+          <span class="tag solve">✅ 실제 API로만 생성</span>
+          <p>실제 사용자와 똑같은 절차(검증·부수효과·정합성)를 거침 → <strong>현실과 똑같은 데이터가 안전하게</strong></p>
+        </div>
+      </div>
+      <div class="col center">
+        <div class="big-msg" style="text-align:center;">실제로 쓰는 길로만<br/>데이터를 만드니까<br/><span class="hl">현실과 100% 일치</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">04 / 10</div>
+</section>
+
+<!-- 5 : 대표 시나리오 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">대표 시나리오 · 채용 서비스 예시</span><h2>여러 서버를 넘나들며, 한 문장으로</h2></div>
+    <div class="cols">
+      <div class="col">
+        <div class="scenario">
+          <div class="say">“공고에 지원해서 서류합격 상태인 지원자 만들어줘”</div>
+          <div class="flow">
+            <div class="srv">구직자</div>
+            <div class="step"><span class="n">1</span> 회원가입 또는 로그인</div>
+            <div class="step"><span class="n">2</span> 메일 인증번호를 스크립트로 읽어 인증</div>
+            <div class="step"><span class="n">3</span> 운영 중인 공고 탐색 → 지원</div>
+            <div class="srv">기업</div>
+            <div class="step"><span class="n">4</span> 방금 들어온 지원 건을 서류합격으로 변경</div>
+          </div>
+          <div class="result-line"><span class="ok">결과 →</span> 지원자 · 지원 공고 · 서류합격 상태까지 한 번에</div>
+        </div>
+      </div>
+      <div class="col center" style="flex:0.82;">
+        <div class="block"><span class="tag solve">이 시나리오가 보여주는 것</span>
+          <p><strong>하나의 서버로 끝나지 않습니다.</strong> 구직자 서버와 기업 서버를 넘나들며 순서대로 실행합니다.</p></div>
+        <div class="block"><span class="tag solve">스크립트의 역할</span>
+          <p>메일 인증번호 읽기처럼 API만으로 막히는 중간 단계도 처리해 흐름이 끊기지 않습니다.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">05 / 10</div>
+</section>
+
+<!-- 6 : 차별점 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">차별점</span><h2>“그거 그냥 ○○로 되는 거 아냐?”</h2></div>
+    <div class="body-fill">
+    <div class="tbl-wrap">
+      <table>
+        <tr><th style="width:30%;">기존 방식</th><th style="width:38%;">한계</th><th>테스트메이트</th></tr>
+        <tr><td><strong>DB 직접 INSERT</strong></td><td>비현실·깨진 데이터, 위험</td><td class="tm">실제 API로만 → 현실과 동일</td></tr>
+        <tr><td><strong>Postman 수동 호출</strong></td><td>순서·값을 사람이, API를 알아야</td><td class="tm">말 한마디로 AI가 조합</td></tr>
+        <tr><td><strong>자동화 스크립트</strong></td><td>정해진 경우만, 바뀌면 재코딩</td><td class="tm">처음 보는 요청도 즉석 조합</td></tr>
+        <tr><td><strong>범용 AI 코딩 도구</strong></td><td>코드만 줄 뿐, 연결·실행은 각자</td><td class="tm">사내 API 연결 + 실행 + 자산화</td></tr>
+      </table>
+    </div>
+    </div>
+  </div>
+  <div class="page-no">06 / 10</div>
+</section>
+
+<!-- 7 : AI 활용 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">AI 활용</span><h2>왜 굳이 AI인가</h2></div>
+    <div class="cols">
+      <div class="col">
+        <h3 style="margin-bottom:16px;" class="accent">① 제품 안에서 — 핵심 동력</h3>
+        <div class="ai-list">
+          <div class="ai-item"><span class="dot">1</span><span class="txt"><strong>말을 이해해 실행</strong> — 요청을 이해해 필요한 API를 골라 순서대로 조합</span></div>
+          <div class="ai-item"><span class="dot">2</span><span class="txt"><strong>스스로 찾아 보완</strong> — 부족한 정보는 API 목록·사내 문서에서 스스로</span></div>
+        </div>
+        <div class="note" style="background:var(--accent-soft);border-color:var(--accent-line);"><strong class="accent">WHY</strong> — 매번 다른 요청을 이해하고 즉석에서 조합하는 판단은 규칙 자동화로는 불가능. <strong style="color:var(--text)">AI만 할 수 있다.</strong></div>
+      </div>
+      <div class="col">
+        <h3 style="margin-bottom:16px;" class="accent">② 개발 과정에서 — AI를 “팀처럼”</h3>
+        <ul class="plain">
+          <li><strong>기획 우선</strong> — 기획 문서를 AI와 구조화 후 구현, 문서·코드 동기화</li>
+          <li><strong>규칙 내재화</strong> — 코딩·보안·커밋 규칙을 AI가 늘 참조하도록 설정</li>
+          <li><strong>역할 분리</strong> — 기획·백엔드·프론트·리뷰를 전문 역할로 나눠 병렬·교차 검토</li>
+        </ul>
+        <p class="muted" style="font-size:15px;margin-top:12px;">→ 1인이 기획·백엔드·프론트·문서를 진행해 동작하는 프로토타입 완성</p>
+      </div>
+    </div>
+  </div>
+  <div class="page-no">07 / 10</div>
+</section>
+
+<!-- 8 : 정량 성과 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">정량 성과</span><h2>시간은 줄이고, 비용은 낮게</h2></div>
+    <div class="body-fill">
+      <div class="metrics">
+        <div class="metric hl"><div class="big">약 90% ↓</div><div class="lab">테스트 데이터 준비 시간</div><div class="sub">상태 5종 40분 → 3분 (추정)</div></div>
+        <div class="metric"><div class="big">약 4원</div><div class="lab">AI 호출 1회 비용</div><div class="sub">실측 · 한 작업 대략 4~12원</div></div>
+        <div class="metric"><div class="big">80% ↓</div><div class="lab">반복 작업 AI 호출</div><div class="sub">레시피 직접 실행 시 (10회→2회)</div></div>
+      </div>
+      <div class="note" style="margin-top:24px;"><strong>정직한 표기</strong> — 준비 시간은 채용 시나리오 기반 <strong>추정</strong>(가정 명시), 비용은 <strong>실측 로그</strong> 기반입니다.</div>
+    </div>
+  </div>
+  <div class="page-no">08 / 10</div>
+</section>
+
+<!-- 9 : AI 자원 효율성 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">AI 자원 효율성</span><h2>토큰을 아끼도록 설계했다</h2></div>
+    <div class="body-fill">
+      <div class="grid tall">
+        <div class="card hl"><div class="ico">⚡</div><h3>작업 선택 1회 호출</h3><p>의도 분석 + 작업 선택을 한 번에 (2단계 → 1회) → 호출 수 절반</p></div>
+        <div class="card"><div class="ico">🎯</div><h3>레시피 조건부 전달</h3><p>필요한 서비스의 레시피만 전달 → 입력 토큰 최대 2배 차이</p></div>
+        <div class="card"><div class="ico">🔀</div><h3>모델 이원화</h3><p>무거운 판단은 고성능, 가벼운 처리는 저가 모델로 분리</p></div>
+        <div class="card"><div class="ico">🔘</div><h3>레시피 직접 실행</h3><p>자주 쓰는 작업은 버튼으로 바로 → <strong>AI 호출 0회</strong></p></div>
+      </div>
+      <div class="note" style="background:var(--accent-soft);border-color:var(--accent-line);margin-top:22px;"><strong class="accent">효과</strong> — 자주 쓰는 작업 10회 기준, 직접 실행을 쓰면 AI 호출 10회 → <strong style="color:var(--text)">2회(80%↓)</strong>. 조회 루프도 최대 5회·120초로 제한해 과금 폭주 방지.</div>
+    </div>
+  </div>
+  <div class="page-no">09 / 10</div>
+</section>
+
+<!-- 10 : 로드맵 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">로드맵 · 확산</span><h2>QA 데이터 생성은 시작점</h2></div>
+    <div class="body-fill">
+      <div class="roadmap">
+        <div class="rm"><span class="badge">지금</span><span class="txt"><strong>QA 테스트 데이터 생성</strong> — 동작 프로토타입</span></div>
+        <div class="rm"><span class="badge">다음</span><span class="txt"><strong>사내 서비스로 확산</strong> — 라이브러리만 붙이면 자동 연동, 확산 비용이 낮음</span></div>
+      </div>
+      <div style="font-size:14px;font-weight:800;color:var(--accent-2);letter-spacing:0.04em;margin:22px 0 12px;">이후 — 같은 엔진의 확장</div>
+      <div class="grid" style="gap:18px;">
+        <div class="card hl"><div class="ico">🛠️</div><h3>대화형 통합 어드민</h3><p>“○○기업 결제 내역이랑 올라간 공고 보여줘” → 조회 API들을 골라 실행·정리</p></div>
+        <div class="card hl"><div class="ico">💬</div><h3>대화형 사용자 서비스</h3><p>“내가 지원한 공고 중 서류합격만 알려줘” → 지원현황 조회 API 실행·정리</p></div>
+      </div>
+      <div class="note" style="margin-top:20px;background:var(--accent-soft);border-color:var(--accent-line);"><strong class="accent">공통 엔진</strong> — 셋 다 “대화 → AI가 API 선택 → 실행 → 정리”라는 같은 골격. 사내 반복 업무 전반으로 넓혀갈 수 있습니다.</div>
+    </div>
+  </div>
+  <div class="page-no">10 / 10</div>
+</section>
+
+<!-- A1 : Appendix — 아키텍처 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="appx-badge">APPENDIX</div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">Appendix</span><h2>어떻게 동작하나</h2></div>
+    <div class="cols">
+      <div class="col">
+        <h3 class="accent" style="margin-bottom:12px;">준비 — 서버 연결 (1회)</h3>
+        <ul class="plain">
+          <li>각 서버에 <strong>라이브러리 추가</strong></li>
+          <li>기동 시 API 목록(OpenAPI)을 <strong>자동 등록</strong></li>
+          <li>DB 구조를 몰라도 됨, 재기동 시 최신으로 자동 갱신</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3 class="accent" style="margin-bottom:12px;">사용 — 대화로 실행</h3>
+        <ul class="plain">
+          <li>사용자가 말함 → AI가 필요한 API 선택</li>
+          <li><strong>사용자 브라우저에서 직접 호출</strong> (내 로그인 세션 그대로 재사용)</li>
+          <li>스텝 결과만 서버에 보고 → 저장·재개·히스토리</li>
+        </ul>
+        <div class="note"><strong>보안</strong> — 시스템이 남의 인증 정보를 보관하지 않음. API 목록은 개발·스테이징에서만 전송.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot-brand">테스트메이트</div>
+</section>
+
+<!-- A2 : Appendix — 안전장치 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="appx-badge">APPENDIX</div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">Appendix</span><h2>신뢰성과 안전장치</h2></div>
+    <div class="body-fill">
+      <div class="grid tall">
+        <div class="card"><div class="ico">🚫</div><h3>지어내지 않음</h3><p>등록된 API·문서를 근거로만. 근거 없으면 되묻거나 “없다”</p></div>
+        <div class="card"><div class="ico">⚠️</div><h3>위험 작업 확인</h3><p>결제 등 되돌릴 수 없는 API는 실행 전 확인(<code>@TestForgeConfirm</code>)</p></div>
+        <div class="card"><div class="ico">🙈</div><h3>내부 API 숨김</h3><p>관리·내부용 API는 노출 안 함(<code>@TestForgeExclude</code>)</p></div>
+        <div class="card"><div class="ico">🧪</div><h3>운영 영향 없음</h3><p>개발·스테이징에서만 동작, 라이브러리를 켜야만 작동</p></div>
+      </div>
+      <div class="note" style="background:var(--bg-soft);border-color:var(--line);color:var(--text-2);margin-top:22px;"><strong style="color:var(--text)">한계(정직하게)</strong> — 아직 프로토타입. 데이터 되돌리기·대량 생성·레시피 공유는 다음 단계.</div>
+    </div>
+  </div>
+  <div class="foot-brand">테스트메이트</div>
+</section>
+
+<!-- A3 : Appendix — 기술 스택 -->
+<section class="slide">
+  <div class="brandbar"></div>
+  <div class="appx-badge">APPENDIX</div>
+  <div class="slide-inner">
+    <div class="slide-head"><span class="kicker">Appendix</span><h2>기술 스택</h2></div>
+    <div class="body-fill">
+    <div class="tbl-wrap">
+      <table>
+        <tr><th style="width:22%;">영역</th><th>구성</th></tr>
+        <tr><td><strong>프론트엔드</strong></td><td>React 19 · Vite · TypeScript · TailwindCSS</td></tr>
+        <tr><td><strong>백엔드</strong></td><td>Java 25 · Spring Boot 4 · MySQL · SSE(실시간)</td></tr>
+        <tr><td><strong>AI</strong></td><td>OpenAI 호환 API 직접 호출(RestClient) + tool_calls · reasoning/fast 모델 이원화</td></tr>
+        <tr><td><strong>라이브러리</strong></td><td>Java 21 · OpenAPI 자동 수집 · CORS 자동 설정 · 어노테이션</td></tr>
+        <tr><td><strong>검증</strong></td><td>서로 다른 도메인의 데모 서버 6종으로 실제 실행 검증</td></tr>
+      </table>
+    </div>
+    <div class="note" style="background:var(--bg-soft);border-color:var(--line);color:var(--text-2);margin-top:22px;">AI 호출은 <strong style="color:var(--text)">Spring AI를 쓰지 않고</strong> OpenAI 호환 API를 직접 호출·파싱합니다(공급자 교체는 설정만으로).</div>
+    </div>
+  </div>
+  <div class="foot-brand">테스트메이트</div>
+</section>
+
+</body>
+</html>
