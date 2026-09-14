@@ -2,7 +2,7 @@
 // - 🚀 빠른 시작 타이틀
 // - quick-action: 선택된 서비스의 레시피(미선택이면 전체 레시피) 중 랜덤 4개.
 //   버튼 라벨 = 전송 발화 = 레시피 이름(라벨과 실제 전송 문구를 일치시켜 혼란 방지).
-//   클릭 시 레시피 이름을 그대로 발화로 전송(referenceId 없이) → AI 가 Tool Use 로 매칭.
+//   클릭 시 레시피 이름을 그대로 발화로 전송(targetRecipeId 없이) → AI 가 Tool Use 로 매칭.
 // - 자유 입력 힌트
 
 import { useMemo } from "react";

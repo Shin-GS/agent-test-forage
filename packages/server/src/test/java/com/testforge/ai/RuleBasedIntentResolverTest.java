@@ -18,8 +18,8 @@ class RuleBasedIntentResolverTest {
     /** 컨텍스트 빌더 헬퍼 (서비스 지정 여부/후보/서비스 참조를 케이스별로 조립) */
     private IntentContext ctx(String utterance, Long apiSpecId,
                               List<RecipeCandidate> recipes, List<ServiceOption> services,
-                              String referenceId) {
-        return new IntentContext(1L, 100L, utterance, apiSpecId, recipes, services, referenceId, List.of());
+                              Long targetRecipeId) {
+        return new IntentContext(1L, 100L, utterance, apiSpecId, recipes, services, targetRecipeId, List.of());
     }
 
     // ── 서비스 미지정 케이스 ──
@@ -109,12 +109,12 @@ class RuleBasedIntentResolverTest {
     }
 
     @Test
-    void withService_referenceId_prioritizesThatRecipe() {
-        // 참조 태그가 있으면 발화 매칭과 무관하게 해당 레시피 우선 실행
+    void withService_targetRecipeId_prioritizesThatRecipe() {
+        // 지목 레시피가 있으면 발화 매칭과 무관하게 해당 레시피 우선 실행
         IntentContext context = ctx("아무거나", 1L,
                 List.of(RecipeCandidate.of(10L, "회원가입", "설명", List.of()),
                         RecipeCandidate.of(20L, "로그인", "설명", List.of())),
-                List.of(), "recipe_20");
+                List.of(), 20L);
 
         IntentResult result = resolver.resolve(context);
 

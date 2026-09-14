@@ -90,7 +90,7 @@ ref: docs/specs/panel/overview.md, docs/specs/panel/history.md, docs/specs/commo
   - 초기 포커스: **[취소]**
 - 동작:
   - [취소] / ESC / 배경 클릭 → 아무 동작 없이 닫힘 (발화 전송 안 됨)
-  - [실행] → 기존 실행 flow 진입 (발화 "{레시피명} 실행하기" + 참조 태그 전송, `handleRunRecipe`)
+  - [실행] → 기존 실행 flow 진입 (발화 "{레시피명} 실행하기" + 지목 레시피(targetRecipeId) 전송, `handleRunRecipe`)
 - 대화방이 처리 중이면 [▶]가 비활성(`aria-disabled`)이라 모달이 뜨지 않는다
 - 서비스 불일치(대화방 서비스 ≠ 레시피 서비스)는 이 모달이 아니라 **실행 후 별도 서비스 변경 확인 단계**에서 다룬다 (거부 시 no_match/clarify, 발화는 유지)
 - 층위 구분: 이 패널 모달 = "발화를 보낼지" 확인 / 채팅의 실행 카드 = "어떤 방식으로 실행할지"(자동/직접) 선택. 이중 확인이 아니다. 상세는 [panel/overview.md](../../specs/panel/overview.md), [card-ui.md](../../specs/chat/card-ui.md)

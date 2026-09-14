@@ -19,8 +19,8 @@ public record MessageResponse(
         StatusView role,
         // 턴 전체 상태 (code + description)
         StatusView status,
-        // 참조 태그 (없으면 null)
-        String referenceId,
+        // 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, 없으면 null)
+        Long targetRecipeId,
         // 생성 시각
         LocalDateTime createdAt,
         // 순서 있는 파트 배열 (id 오름차순)

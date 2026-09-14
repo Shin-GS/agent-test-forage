@@ -174,9 +174,9 @@ public class ChatProcessor {
             services = loadServices();
         }
 
-        String referenceId = latestUserReferenceId(allTurns);
+        Long targetRecipeId = latestUserTargetRecipeId(allTurns);
         return new IntentContext(userId, conversationId, utterance, apiSpecId,
-                recipes, services, referenceId, history);
+                recipes, services, targetRecipeId, history);
     }
 
     /** 턴들의 파트를 한 번에 로드해 turnId → 파트 목록(id 오름차순) 맵으로 묶는다(N+1 방지). */
@@ -203,12 +203,12 @@ public class ChatProcessor {
         return "";
     }
 
-    /** 마지막 USER 턴의 referenceId (없으면 null) */
-    private String latestUserReferenceId(List<Message> turns) {
+    /** 마지막 USER 턴의 targetRecipeId (없으면 null) */
+    private Long latestUserTargetRecipeId(List<Message> turns) {
         for (int i = turns.size() - 1; i >= 0; i--) {
             Message m = turns.get(i);
             if (m.getRole() == MessageRole.USER) {
-                return m.getReferenceId();
+                return m.getTargetRecipeId();
             }
         }
         return null;

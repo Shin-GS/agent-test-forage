@@ -63,7 +63,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 - [버전 관리](recipe/versioning.md)
 
 ### 사이드 패널
-- [패널 구조](panel/overview.md) — 뷰 전환, 참조 태그
+- [패널 구조](panel/overview.md) — 뷰 전환, 지목 레시피
 - [작업 히스토리](panel/history.md)
 
 ### 스펙

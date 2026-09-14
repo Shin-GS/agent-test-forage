@@ -17,8 +17,8 @@ public record ConversationStartRequest(
         Long apiSpecId,
         // 대화 제목 (선택 — 레시피로 시작 시 레시피명 등). 없으면 content로 파생
         String title,
-        // 참조 태그 (레시피 ID 등, 선택)
-        String referenceId,
+        // 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, 선택)
+        Long targetRecipeId,
         // 타입별 상세 메타 (Map/List 등, 선택)
         Object metadata) {
 }

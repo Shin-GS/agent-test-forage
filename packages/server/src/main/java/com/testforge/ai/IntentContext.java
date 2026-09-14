@@ -27,8 +27,8 @@ public record IntentContext(
         List<RecipeCandidate> recipes,
         // 사용 가능한 서비스 (서비스 미지정 시에만 채워짐)
         List<ServiceOption> services,
-        // 참조 중인 레시피 ID (참조 태그, 없으면 null)
-        String referenceId,
+        // 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, 없으면 null)
+        Long targetRecipeId,
         // 최근 대화 이력 (오래된 → 최신 순, 현재 발화 제외)
         List<HistoryTurn> history) {
 

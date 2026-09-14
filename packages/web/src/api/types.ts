@@ -83,7 +83,7 @@ export interface MessageResponse {
   conversationId: number;
   role: StatusView;
   status: StatusView;
-  referenceId: string | null;
+  targetRecipeId: number | null;
   createdAt: string;
   parts: PartResponse[];
 }

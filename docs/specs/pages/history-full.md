@@ -133,7 +133,7 @@ FE는 URL 쿼리키를 **API 파라미터명으로 매핑**해 `GET /api/v1/exec
 
 | 항목 | 비고 |
 |------|------|
-| [다시 실행] 버튼 | 채팅 연동으로 재실행(현재 대화방 발화 + 참조 태그). 정책 추후([panel/history.md](../panel/history.md#패널-내-히스토리)) |
+| [다시 실행] 버튼 | 채팅 연동으로 재실행(현재 대화방 발화 + 지목 레시피). 정책 추후([panel/history.md](../panel/history.md#패널-내-히스토리)) |
 | 플랜 히스토리 | 플랜 실행 구현 후. `EXECUTION(TYPE=PLAN)` + `EXECUTION_RECIPE` 펼침 표시 |
 | 날짜 그룹 헤더 | "오늘/어제/이번 주" 그룹핑 |
 | CSV / JSON 내보내기 | 필터된 목록 내보내기 |

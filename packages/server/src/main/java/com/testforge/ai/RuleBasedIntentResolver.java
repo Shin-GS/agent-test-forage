@@ -17,7 +17,7 @@ import java.util.Locale;
  *   <li>서비스 미지정 → 인사/잡담이면 chat, 그 외에는 select_service(추천은 서비스명 부분일치)</li>
  *   <li>서비스 지정 →
  *     <ul>
- *       <li>referenceId가 레시피와 매칭되면 execute_recipe (우선 매칭)</li>
+ *       <li>targetRecipeId가 레시피와 매칭되면 execute_recipe (우선 매칭)</li>
  *       <li>인사/잡담이면 chat</li>
  *       <li>발화가 너무 짧으면(의미 토큰 없음) clarify</li>
  *       <li>레시피 이름/태그 매칭 0개 → no_match</li>
@@ -63,10 +63,10 @@ public class RuleBasedIntentResolver implements IntentResolver {
             return IntentResult.selectService(suggested);
         }
 
-        // 서비스 지정: referenceId 우선 매칭
-        IntentResult byReference = matchByReference(context);
-        if (byReference != null) {
-            return byReference;
+        // 서비스 지정: targetRecipeId 우선 매칭
+        IntentResult byTargetRecipe = matchByTargetRecipe(context);
+        if (byTargetRecipe != null) {
+            return byTargetRecipe;
         }
 
         if (isSmallTalk(normalized)) {
@@ -96,35 +96,18 @@ public class RuleBasedIntentResolver implements IntentResolver {
         return IntentResult.showCandidates(List.copyOf(limited));
     }
 
-    /** referenceId가 레시피 목록에 있으면 그 레시피를 우선 실행 (referenceId는 "recipe_123" 또는 "123") */
-    private IntentResult matchByReference(IntentContext context) {
-        String referenceId = context.referenceId();
-        if (referenceId == null || referenceId.isBlank()) {
+    /** targetRecipeId가 레시피 목록에 있으면 그 레시피를 우선 실행 (사이드 패널 [▶] 실행 등) */
+    private IntentResult matchByTargetRecipe(IntentContext context) {
+        Long targetRecipeId = context.targetRecipeId();
+        if (targetRecipeId == null) {
             return null;
         }
-        Long refRecipeId = parseRecipeId(referenceId);
-        if (refRecipeId == null) {
-            return null;
-        }
-        boolean present = context.recipes().stream().anyMatch(r -> refRecipeId.equals(r.id()));
+        boolean present = context.recipes().stream().anyMatch(r -> targetRecipeId.equals(r.id()));
         if (present) {
-            log.debug("Resolved execute_recipe by referenceId: recipeId={}", refRecipeId);
-            return IntentResult.executeRecipe(refRecipeId, java.util.Map.of());
+            log.debug("Resolved execute_recipe by targetRecipeId: recipeId={}", targetRecipeId);
+            return IntentResult.executeRecipe(targetRecipeId, java.util.Map.of());
         }
         return null;
-    }
-
-    /** "recipe_123" / "123" → 123L. 형식이 아니면 null */
-    private Long parseRecipeId(String referenceId) {
-        String digits = referenceId.replaceAll("[^0-9]", "");
-        if (digits.isEmpty()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(digits);
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     /** 발화 토큰이 레시피 이름 또는 태그에 부분 포함되면 매칭으로 본다 */

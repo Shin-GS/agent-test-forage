@@ -57,9 +57,9 @@ public class Message {
     @Column(name = "CONTENT_PREVIEW", length = 500)
     private String contentPreview;
 
-    /** 사용자 발화의 참조 태그(레시피 ID 등). 없으면 NULL */
-    @Column(name = "REFERENCE_ID", length = 50)
-    private String referenceId;
+    /** 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, AI 매칭 스킵용). 없으면 NULL */
+    @Column(name = "TARGET_RECIPE_ID")
+    private Long targetRecipeId;
 
     /** 생성 시각 */
     @Column(name = "CREATED_AT", nullable = false)
@@ -107,12 +107,12 @@ public class Message {
         this.contentPreview = contentPreview;
     }
 
-    public String getReferenceId() {
-        return referenceId;
+    public Long getTargetRecipeId() {
+        return targetRecipeId;
     }
 
-    public void setReferenceId(String referenceId) {
-        this.referenceId = referenceId;
+    public void setTargetRecipeId(Long targetRecipeId) {
+        this.targetRecipeId = targetRecipeId;
     }
 
     public LocalDateTime getCreatedAt() {

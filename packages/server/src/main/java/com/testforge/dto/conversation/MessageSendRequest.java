@@ -10,8 +10,8 @@ public record MessageSendRequest(
         Long userId,
         // 메시지 본문 (Markdown). 비어 있으면 400
         String content,
-        // 참조 태그 (레시피 ID 등, 선택)
-        String referenceId,
+        // 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, 선택)
+        Long targetRecipeId,
         // 타입별 상세 메타 (Map/List 등, 선택)
         Object metadata) {
 }

@@ -83,7 +83,7 @@ ref: docs/specs/chat/overview.md, docs/specs/common/messaging.md
 | `ROLE` | VARCHAR(20) | USER / ASSISTANT / SYSTEM |
 | `STATUS` | VARCHAR(20) | STREAMING / COMPLETE / FAILED (턴 전체 상태) |
 | `CONTENT_PREVIEW` | VARCHAR(500) NULL | 목록 미리보기·검색용 요약(파트에서 파생한 **캐시**, 진실 아님) |
-| `REFERENCE_ID` | VARCHAR(50) NULL | 사용자 발화의 참조 태그(레시피 ID 등) |
+| `TARGET_RECIPE_ID` | BIGINT NULL | 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, AI 매칭 스킵용) |
 | `CREATED_AT` | DATETIME | 생성 시각 |
 
 **인덱스**: `IDX_MESSAGE_CONVERSATION` : (`CONVERSATION_ID`, `ID`) — 대화방 턴 커서 페이징(`WHERE conversation_id=? AND id<:cursor ORDER BY id DESC`)

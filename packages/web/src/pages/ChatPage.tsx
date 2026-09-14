@@ -42,7 +42,7 @@ function optimisticUserMessage(conversationId: number, content: string): Message
     conversationId,
     role: { code: "USER", description: "사용자" },
     status: { code: "COMPLETE", description: "완료" },
-    referenceId: null,
+    targetRecipeId: null,
     createdAt: new Date().toISOString(),
     parts: [
       {
@@ -240,9 +240,9 @@ export function ChatPage() {
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [currentConversationId, currentUnread]);
 
-  // 전송. referenceId 는 사이드 패널 레시피 실행 시 recipeId(문자열)로 전달된다.
+  // 전송. targetRecipeId 는 사이드 패널 [▶] 실행 시 recipeId(숫자)로 전달된다.
   const handleSend = useCallback(
-    async (content: string, referenceId?: string) => {
+    async (content: string, targetRecipeId?: number) => {
       setError(null);
       try {
         if (currentConversationId == null) {
@@ -250,7 +250,7 @@ export function ChatPage() {
             content,
             // 새 대화 pending 대상 서비스(없으면 null=미지정)
             apiSpecId: pendingApiSpecId,
-            referenceId,
+            targetRecipeId,
           });
           const newId = started.conversation.id;
           setCurrentConversation(newId);
@@ -269,7 +269,7 @@ export function ChatPage() {
           await loadConversations();
         } else {
           addMessage(optimisticUserMessage(currentConversationId, content));
-          await conversationsApi.sendMessage(currentConversationId, { content, referenceId });
+          await conversationsApi.sendMessage(currentConversationId, { content, targetRecipeId });
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "메시지 전송에 실패했습니다");
@@ -308,14 +308,14 @@ export function ChatPage() {
 
   const isOnboarding = currentConversationId == null && messages.length === 0;
 
-  // 레시피 [▶] 실행: "{name} 실행하기" 발화 + referenceId(=recipeId)
+  // 레시피 [▶] 실행: "{name} 실행하기" 발화 + targetRecipeId(=recipeId)
   const handleRunRecipe = useCallback(
     (recipeId: number, recipeName: string) => {
       if (currentConversationId != null && conversationStatus !== "idle") {
         showToast("현재 대화방에 진행 중인 작업이 있어요. 완료 후 다시 시도해주세요.", "warning");
         return;
       }
-      void handleSend(`${recipeName} 실행하기`, String(recipeId));
+      void handleSend(`${recipeName} 실행하기`, recipeId);
     },
     [handleSend, currentConversationId, conversationStatus, showToast]
   );

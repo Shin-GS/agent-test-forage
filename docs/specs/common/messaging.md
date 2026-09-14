@@ -53,7 +53,7 @@ last-updated: 2026-09-08
 }
 ```
 
-- **턴 필드**: `id`(정렬·커서 기준), `role`(user/assistant/system), `status`(턴 전체 상태), `createdAt`, `parts[]`. 사용자 발화 턴은 참조 태그가 있으면 `referenceId`를 가진다.
+- **턴 필드**: `id`(정렬·커서 기준), `role`(user/assistant/system), `status`(턴 전체 상태), `createdAt`, `parts[]`. 사용자 발화 턴은 지목 레시피가 있으면 `targetRecipeId`를 가진다.
 - **파트 필드**: `id`(턴 내 순서), `type`(아래 파트 타입), `status`(파트 상태), 그리고 타입에 따라 `content`(TEXT) / `executionId`(실행류) / `investigationId`(조회류) / `cardType`(카드) / `payloadJson`(잔여 구조화 데이터).
 - **정렬**: FE는 SSE 도착 순서가 아니라 **턴 `id`, 파트 `id`** 로 정렬한다. 낙관적 표시/SSE 순서 뒤바뀜에도 화면 순서가 안 꼬인다.
 
@@ -117,11 +117,11 @@ last-updated: 2026-09-08
   "type": "text | action | action_picker_response",
   "content": "사용자 입력 텍스트",
   "metadata": { },
-  "referenceId": "recipe_123"
+  "targetRecipeId": 123
 }
 ```
 
-- `referenceId`: 참조 태그로 전달되는 레시피/도구 ID (nullable)
+- `targetRecipeId`: 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, AI 매칭 스킵용. nullable)
 - 전송 API는 **동기 접수**로 거의 즉시 리턴하고(무거운 처리는 async), 응답에 최소 `{ accepted: true, sessionId }`를 준다. FE는 이 성공 응답을 받은 뒤에만 낙관적 임시 메시지를 렌더한다(아래 낙관적 UI).
 - **첫 메시지 = 대화방 생성 겸함**: 대화방 ID 없이 첫 메시지를 보내면 서버가 대화방+메시지를 함께 생성하고 새 대화방 정보를 응답에 포함(+ `session_list_update` upsert 발행). 이후 메시지는 대화방 ID로 전송.
   - `POST /api/v1/conversations/messages` — 방 없이 첫 메시지 (방 생성 겸함). 응답에 `conversation` 포함

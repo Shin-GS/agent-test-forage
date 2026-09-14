@@ -225,7 +225,7 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
   - 예(플랜 맞음): "입사지원 해줘" → 이력서 작성 → 포지션 탐색 → 입사지원 (앞 결과가 뒤 입력으로 흐름)
   - 예(플랜 아님): "주문 관련 보여줘" → show_candidates (순차 조합이 아니라 후보 선택)
 - 유사한 레시피가 2개 이상 매칭되는데 실행은 1개면 show_candidates를 호출하세요 (최대 5개). 이는 순차 조합(propose_plan)과 다른 축입니다.
-- referenceId가 있으면 해당 레시피를 우선 매칭하세요.
+- targetRecipeId가 있으면 해당 레시피를 우선 매칭하세요.
 - 레시피 요청이 아닌 일반 대화/질문이면 chat을 호출하세요.
 - 서비스가 미지정인데 서비스 특정이 필요한 요청이면 select_service를 호출하세요.
 - 정책/기능에 대한 질문("이 회원가입 정책이 뭐야?")이면 investigate로 정보를 조회한 뒤 답하세요. 정보가 부족하면 investigate를 반복 호출하고, 충분하면 chat으로 답하세요.
@@ -249,8 +249,8 @@ AI가 적절한 tool을 직접 선택하여 호출. 별도 의도 분류 단계 
 ## 최근 대화 이력
 {history}
 
-## 참조 중인 레시피
-{referenceId 또는 "없음"}
+## 지목 레시피
+{targetRecipeId 또는 "없음"}
 ```
 
 ---
@@ -294,7 +294,7 @@ switch (toolName) {
 
 | tool | 채팅 메시지 | 액션 피커 | 사이드 패널 |
 |------|-----------|-----------|------------|
-| execute_recipe | AI message | [자동 실행] [직접 입력] [취소] | 참조 태그 설정 |
+| execute_recipe | AI message | [자동 실행] [직접 입력] [취소] | 지목 레시피 설정 |
 | propose_plan | FE 고정 템플릿 + rationale | 플랜 제안 카드 (1단계: 읽기 전용 미리보기. 편집은 2단계) | 변화 없음 |
 | select_service | AI message | 서비스 선택 버튼 / search-select | 변화 없음 |
 | show_candidates | AI message | 후보 목록 선택 | 변화 없음 |

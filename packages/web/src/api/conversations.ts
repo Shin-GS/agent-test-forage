@@ -14,14 +14,14 @@ export interface StartMessagePayload {
   content: string;
   /** 대상 서비스. 미지정(미전달/null)이면 서버가 서비스 없이 대화방을 생성한다 */
   apiSpecId?: number | null;
-  /** 참조 태그 (사이드 패널 레시피 실행 시 recipeId 를 문자열로 전달) */
-  referenceId?: string;
+  /** 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 시 recipeId 전달) */
+  targetRecipeId?: number;
 }
 
 export interface SendMessagePayload {
   content: string;
-  /** 참조 태그 (사이드 패널 레시피 실행 시 recipeId 를 문자열로 전달) */
-  referenceId?: string;
+  /** 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 시 recipeId 전달) */
+  targetRecipeId?: number;
 }
 
 /** 새 대화방 시작 + 첫 메시지 전송. 응답: { accepted, conversation, message } */

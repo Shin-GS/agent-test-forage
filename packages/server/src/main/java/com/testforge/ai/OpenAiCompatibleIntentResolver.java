@@ -66,13 +66,13 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
 
     @Override
     public IntentResult resolve(IntentContext context) {
-        // 참조 태그([▶] 실행 등) 단락: referenceId가 현재 레시피 목록의 유효 id면 AI 호출 없이 바로 실행.
-        // RuleBasedIntentResolver.matchByReference/parseRecipeId와 동일 규칙.
-        Long referencedRecipeId = matchReferencedRecipeId(context);
-        if (referencedRecipeId != null) {
-            log.debug("Short-circuit execute_recipe by referenceId={} (recipeId={}), skipping AI call",
-                    context.referenceId(), referencedRecipeId);
-            return IntentResult.executeRecipe(referencedRecipeId, Map.of());
+        // 지목 레시피([▶] 실행 등) 단락: targetRecipeId가 현재 레시피 목록의 유효 id면 AI 호출 없이 바로 실행.
+        // RuleBasedIntentResolver.matchByTargetRecipe와 동일 규칙.
+        Long targetRecipeId = matchTargetRecipeId(context);
+        if (targetRecipeId != null) {
+            log.debug("Short-circuit execute_recipe by targetRecipeId={}, skipping AI call",
+                    targetRecipeId);
+            return IntentResult.executeRecipe(targetRecipeId, Map.of());
         }
 
         List<OpenAiDtos.ChatMessage> messages = buildMessages(context);
@@ -276,35 +276,18 @@ public class OpenAiCompatibleIntentResolver implements IntentResolver {
         return Map.of();
     }
 
-    // ── 참조 태그 단락: referenceId를 실제 레시피 목록과 대조 ──
+    // ── 지목 레시피 단락: targetRecipeId를 실제 레시피 목록과 대조 ──
 
     /**
-     * referenceId("recipe_123" 또는 "123")를 파싱해 현재 recipes 목록에 존재하면 그 id를 반환한다.
-     * referenceId가 없거나 형식이 아니거나 목록에 없으면 null(→ 기존 AI 호출 경로).
+     * targetRecipeId가 현재 recipes 목록에 존재하면 그 id를 반환한다.
+     * 없거나 목록에 없으면 null(→ 기존 AI 호출 경로).
      */
-    private Long matchReferencedRecipeId(IntentContext context) {
-        String referenceId = context.referenceId();
-        if (referenceId == null || referenceId.isBlank()) {
+    private Long matchTargetRecipeId(IntentContext context) {
+        Long targetRecipeId = context.targetRecipeId();
+        if (targetRecipeId == null || !recipeExists(context, targetRecipeId)) {
             return null;
         }
-        Long refRecipeId = parseRecipeId(referenceId);
-        if (refRecipeId == null || !recipeExists(context, refRecipeId)) {
-            return null;
-        }
-        return refRecipeId;
-    }
-
-    /** "recipe_123" / "123" → 123L. 숫자가 없으면 null */
-    private Long parseRecipeId(String referenceId) {
-        String digits = referenceId.replaceAll("[^0-9]", "");
-        if (digits.isEmpty()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(digits);
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return targetRecipeId;
     }
 
     // ── context 대조: AI가 준 id를 실제 목록과 매칭 ──

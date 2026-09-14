@@ -123,7 +123,7 @@ public class ConversationService {
 
         // 2) 첫 메시지 저장 = USER 턴 + TEXT 파트 1개
         Message savedMessage = saveUserTurn(savedConversation.getId(),
-                request.content(), request.referenceId());
+                request.content(), request.targetRecipeId());
 
         // 3) 대화방 선점 + 처리 중 상태 전이(ai_responding). 방금 생성한 대화방이라 락 경합은 없어
         //    tryLock 반환값을 검사하지 않는다. AI 처리 종결(completeAssistantTurn) 시점까지 점유를 유지한다.
@@ -428,7 +428,7 @@ public class ConversationService {
                 throw ApiException.invalidRequest("content is required");
             }
 
-            Message saved = saveUserTurn(conversationId, request.content(), request.referenceId());
+            Message saved = saveUserTurn(conversationId, request.content(), request.targetRecipeId());
 
             // 처리 중 상태로 전이(ai_responding): 모든 탭 입력 잠금. 목록 최신순/안 읽음 기준도 갱신.
             conversation.setStatus(ConversationStatus.AI_RESPONDING);
@@ -1016,10 +1016,10 @@ public class ConversationService {
         return conversation;
     }
 
-    /** 사용자 발화 턴 저장 = USER 턴(COMPLETE) + TEXT 파트 1개. referenceId는 턴에 둔다. */
-    private Message saveUserTurn(Long conversationId, String content, String referenceId) {
+    /** 사용자 발화 턴 저장 = USER 턴(COMPLETE) + TEXT 파트 1개. targetRecipeId는 턴에 둔다. */
+    private Message saveUserTurn(Long conversationId, String content, Long targetRecipeId) {
         Message turn = new Message(conversationId, MessageRole.USER, MessageStatus.COMPLETE);
-        turn.setReferenceId(referenceId);
+        turn.setTargetRecipeId(targetRecipeId);
         Message savedTurn = messageRepository.save(turn);
 
         MessagePart part = new MessagePart(savedTurn.getId(), PartType.TEXT, PartStatus.COMPLETE);
@@ -1033,7 +1033,7 @@ public class ConversationService {
 
     /**
      * 턴(MESSAGE)을 저장하고 draft의 파트들을 순서대로 append한다. 턴 미리보기(contentPreview)는 첫 TEXT
-     * 파트에서 파생한다. referenceId 등 턴 고유 필드가 필요하면 호출 후 별도 세팅한다.
+     * 파트에서 파생한다. targetRecipeId 등 턴 고유 필드가 필요하면 호출 후 별도 세팅한다.
      */
     private Message saveTurn(Long conversationId, MessageRole role, MessageStatus status,
                              List<PartDraft> parts) {
@@ -1271,7 +1271,7 @@ public class ConversationService {
                 message.getConversationId(),
                 StatusView.of(message.getRole()),
                 StatusView.of(message.getStatus()),
-                message.getReferenceId(),
+                message.getTargetRecipeId(),
                 message.getCreatedAt(),
                 parts);
     }
@@ -1296,7 +1296,7 @@ public class ConversationService {
                         m.getConversationId(),
                         StatusView.of(m.getRole()),
                         StatusView.of(m.getStatus()),
-                        m.getReferenceId(),
+                        m.getTargetRecipeId(),
                         m.getCreatedAt(),
                         partsByMessage.getOrDefault(m.getId(), List.of())))
                 .toList();

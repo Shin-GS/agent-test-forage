@@ -2,7 +2,7 @@
 
 import type { ConversationRuntimeStatus } from "../../store/types";
 
-/** 레시피 [▶] 실행 콜백. App 의 handleSend(referenceId=recipeId) 로 연결된다. */
+/** 레시피 [▶] 실행 콜백. App 의 handleSend(targetRecipeId=recipeId) 로 연결된다. */
 export type RunRecipeFn = (recipeId: number, recipeName: string) => void;
 
 export interface PanelContext {
