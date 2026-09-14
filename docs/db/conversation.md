@@ -83,7 +83,6 @@ ref: docs/specs/chat/overview.md, docs/specs/common/messaging.md
 | `ROLE` | VARCHAR(20) | USER / ASSISTANT / SYSTEM |
 | `STATUS` | VARCHAR(20) | STREAMING / COMPLETE / FAILED (턴 전체 상태) |
 | `CONTENT_PREVIEW` | VARCHAR(500) NULL | 목록 미리보기·검색용 요약(파트에서 파생한 **캐시**, 진실 아님) |
-| `CLIENT_MESSAGE_ID` | VARCHAR(50) NULL | 낙관적 UI 매칭용(사용자 메시지) |
 | `REFERENCE_ID` | VARCHAR(50) NULL | 사용자 발화의 참조 태그(레시피 ID 등) |
 | `CREATED_AT` | DATETIME | 생성 시각 |
 

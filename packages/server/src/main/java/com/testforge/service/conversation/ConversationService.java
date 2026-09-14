@@ -1272,7 +1272,6 @@ public class ConversationService {
                 StatusView.of(message.getRole()),
                 StatusView.of(message.getStatus()),
                 message.getReferenceId(),
-                message.getClientMessageId(),
                 message.getCreatedAt(),
                 parts);
     }
@@ -1298,7 +1297,6 @@ public class ConversationService {
                         StatusView.of(m.getRole()),
                         StatusView.of(m.getStatus()),
                         m.getReferenceId(),
-                        m.getClientMessageId(),
                         m.getCreatedAt(),
                         partsByMessage.getOrDefault(m.getId(), List.of())))
                 .toList();

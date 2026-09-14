@@ -57,10 +57,6 @@ public class Message {
     @Column(name = "CONTENT_PREVIEW", length = 500)
     private String contentPreview;
 
-    /** 낙관적 UI 매칭용(사용자 메시지). 없으면 NULL */
-    @Column(name = "CLIENT_MESSAGE_ID", length = 50)
-    private String clientMessageId;
-
     /** 사용자 발화의 참조 태그(레시피 ID 등). 없으면 NULL */
     @Column(name = "REFERENCE_ID", length = 50)
     private String referenceId;
@@ -109,14 +105,6 @@ public class Message {
 
     public void setContentPreview(String contentPreview) {
         this.contentPreview = contentPreview;
-    }
-
-    public String getClientMessageId() {
-        return clientMessageId;
-    }
-
-    public void setClientMessageId(String clientMessageId) {
-        this.clientMessageId = clientMessageId;
     }
 
     public String getReferenceId() {

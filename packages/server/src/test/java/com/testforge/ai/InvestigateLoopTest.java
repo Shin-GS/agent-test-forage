@@ -81,7 +81,7 @@ class InvestigateLoopTest {
     /** finalize의 non-null 분기(정상 종결)를 태우기 위한 최소 MessageResponse (필드 값은 미검증) */
     private static com.testforge.dto.conversation.MessageResponse completedView() {
         return new com.testforge.dto.conversation.MessageResponse(
-                1L, CONVERSATION_ID, null, null, null, null, null, List.of());
+                1L, CONVERSATION_ID, null, null, null, null, List.of());
     }
 
     private InvestigateLoop loop(Connector... connectors) {

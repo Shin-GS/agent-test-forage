@@ -21,8 +21,6 @@ public record MessageResponse(
         StatusView status,
         // 참조 태그 (없으면 null)
         String referenceId,
-        // 낙관적 UI 매칭용 클라이언트 메시지 ID (없으면 null)
-        String clientMessageId,
         // 생성 시각
         LocalDateTime createdAt,
         // 순서 있는 파트 배열 (id 오름차순)

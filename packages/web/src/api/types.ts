@@ -76,7 +76,7 @@ export interface PartResponse {
  * - role.code: USER / ASSISTANT / SYSTEM
  * - status.code: STREAMING / COMPLETE / FAILED (턴 전체 상태)
  * - 정렬/커서는 turn id 단독(seq 폐지).
- * - clientMessageId: 낙관적 UI 매칭 힌트(있으면 사용, 없으면 id 없는 임시 턴 전부 제거로 대체).
+ * - 낙관적 UI 는 id 없는(음수) 임시 턴을 확정 턴 도착 시 전부 제거로 대체한다(매칭 키 없음).
  */
 export interface MessageResponse {
   id: number;
@@ -84,7 +84,6 @@ export interface MessageResponse {
   role: StatusView;
   status: StatusView;
   referenceId: string | null;
-  clientMessageId: string | null;
   createdAt: string;
   parts: PartResponse[];
 }

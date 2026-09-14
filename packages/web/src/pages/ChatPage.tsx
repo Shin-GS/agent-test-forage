@@ -43,7 +43,6 @@ function optimisticUserMessage(conversationId: number, content: string): Message
     role: { code: "USER", description: "사용자" },
     status: { code: "COMPLETE", description: "완료" },
     referenceId: null,
-    clientMessageId: null,
     createdAt: new Date().toISOString(),
     parts: [
       {
