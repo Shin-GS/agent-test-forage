@@ -3,34 +3,25 @@
 import { request } from "./client";
 import type { ExecutionResponse } from "./types";
 
+/**
+ * 실행 시작 요청 (단일/플랜 공통). recipeIds 길이로 SINGLE/PLAN 이 결정된다(1개면 SINGLE).
+ * execution_mode 카드([바로 실행])는 recipeIds=[recipeId] 하나로, plan 카드([자동 실행])는 여러 개로 보낸다.
+ */
 export interface StartExecutionPayload {
-  recipeId: number;
-  /** 실행 모드 코드 (예: AUTO / MANUAL) */
-  mode: string;
-  /** 실행 시작 시 시드할 초기값 (AI 추출값 등). BE 가 recipe 변수 기본값과 병합해 context.userInput 에 넣는다 */
-  initialContext?: Record<string, unknown>;
-  /**
-   * 촉발 파트 id (execution_mode 카드 파트). BE 가 이 파트를 CONSUMED 로 전이시킨다.
-   * messaging.md: 카드 실행은 기존 요청의 messageId 필드에 촉발 파트 id 를 넣는다(별도 partId 필드 아님).
-   */
-  messageId?: number;
-}
-
-export interface StartPlanPayload {
-  /** 실행할 레시피 ID 순서 (= 실행 순서). recipeIds 1개면 BE 가 단일(SINGLE)로 수렴한다 */
+  /** 실행할 레시피 ID 순서 (= 실행 순서). 1개면 BE 가 단일(SINGLE)로 수렴한다 */
   recipeIds: number[];
+  /** 실행 모드 코드 (예: AUTO / MANUAL). 미지정 시 BE 기본값(AUTO) */
+  mode?: string;
+  /** 첫 레시피에 시드할 초기값 (AI 추출값 등). BE 가 recipe 변수 기본값과 병합해 context.userInput 에 넣는다 */
+  initialContext?: Record<string, unknown>;
   /**
    * 레시피별 값 사전 편집 맵 (플랜 카드에서 편집한 값). recipeIds 와 인덱스 1:1.
-   * recipeInputs[i] 는 recipeIds[i] 의 편집값 맵이며, 미편집이면 {}. 배열 길이는 recipeIds 와 일치.
+   * recipeInputs[i] 는 recipeIds[i] 의 편집값 맵이며, 미편집이면 {}. 배열 길이는 recipeIds 와 일치. 단일 실행은 생략.
    */
   recipeInputs?: Array<Record<string, unknown>>;
-  /** 실행 모드 코드 (플랜은 항상 AUTO). 미지정 시 BE 기본값 */
-  mode?: string;
-  /** 첫 레시피에 시드할 초기값 (AI 추출값 등). 없으면 생략 */
-  initialContext?: Record<string, unknown>;
   /**
-   * 촉발 파트 id (plan 카드 파트). BE 가 이 파트를 CONSUMED 로 전이시킨다.
-   * messaging.md: 카드 실행은 기존 요청의 messageId 필드에 촉발 파트 id 를 넣는다.
+   * 촉발 파트 id (execution_mode / plan 카드 파트). BE 가 이 파트를 CONSUMED 로 전이시킨다.
+   * messaging.md: 카드 실행은 기존 요청의 messageId 필드에 촉발 파트 id 를 넣는다(별도 partId 필드 아님).
    */
   messageId?: number;
 }
@@ -47,28 +38,16 @@ export interface ReportStepPayload {
   extractedValues?: Record<string, any>;
 }
 
-/** 대화방에서 실행 시작 (단일 레시피) */
+/**
+ * 대화방에서 실행 시작 (단일/플랜 공통). recipeIds 길이로 SINGLE/PLAN 이 결정된다.
+ * BE 가 첫 레시피만 RUNNING 으로 시작하고 각 레시피 완료 시 자동으로 다음으로 전이한다
+ * (FE 는 reportStep 만 보고, complete 호출 없음). recipeIds 1개면 단일 실행(TYPE 표시만 SINGLE).
+ */
 export function startExecution(
   conversationId: number,
   payload: StartExecutionPayload
 ): Promise<ExecutionResponse> {
   return request<ExecutionResponse>(`/conversations/${conversationId}/executions`, {
-    method: "POST",
-    body: payload,
-  });
-}
-
-/**
- * 플랜 실행 시작 (레시피 여러 개 순차 실행). plan 카드의 [자동 실행]이 트리거한다.
- * recipeIds 순서가 실행 순서이며, BE 가 첫 레시피만 RUNNING 으로 시작하고 각 레시피 완료 시
- * 자동으로 다음 레시피로 전이한다(FE 는 reportStep 만 보고, complete 호출 없음).
- * recipeIds 가 1개면 단일 실행과 동일하게 수렴한다(TYPE 표시만 SINGLE).
- */
-export function startPlan(
-  conversationId: number,
-  payload: StartPlanPayload
-): Promise<ExecutionResponse> {
-  return request<ExecutionResponse>(`/conversations/${conversationId}/plan-executions`, {
     method: "POST",
     body: payload,
   });
@@ -113,7 +92,6 @@ export function resume(executionId: number): Promise<ExecutionResponse> {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export interface ActionPickerRespondPayload {
-  executionId: number;
   /** pre-run 일괄 수집이면 -1 (execution.md 규약) */
   stepIndex: number;
   values: Record<string, any>;
@@ -125,11 +103,15 @@ export interface ActionPickerRespondPayload {
 }
 
 /**
- * 액션 피커 입력 제출. 서버가 values 를 context.userInput 에 병합하고
- * input_waiting → executing 전이 후 실행을 재개(응답의 executing execution 으로 러너 구동).
+ * 액션 피커 입력 제출. 대상 실행 ID는 path variable 로 전달한다(식별자는 경로에).
+ * 서버가 values 를 context.userInput 에 병합하고 input_waiting → executing 전이 후 실행을 재개
+ * (응답의 executing execution 으로 러너 구동).
  */
-export function respondActionPicker(payload: ActionPickerRespondPayload): Promise<ExecutionResponse> {
-  return request<ExecutionResponse>("/action-picker/respond", {
+export function respondActionPicker(
+  executionId: number,
+  payload: ActionPickerRespondPayload
+): Promise<ExecutionResponse> {
+  return request<ExecutionResponse>(`/executions/${executionId}/action-picker-response`, {
     method: "POST",
     body: payload,
   });

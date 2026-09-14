@@ -383,7 +383,6 @@ class RecipeIntegrationTest {
     /** 생성 요청 바디 문자열 (ownerUserId/apiSpecId 고정) */
     private String createBody(String name, Visibility visibility, String stepsJsonArray) {
         return "{"
-                + "\"ownerUserId\":1,"
                 + "\"apiSpecId\":" + specId + ","
                 + "\"name\":\"" + name + "\","
                 + "\"visibility\":\"" + visibility.name() + "\","

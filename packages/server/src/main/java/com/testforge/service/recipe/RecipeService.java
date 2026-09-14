@@ -72,15 +72,15 @@ public class RecipeService {
      * 공개범위=COMMON 생성은 ADMIN만 허용(canSetCommon), 위반 시 403.
      */
     @Transactional
-    public RecipeDetailResponse create(RecipeCreateRequest request) {
-        validateRequiredMeta(request.ownerUserId(), request.apiSpecId(), request.name());
+    public RecipeDetailResponse create(Long ownerUserId, RecipeCreateRequest request) {
+        validateRequiredMeta(ownerUserId, request.apiSpecId(), request.name());
 
         Visibility visibility = request.visibility() == null ? Visibility.PRIVATE : request.visibility();
         if (visibility == Visibility.COMMON && !accessPolicy.canSetCommon(CurrentUser.role())) {
             throw ApiException.forbidden("Only ADMIN can create a COMMON recipe");
         }
 
-        Recipe recipe = new Recipe(request.ownerUserId(), request.apiSpecId(), request.name());
+        Recipe recipe = new Recipe(ownerUserId, request.apiSpecId(), request.name());
         recipe.setDescription(request.description());
         recipe.setVisibility(visibility);
         recipe.setTags(RecipeJsonUtil.toJsonString(request.tags()));

@@ -3,7 +3,7 @@
 // - 변수 스키마(pendingInputs)로 필드 렌더: text/number/textarea/select/radio/checkbox/date
 // - 기본값 프리필, required 표시
 // - [취소] → POST /conversations/{id}/cancel (FE 단독으로 닫지 않음 — 서버 상태 해제)
-// - [확인] → POST /action-picker/respond → 반환된 executing 실행으로 러너 구동
+// - [확인] → POST /executions/{id}/action-picker-response → 반환된 executing 실행으로 러너 구동
 //
 // 채팅 input 영역에 겹쳐 노출(액션 피커가 뜨면 입력창 잠금 — App/ChatInput 이 conversationStatus 로 처리).
 
@@ -72,13 +72,15 @@ export function ActionPicker() {
         payloadValues[v.key] = v.type === "number" && raw !== "" ? Number(raw) : raw;
       }
 
-      const execution: ExecutionResponse = await executionsApi.respondActionPicker({
-        executionId: actionPicker.executionId,
-        stepIndex: actionPicker.stepIndex,
-        values: payloadValues,
-        // 대상 ACTION_PICKER 파트를 CONSUMED 처리하도록 파트 id 전달(messaging.md).
-        partId: actionPicker.partId ?? undefined,
-      });
+      const execution: ExecutionResponse = await executionsApi.respondActionPicker(
+        actionPicker.executionId,
+        {
+          stepIndex: actionPicker.stepIndex,
+          values: payloadValues,
+          // 대상 ACTION_PICKER 파트를 CONSUMED 처리하도록 파트 id 전달(messaging.md).
+          partId: actionPicker.partId ?? undefined,
+        }
+      );
 
       // 서버가 executing 으로 전이한 실행을 러너로 구동. 액션 피커는 닫는다(언마운트).
       const mode = actionPicker.mode;

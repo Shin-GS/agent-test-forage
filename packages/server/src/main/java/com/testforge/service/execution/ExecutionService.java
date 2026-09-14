@@ -12,7 +12,6 @@ import com.testforge.dto.execution.ExecutionRecipeView;
 import com.testforge.dto.execution.ExecutionResponse;
 import com.testforge.dto.execution.ExecutionStartRequest;
 import com.testforge.dto.execution.ExecutionStepView;
-import com.testforge.dto.execution.PlanStartRequest;
 import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.conversation.enums.ConversationStatus;
@@ -141,35 +140,11 @@ public class ExecutionService {
      */
     @Transactional
     public ExecutionResponse start(Long conversationId, Long requesterId, ExecutionStartRequest request) {
-        if (request.userId() == null) {
-            throw ApiException.invalidRequest("userId is required");
-        }
-        if (request.recipeId() == null) {
-            throw ApiException.invalidRequest("recipeId is required");
-        }
-        // 단일 실행 = 레시피 1개짜리 플랜. 공통 오케스트레이션(startInternal)으로 수렴한다.
-        // 단일 실행은 사전 편집값이 없다(recipeInputs=null) — 발화값(initialContext)만 첫 레시피에 시드된다.
-        // messageId()는 실행을 촉발한 execution_mode 카드 파트 ID(있으면 CONSUMED 처리).
-        return startInternal(conversationId, requesterId, List.of(request.recipeId()),
-                request.mode(), request.initialContext(), null, request.messageId());
-    }
-
-    /**
-     * 플랜 실행 시작 (레시피 여러 개 순차 실행). {@code recipeIds} 순서가 곧 실행 순서다.
-     * 단일 실행과 동일한 공통 오케스트레이션({@link #startInternal})으로 수렴하며, recipeIds가 1개면
-     * 단일 실행과 동작이 같다(TYPE 표시만 SINGLE). 각 레시피는 canView로 접근 권한을 검증한다.
-     *
-     * <p>이미 처리 중인 대화방이면 409, 레시피/대화방이 없으면 404. recipeIds가 비면 400.
-     */
-    @Transactional
-    public ExecutionResponse startPlan(Long conversationId, Long requesterId, PlanStartRequest request) {
-        if (request.userId() == null) {
-            throw ApiException.invalidRequest("userId is required");
-        }
         if (request.recipeIds() == null || request.recipeIds().isEmpty()) {
             throw ApiException.invalidRequest("recipeIds is required (at least one)");
         }
-        // messageId()는 실행을 촉발한 plan 카드 파트 ID(있으면 CONSUMED 처리).
+        // 단일 = N=1 플랜. recipeIds 길이로 SINGLE/PLAN이 결정되며, 공통 오케스트레이션(startInternal)으로 수렴한다.
+        // messageId()는 실행을 촉발한 카드 파트 ID(있으면 CONSUMED 처리).
         return startInternal(conversationId, requesterId, request.recipeIds(),
                 request.mode(), request.initialContext(), request.recipeInputs(), request.messageId());
     }
@@ -912,14 +887,14 @@ public class ExecutionService {
      * <p>{@code stepIndex}는 pre-run 수집이면 {@code -1}로 온다. 프로토타입은 값 병합에 사용하지 않는다.
      */
     @Transactional
-    public ExecutionResponse respondActionPicker(Long requesterId, ActionPickerRespondRequest request) {
-        if (request.executionId() == null) {
+    public ExecutionResponse respondActionPicker(Long requesterId, Long executionId, ActionPickerRespondRequest request) {
+        if (executionId == null) {
             throw ApiException.invalidRequest("executionId is required");
         }
 
-        Execution execution = executionRepository.findById(request.executionId())
-                .orElseThrow(() -> ApiException.executionNotFound(request.executionId()));
-        requireOwner(execution, request.executionId(), requesterId);
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> ApiException.executionNotFound(executionId));
+        requireOwner(execution, executionId, requesterId);
 
         Long conversationId = execution.getConversationId();
         if (conversationId == null) {
@@ -962,7 +937,6 @@ public class ExecutionService {
         conversationRepository.save(conversation);
 
         Long ownerId = conversation.getUserId();
-        Long executionId = execution.getId();
 
         // 실행 진행 블록(PROGRESS) 파트 생성 (액션 피커 값 입력 후 실제 실행 시작). 촉발 카드 파트가
         // 있으면 그 턴에 귀속(값 확인 후 실행도 카드 턴 — card-ui.md), 없으면 새 턴 폴백.

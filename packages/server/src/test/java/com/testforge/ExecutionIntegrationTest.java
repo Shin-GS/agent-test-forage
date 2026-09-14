@@ -131,7 +131,7 @@ class ExecutionIntegrationTest {
 
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + ",\"mode\":\"AUTO\"}"))
+                        .content("{\"recipeIds\":[" + recipeId + "],\"mode\":\"AUTO\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status.code").value("RUNNING"))
                 .andExpect(jsonPath("$.type.code").value("SINGLE"))
@@ -167,7 +167,7 @@ class ExecutionIntegrationTest {
 
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
@@ -195,7 +195,7 @@ class ExecutionIntegrationTest {
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
         List<Long> stepIds = stepIdsOf(executionId);
@@ -226,7 +226,7 @@ class ExecutionIntegrationTest {
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
         List<Long> stepIds = stepIdsOf(executionId);
@@ -258,7 +258,7 @@ class ExecutionIntegrationTest {
 
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_BUSY"));
     }
@@ -270,7 +270,7 @@ class ExecutionIntegrationTest {
 
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":999999}"))
+                        .content("{\"recipeIds\":[999999]}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("RECIPE_NOT_FOUND"));
 
@@ -286,7 +286,7 @@ class ExecutionIntegrationTest {
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
@@ -309,7 +309,7 @@ class ExecutionIntegrationTest {
         Long conversationId = newConversation(specId, ConversationStatus.IDLE);
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
@@ -354,7 +354,7 @@ class ExecutionIntegrationTest {
     private long startAndFirstStepId(Long conversationId, Long recipeId) throws Exception {
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
         Long recipeRowId = executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(executionId)
@@ -605,8 +605,8 @@ class ExecutionIntegrationTest {
         // 카드 [바로 실행] = 실행 시작 요청에 messageId(=카드 파트 id) 전달
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId
-                                + ",\"mode\":\"AUTO\",\"messageId\":" + cardPartId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId
+                                + "],\"mode\":\"AUTO\",\"messageId\":" + cardPartId + "}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
 
@@ -638,7 +638,7 @@ class ExecutionIntegrationTest {
         // 카드 없이 실행 (messageId 미전달) — 패널 직접 실행 등
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeId\":" + recipeId + ",\"mode\":\"AUTO\"}"))
+                        .content("{\"recipeIds\":[" + recipeId + "],\"mode\":\"AUTO\"}"))
                 .andExpect(status().isCreated());
         Long executionId = executionRepository.findAll().get(0).getId();
         reportAllStepsSuccess(executionId);

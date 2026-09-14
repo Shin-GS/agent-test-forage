@@ -88,7 +88,8 @@ export function useRecipeRun(consumed: boolean): UseRecipeRun {
     setError(null);
     try {
       const execution = await executionsApi.startExecution(convId, {
-        recipeId,
+        // 단일 실행 = recipeIds 1개 (BE 가 SINGLE 로 수렴).
+        recipeIds: [recipeId],
         mode,
         // AI 가 발화에서 추출한 값을 실행 시작 시 시드(BE 가 recipe 변수 기본값과 병합).
         initialContext: extractedValues,

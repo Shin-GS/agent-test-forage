@@ -8,7 +8,8 @@ import java.util.Map;
  * {@code userInput.*}에 병합한 뒤 대화방을 {@code WAITING_INPUT → EXECUTING}으로 전환하고
  * 실행을 재개한다.
  *
- * @param executionId 대상 실행 ID
+ * <p>대상 실행 ID는 path variable로 전달하므로 요청 바디에 없다.
+ *
  * @param stepIndex   값을 수집한 사용자 입력 스텝 인덱스. 프로토타입 pre-run 일괄 수집이면 {@code -1}
  *                    (pre-run 마커). 값 병합에는 사용하지 않지만 스키마상 수신한다.
  * @param values      수집한 입력값 맵 (변수 key → 값). userInput 하위에 병합된다.
@@ -16,7 +17,6 @@ import java.util.Map;
  *                    (messaging.md 버튼/피커 응답 partId). null이면 파트 소비 처리를 건너뛴다.
  */
 public record ActionPickerRespondRequest(
-        Long executionId,
         Integer stepIndex,
         Map<String, Object> values,
         Long partId) {

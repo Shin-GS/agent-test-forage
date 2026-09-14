@@ -107,8 +107,8 @@ public class ConversationService {
      * 빈 대화방을 만들지 않아 orphan 대화방을 원천 차단한다.
      */
     @Transactional
-    public ConversationStartResponse start(ConversationStartRequest request) {
-        if (request.userId() == null) {
+    public ConversationStartResponse start(Long requesterId, ConversationStartRequest request) {
+        if (requesterId == null) {
             throw ApiException.invalidRequest("userId is required");
         }
         if (request.content() == null || request.content().isBlank()) {
@@ -116,7 +116,7 @@ public class ConversationService {
         }
 
         // 1) 대화방 생성 + 제목 결정 (지정 title 우선, 없으면 content로 임시 파생)
-        Conversation conversation = new Conversation(request.userId());
+        Conversation conversation = new Conversation(requesterId);
         conversation.setTitle(ConversationTitleUtil.resolveTitle(request.title(), request.content()));
         conversation.setApiSpecId(request.apiSpecId());
         Conversation savedConversation = conversationRepository.save(conversation);

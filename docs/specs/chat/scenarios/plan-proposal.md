@@ -125,7 +125,7 @@ BE: recipeIds로 레시피 상세 조회 (이름, 설명, 기본값)
 | 실행/취소 후 | 카드 편집 잠금 |
 
 - 사용자의 스킵/순서변경/값 편집은 **카드 로컬 상태**로만 관리하고 **서버에 저장하지 않는다.** 카드 payload(원본 `recipeIds`/`recipes`/`variables`)는 그대로 두므로 **새로고침 시 원래 제안이 복원**된다.
-- [자동 실행] 시 FE가 **체크된 항목만, 화면 순서대로** `recipeIds`를 구성하고, 같은 순서로 `recipeInputs`(사전 편집값)를 정렬해 `startPlan`(POST `/conversations/{id}/plan-executions {recipeIds, recipeInputs}`)에 전달한다. 스킵·순서변경은 BE 변경 없음, 값 사전 편집은 `recipeInputs` 확장 — 상세: [plan.md 제안 카드 편집](../../recipe/plan.md#제안-카드-편집-2단계--스킵--순서변경--값-사전-편집).
+- [자동 실행] 시 FE가 **체크된 항목만, 화면 순서대로** `recipeIds`를 구성하고, 같은 순서로 `recipeInputs`(사전 편집값)를 정렬해 `startPlan`(POST `/conversations/{id}/executions {recipeIds, recipeInputs}`)에 전달한다. 스킵·순서변경은 BE 변경 없음, 값 사전 편집은 `recipeInputs` 확장 — 상세: [plan.md 제안 카드 편집](../../recipe/plan.md#제안-카드-편집-2단계--스킵--순서변경--값-사전-편집).
 
 ### 값 사전 편집 아코디언 (결정 3 · 4)
 

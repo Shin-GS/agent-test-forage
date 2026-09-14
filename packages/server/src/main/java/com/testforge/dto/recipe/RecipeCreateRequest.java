@@ -7,8 +7,6 @@ import com.testforge.entity.recipe.enums.Visibility;
  * 스텝/변수/결과정의/태그는 구조가 제각각이라 범용 객체(Map/List)로 받아 서버에서 문자열로 직렬화해 저장한다.
  */
 public record RecipeCreateRequest(
-        // 작성자 ID (auth 도입 전까지 요청 바디로 전달)
-        Long ownerUserId,
         // 대상 서비스(스펙) ID
         Long apiSpecId,
         // 레시피명 (AI 매칭용)

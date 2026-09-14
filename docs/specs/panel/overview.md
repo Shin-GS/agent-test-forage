@@ -180,4 +180,4 @@ last-updated: 2026-09-18
 |---|------|------|----------|
 | 1 | service_select / candidates 카드 클릭 무동작(버튼 비활성) | ✅ 해결 | `ListCards.tsx`가 클릭 시 실행/서비스 설정 동작. service_select는 `updateService` 호출 + 카드 CONSUMED, candidates는 후보 레시피 실행 |
 | 2 | 패널 상단 서비스 드롭다운 클릭해도 안 열림 | ✅ 해결 | `PanelServiceBlock` 드롭다운 정상 열림·선택·`PATCH /service` 반영 (새 대화/기존 대화 모두 확인) |
-| 3 | 패널 홈 레시피 "▶" 실행이 활성 대화방에 안 붙음 | ✅ 해결 | ▶ → 확인 모달 → `onRunRecipe` → 발화("{name} 실행하기") + targetRecipeId(=recipeId)를 채팅 메시지로 전송(기존 대화면 `POST /conversations/{id}/messages`, 새 대화면 `POST /conversations/messages`로 방 생성 겸함). FE는 `/executions`를 직접 호출하지 않고 채팅 메시지로 BE 실행을 트리거하는 구조 |
+| 3 | 패널 홈 레시피 "▶" 실행이 활성 대화방에 안 붙음 | ✅ 해결 | ▶ → 확인 모달 → `onRunRecipe` → 발화("{name} 실행하기") + targetRecipeId(=recipeId)를 채팅 메시지로 전송(기존 대화면 `POST /conversations/{id}/messages`, 새 대화면 `POST /conversations`로 방 생성 겸함). FE는 `/executions`를 직접 호출하지 않고 채팅 메시지로 BE 실행을 트리거하는 구조 |

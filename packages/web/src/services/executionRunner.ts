@@ -1,6 +1,6 @@
 // 레시피 실행 엔진 (프로토타입 최소 구현 — 플랜 멀티레시피 지원).
 //
-// startExecution/startPlan 응답(ExecutionResponse)을 받아 브라우저에서 스텝을 순차 실행한다.
+// startExecution 응답(ExecutionResponse)을 받아 브라우저에서 스텝을 순차 실행한다.
 // - recipeSnapshot 의 스텝 정의(steps 배열)와 서버 스텝 레코드(recipe.steps[]: id=stepId)를
 //   순서(stepIndex / 배열 순서)로 매칭한다.
 // - 각 스텝을 실행하고 executionsApi.reportStep 으로 결과를 보고한다.

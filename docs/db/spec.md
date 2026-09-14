@@ -170,7 +170,7 @@ ref: docs/specs/spec/registration.md
 
 ### 등록 (전체 스펙)
 
-`POST /api/v1/specs/register`
+`POST /api/v1/specs`
 
 ```json
 {
@@ -207,9 +207,9 @@ ref: docs/specs/spec/registration.md
 - **호환 흡수 주체 = 서버.** 서버가 schemaVersion별 파서를 두어 여러 버전 요청을 내부 표준 모델로 정규화
 - 라이브러리는 자기 `schemaVersion`을 정직하게 명시해서 전송
 - OpenAPI 스펙 버전(3.0/3.1)은 `specJson` 내부 `openapi` 필드에 이미 존재 → 서버가 그걸로 파싱
-- 계약이 하위호환 불가하게 깨지면 API 경로도 승격 (`/api/v2/specs/register`)
+- 계약이 하위호환 불가하게 깨지면 API 경로도 승격 (`/api/v2/specs`)
 
-> 초기 버전은 heartbeat 엔드포인트를 두지 않는다. 등록은 기동당 1회(`/register`)뿐이며,
+> 초기 버전은 heartbeat 엔드포인트를 두지 않는다. 등록은 기동당 1회(`POST /specs`)뿐이며,
 > 재기동 시 다시 1회 등록되어 최신 스펙으로 upsert된다.
 
 ### 인증 (등록 보안)

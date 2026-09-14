@@ -82,9 +82,8 @@ last-updated: 2026-09-03
 액션 피커 입력 완료 → 일반 메시지 API가 아닌 별도 API로 구조화된 값 전송:
 
 ```
-POST /api/v1/action-picker/respond
+POST /api/v1/executions/{executionId}/action-picker-response
 {
-  "executionId": 456,
   "stepIndex": 3,
   "values": {
     "jobPostingId": "123",
@@ -92,6 +91,8 @@ POST /api/v1/action-picker/respond
   }
 }
 ```
+
+- 대상 실행 ID는 **path variable**(`{executionId}`)로 전달한다(식별자는 body가 아닌 경로에).
 
 - `stepIndex`: 값을 수집한 사용자 입력 스텝의 인덱스.
   - **프로토타입 pre-run 수집**(실행 시작 직전, 레시피 메타의 `사용자 입력 변수`를 일괄 수집 — USER_INPUT 스텝 없음)인 경우 `stepIndex: -1`(pre-run 마커)로 보낸다.

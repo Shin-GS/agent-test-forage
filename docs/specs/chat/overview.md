@@ -190,7 +190,7 @@ last-updated: 2026-09-08
 
 - `conversationId`가 아직 없는 **새 대화 상태**(서버 미생성)에서 서비스 블록 드롭다운으로 고른 값은 **FE 로컬 상태(pending)** 에 임시 보관한다.
 - 서비스 블록 표시값: **`conversationId`가 있으면 대화방의 `apiSpecId`, 없으면 pending 값**을 표시한다.
-- **첫 메시지 전송 시** 이 pending `apiSpecId`(없으면 null=미지정)를 `POST /api/v1/conversations/messages`의 `apiSpecId`로 전달해 대화방 생성에 반영한다.
+- **첫 메시지 전송 시** 이 pending `apiSpecId`(없으면 null=미지정)를 `POST /api/v1/conversations`의 `apiSpecId`로 전달해 대화방 생성에 반영한다.
 - **orphan 차단 원칙 유지**: 대화방은 여전히 첫 메시지 전송 시점에만 생성되며, pending 값은 그 전까지 FE에만 존재한다(서버에 빈 대화방을 만들지 않음).
 
 ### 서비스 변경 안전 규칙

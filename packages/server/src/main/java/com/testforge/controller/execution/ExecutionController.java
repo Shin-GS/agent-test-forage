@@ -6,7 +6,6 @@ import com.testforge.dto.execution.ExecutionResponse;
 import com.testforge.dto.execution.ExecutionStartRequest;
 import com.testforge.dto.execution.ExecutionStepView;
 import com.testforge.dto.execution.ExecutionSummaryView;
-import com.testforge.dto.execution.PlanStartRequest;
 import com.testforge.dto.execution.StepReportRequest;
 import com.testforge.entity.execution.enums.ExecutionStatus;
 import com.testforge.security.CurrentUser;
@@ -29,7 +28,7 @@ import java.util.List;
  * 레시피 실행 시작/종료/조회 API. 실제 스텝 실행은 FE 브라우저가 수행하고, 이 API는 실행의
  * 서버측 기록(스냅샷/상태/히스토리)과 대화방 상태(executing↔idle) 전이를 담당한다.
  *
- * <p>히스토리 목록은 커서 기반 무한 스크롤로 제공한다(부하 방지). 이어서 실행/플랜 실행은 다음 조각.
+ * <p>히스토리 목록은 커서 기반 무한 스크롤로 제공한다(부하 방지). 실행 시작은 단일/플랜 공통 엔드포인트다(recipeIds 길이로 구분).
  *
  * <p>인증: 모든 엔드포인트는 세션 인증 필수(SecurityConfig). userId는 세션에서 도출한다(auth.md).
  */
@@ -44,39 +43,16 @@ public class ExecutionController {
     }
 
     /**
-     * 실행 시작 (단일 레시피). 대화방을 executing으로 전이하고 스냅샷/레코드를 생성한다.
-     * 이미 처리 중이면 409 CONVERSATION_BUSY, 레시피/대화방 없으면 404.
+     * 실행 시작 (단일/플랜 공통). {@code recipeIds} 길이로 SINGLE/PLAN이 결정된다(1개면 SINGLE).
+     * 대화방을 executing으로 전이하고 스냅샷/레코드를 생성한다.
+     * 이미 처리 중이면 409 CONVERSATION_BUSY, 레시피/대화방 없으면 404, recipeIds가 비면 400.
      */
     @PostMapping("/conversations/{conversationId}/executions")
     public ResponseEntity<ExecutionResponse> start(@PathVariable Long conversationId,
                                                    @RequestBody ExecutionStartRequest request) {
-        // userId는 세션에서 도출 (클라이언트 값 무시)
+        // 단일/플랜 공통. recipeIds 길이로 SINGLE/PLAN 구분. userId는 세션에서 도출(클라이언트 값 미수신).
         Long requesterId = CurrentUser.id();
-        ExecutionStartRequest secured = new ExecutionStartRequest(
-                requesterId, request.recipeId(), request.mode(),
-                request.messageId(), request.initialContext());
-        ExecutionResponse response = executionService.start(conversationId, requesterId, secured);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    /**
-     * 플랜 실행 시작 (레시피 여러 개 순차 실행). plan 카드의 [실행]이 트리거한다. recipeIds 순서가
-     * 실행 순서이며, 첫 레시피만 RUNNING으로 시작하고 각 레시피 완료 시 자동으로 다음 레시피로 전이한다.
-     * recipeIds가 1개면 단일 실행과 동일하게 수렴한다(TYPE 표시만 SINGLE).
-     * 이미 처리 중이면 409, 레시피/대화방 없으면 404, recipeIds가 비면 400.
-     *
-     * <p>실행 완료 보고(complete)용 외부 엔드포인트는 없다. 마지막 레시피의 마지막 스텝을
-     * reportStep(SUCCESS/SKIPPED)으로 보고하면 서버가 자동으로 실행을 완료한다(완료 진입점 단일화).
-     */
-    @PostMapping("/conversations/{conversationId}/plan-executions")
-    public ResponseEntity<ExecutionResponse> startPlan(@PathVariable Long conversationId,
-                                                       @RequestBody PlanStartRequest request) {
-        // userId는 세션에서 도출 (클라이언트 값 무시)
-        Long requesterId = CurrentUser.id();
-        PlanStartRequest secured = new PlanStartRequest(
-                requesterId, request.recipeIds(), request.mode(),
-                request.messageId(), request.initialContext(), request.recipeInputs());
-        ExecutionResponse response = executionService.startPlan(conversationId, requesterId, secured);
+        ExecutionResponse response = executionService.start(conversationId, requesterId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -141,9 +117,10 @@ public class ExecutionController {
      * userInput에 병합한 뒤 대화방을 WAITING_INPUT → EXECUTING으로 전환하고 실행을 재개한다.
      * 실행 없으면 404, 입력 대기 상태가 아니거나 필수값이 여전히 비면 400(WAITING_INPUT 유지).
      */
-    @PostMapping("/action-picker/respond")
-    public ExecutionResponse respondActionPicker(@RequestBody ActionPickerRespondRequest request) {
-        return executionService.respondActionPicker(CurrentUser.id(), request);
+    @PostMapping("/executions/{executionId}/action-picker-response")
+    public ExecutionResponse respondActionPicker(@PathVariable Long executionId,
+                                                 @RequestBody ActionPickerRespondRequest request) {
+        return executionService.respondActionPicker(CurrentUser.id(), executionId, request);
     }
 
     /**

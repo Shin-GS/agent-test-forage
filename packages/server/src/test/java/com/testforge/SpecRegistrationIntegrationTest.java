@@ -67,7 +67,7 @@ class SpecRegistrationIntegrationTest {
         String body = objectMapper.writeValueAsString(
                 registerBody(specJson(List.of("GET /api/v1/users", "POST /api/v1/users"))));
 
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -88,7 +88,7 @@ class SpecRegistrationIntegrationTest {
     void register_reRegister_keepsEndpointPk() throws Exception {
         String first = objectMapper.writeValueAsString(
                 registerBody(specJson(List.of("GET /api/v1/users"))));
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(first))
@@ -100,7 +100,7 @@ class SpecRegistrationIntegrationTest {
         // Re-register with the same endpoint → PK must be preserved.
         String second = objectMapper.writeValueAsString(
                 registerBody(specJson(List.of("GET /api/v1/users"))));
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(second))
@@ -116,7 +116,7 @@ class SpecRegistrationIntegrationTest {
     void register_endpointRemoved_marksDeprecated() throws Exception {
         String first = objectMapper.writeValueAsString(
                 registerBody(specJson(List.of("GET /api/v1/users", "POST /api/v1/users"))));
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(first))
@@ -125,7 +125,7 @@ class SpecRegistrationIntegrationTest {
         // Re-register without POST → POST endpoint should become DEPRECATED, not deleted.
         String second = objectMapper.writeValueAsString(
                 registerBody(specJson(List.of("GET /api/v1/users"))));
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(second))
@@ -246,7 +246,7 @@ class SpecRegistrationIntegrationTest {
         String body = objectMapper.writeValueAsString(
                 registerBody(specJson(List.of("GET /api/v1/users"))));
 
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, "wrong-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -260,7 +260,7 @@ class SpecRegistrationIntegrationTest {
         Map<String, Object> reg = registerBody(specJson(List.of("GET /api/v1/users")));
         reg.put("schemaVersion", "999");
 
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(reg)))
@@ -273,7 +273,7 @@ class SpecRegistrationIntegrationTest {
     void register_invalidSpecJson_returns400() throws Exception {
         Map<String, Object> reg = registerBody("not a valid openapi doc {{{");
 
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(reg)))
@@ -285,7 +285,7 @@ class SpecRegistrationIntegrationTest {
 
     /** Performs a successful register POST with the given body map. */
     private void register(Map<String, Object> body) throws Exception {
-        mockMvc.perform(post("/api/v1/specs/register")
+        mockMvc.perform(post("/api/v1/specs")
                         .header(TOKEN_HEADER, VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))

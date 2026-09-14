@@ -26,7 +26,7 @@ export interface SendMessagePayload {
 
 /** 새 대화방 시작 + 첫 메시지 전송. 응답: { accepted, conversation, message } */
 export function startMessage(payload: StartMessagePayload): Promise<ConversationStartResponse> {
-  return request<ConversationStartResponse>("/conversations/messages", {
+  return request<ConversationStartResponse>("/conversations", {
     method: "POST",
     body: payload,
   });

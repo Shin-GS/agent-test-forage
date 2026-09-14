@@ -124,7 +124,7 @@ last-updated: 2026-09-08
 - `targetRecipeId`: 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, AI 매칭 스킵용. nullable)
 - 전송 API는 **동기 접수**로 거의 즉시 리턴하고(무거운 처리는 async), 응답에 최소 `{ accepted: true, sessionId }`를 준다. FE는 이 성공 응답을 받은 뒤에만 낙관적 임시 메시지를 렌더한다(아래 낙관적 UI).
 - **첫 메시지 = 대화방 생성 겸함**: 대화방 ID 없이 첫 메시지를 보내면 서버가 대화방+메시지를 함께 생성하고 새 대화방 정보를 응답에 포함(+ `session_list_update` upsert 발행). 이후 메시지는 대화방 ID로 전송.
-  - `POST /api/v1/conversations/messages` — 방 없이 첫 메시지 (방 생성 겸함). 응답에 `conversation` 포함
+  - `POST /api/v1/conversations` — 대화방 생성 + 첫 메시지 (body에 첫 메시지 content 포함). 응답에 `conversation` 포함
   - `POST /api/v1/conversations/{id}/messages` — 기존 방에 이어서 전송
   - 빈 대화방을 미리 만들지 않아 orphan을 원천 차단 (overview.md)
 
@@ -163,15 +163,15 @@ last-updated: 2026-09-08
 | 입력 | 처리 | 엔드포인트 |
 |------|------|-----------|
 | 자유 텍스트 발화 | 새 USER 턴(TEXT 파트) 생성 | `POST /conversations/{id}/messages` |
-| 액션 피커 값 제출 | 대상 ACTION_PICKER 파트 CONSUMED + 실행 재개 | `POST /action-picker/respond` |
-| execution_mode 카드 [바로 실행]/[값 확인 후 실행] | 카드 파트 CONSUMED + 실행 시작 | `POST /conversations/{id}/executions` (mode=AUTO/MANUAL) |
-| plan 카드 [자동 실행] | 카드 파트 CONSUMED + 플랜 실행 | `POST /conversations/{id}/plan-executions` |
-| candidates 카드 후보 선택 | 카드 파트 CONSUMED + 실행 시작 | `POST /conversations/{id}/executions` |
+| 액션 피커 값 제출 | 대상 ACTION_PICKER 파트 CONSUMED + 실행 재개 | `POST /executions/{executionId}/action-picker-response` |
+| execution_mode 카드 [바로 실행]/[값 확인 후 실행] | 카드 파트 CONSUMED + 실행 시작 | `POST /conversations/{id}/executions` (recipeIds 1개, mode=AUTO/MANUAL) |
+| plan 카드 [자동 실행] | 카드 파트 CONSUMED + 플랜 실행 | `POST /conversations/{id}/executions` (recipeIds 여러 개) |
+| candidates 카드 후보 선택 | 카드 파트 CONSUMED + 실행 시작 | `POST /conversations/{id}/executions` (recipeIds 1개) |
 | service_select 카드 | 카드 파트 CONSUMED + 대화방 서비스 설정 + **SYSTEM 알림 턴** append("대상 서비스가 'XX'(으)로 설정되었어요") | `PATCH /conversations/{id}/service` |
 | 실패/중단 카드 [이어서 실행] | 재개 | `POST /executions/{id}/resume` |
 | [취소] / [중지] | 실행 취소/중지 | `POST /conversations/{id}/cancel` / `/stop` |
 
-- 버튼/피커 응답 요청 본문에는 **대상 파트를 특정하는 `partId`** 를 포함한다(서버가 그 파트를 CONSUMED로 전이). 나머지 필드(recipeId/mode/values 등)는 기존 계약 유지.
+- 버튼/피커 응답 요청 본문에는 **대상 파트를 특정하는 `partId`** 를 포함한다(서버가 그 파트를 CONSUMED로 전이). 나머지 필드는 각 API의 계약을 따른다(실행 시작=`recipeIds`/`mode`, 액션 피커 응답=`stepIndex`/`values`).
 - 별도의 통합 `/actions` 엔드포인트는 두지 않는다 — 위 기존 분화 엔드포인트를 유지하고 각 API가 촉발 파트 CONSUMED 처리를 더한다.
 
 ---

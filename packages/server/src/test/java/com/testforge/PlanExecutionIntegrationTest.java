@@ -127,9 +127,9 @@ class PlanExecutionIntegrationTest {
     }
 
     private void startPlan(Long conversationId, String recipeIdsJson) throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":" + recipeIdsJson + "}"))
+                        .content("{\"recipeIds\":" + recipeIdsJson + "}"))
                 .andExpect(status().isCreated());
     }
 
@@ -154,9 +154,9 @@ class PlanExecutionIntegrationTest {
         Long r2 = newRecipe("로그인", specId);
         Long conversationId = newConversation(specId);
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":[" + r1 + "," + r2 + "]}"))
+                        .content("{\"recipeIds\":[" + r1 + "," + r2 + "]}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.type.code").value("PLAN"))
                 .andExpect(jsonPath("$.recipes.length()").value(2));
@@ -314,9 +314,9 @@ class PlanExecutionIntegrationTest {
         reportRunningRecipeStep(executionId); // r1 완료 → r2 WAITING_INPUT
 
         // 현재 RUNNING 레시피(r2) 기준 필수값 token 제출 → 재개
-        mockMvc.perform(post("/api/v1/action-picker/respond").with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/executions/{eid}/action-picker-response", executionId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"executionId\":" + executionId + ",\"stepIndex\":-1,\"values\":{\"token\":\"abc\"}}"))
+                        .content("{\"stepIndex\":-1,\"values\":{\"token\":\"abc\"}}"))
                 .andExpect(status().isOk());
 
         assertThat(conversationRepository.findById(conversationId).orElseThrow().getStatus())
@@ -411,9 +411,9 @@ class PlanExecutionIntegrationTest {
         Long r1 = newRecipe("가입", specId);
         Long conversationId = newConversation(specId);
 
-        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":[" + r1 + "]}"))
+                        .content("{\"recipeIds\":[" + r1 + "]}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.type.code").value("SINGLE"))
                 .andExpect(jsonPath("$.recipes.length()").value(1));
@@ -429,9 +429,9 @@ class PlanExecutionIntegrationTest {
     @Test
     void startPlan_emptyRecipeIds_returns400() throws Exception {
         Long conversationId = newConversation(10L);
-        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":[]}"))
+                        .content("{\"recipeIds\":[]}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
@@ -553,9 +553,9 @@ class PlanExecutionIntegrationTest {
     /** recipeInputs 포함 플랜 시작 (recipeInputs 는 JSON 배열 문자열) */
     private void startPlanWithInputs(Long conversationId, String recipeIdsJson,
                                      String recipeInputsJson) throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":" + recipeIdsJson
+                        .content("{\"recipeIds\":" + recipeIdsJson
                                 + ",\"recipeInputs\":" + recipeInputsJson + "}"))
                 .andExpect(status().isCreated());
     }
@@ -639,9 +639,9 @@ class PlanExecutionIntegrationTest {
         Long conversationId = newConversation(specId);
 
         // 발화값 career=1년, 사전편집 career=3년 → 사전편집이 이김
-        mockMvc.perform(post("/api/v1/conversations/{id}/plan-executions", conversationId).with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\":" + USER_ID + ",\"recipeIds\":[" + r1 + "]"
+                        .content("{\"recipeIds\":[" + r1 + "]"
                                 + ",\"initialContext\":{\"career\":\"1년\"}"
                                 + ",\"recipeInputs\":[{\"career\":\"3년\"}]}"))
                 .andExpect(status().isCreated());

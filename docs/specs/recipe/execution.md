@@ -104,8 +104,8 @@ AI: 📋 입사지원 (사람인)
     └─ 미충족 → 액션 피커 노출 (session_status: input_waiting)
                     │
                     ▼
-        사용자 입력 완료 → POST /api/v1/action-picker/respond
-                    │  { executionId, stepIndex, values }
+        사용자 입력 완료 → POST /api/v1/executions/{executionId}/action-picker-response
+                    │  { stepIndex, values }
                     ▼
         서버: values를 실행 context(userInput.*)에 병합
               → input_waiting 해제 → executing 전파(SSE)

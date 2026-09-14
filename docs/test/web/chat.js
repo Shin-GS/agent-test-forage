@@ -747,7 +747,7 @@ const CHAT_TESTS = {
       steps: [
         "예: 3개 중 2번을 스킵하고 1번↔3번 순서를 바꾼 상태 구성",
         "[자동 실행] 클릭",
-        "startPlan(POST /conversations/{id}/plan-executions) 요청 바디의 recipeIds가 '체크된 항목만, 화면에 보이는 순서대로' 구성되는지 확인 (네트워크 탭)",
+        "startPlan(POST /conversations/{id}/executions) 요청 바디의 recipeIds가 '체크된 항목만, 화면에 보이는 순서대로' 구성되는지 확인 (네트워크 탭)",
         "실제 실행 순서가 화면 조정 순서와 일치하는지 확인"
       ],
       expected: "체크된 항목만 화면 순서대로 recipeIds가 구성되어 startPlan에 전달되고, 실제 실행 순서가 조정대로 진행됨"
@@ -867,7 +867,7 @@ const CHAT_TESTS = {
       steps: [
         "예: 3개 중 1번·3번에 값을 편집하고 2번은 미편집 상태 구성",
         "[자동 실행] 클릭",
-        "startPlan(POST /conversations/{id}/plan-executions) 요청 바디에 recipeInputs가 recipeIds와 같은 인덱스(실행 순서)로 정렬되어 전달되는지 확인 (네트워크 탭)",
+        "startPlan(POST /conversations/{id}/executions) 요청 바디에 recipeInputs가 recipeIds와 같은 인덱스(실행 순서)로 정렬되어 전달되는지 확인 (네트워크 탭)",
         "편집한 레시피 자리는 편집값 맵, 미편집 레시피 자리는 빈 맵 {}으로 배열 길이가 recipeIds와 일치하는지 확인",
         "recipeId가 아닌 sequence(배열 인덱스)로 값이 짝지어지는지 확인"
       ],

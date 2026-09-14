@@ -7,6 +7,7 @@ import com.testforge.security.SessionUserRecheckFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -72,8 +73,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/login").permitAll()
                         .requestMatchers("/api/v1/health").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
-                        // 스펙 등록: 라이브러리 X-TestForge-Token 인증 (세션 인증 제외)
-                        .requestMatchers("/api/v1/specs/register").permitAll()
+                        // 스펙 등록(POST /specs): 라이브러리 X-TestForge-Token 인증 (세션 인증 제외).
+                        // GET /specs(목록 조회)는 아래 authenticated 규칙을 따르므로 메서드를 POST로 한정한다.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/specs").permitAll()
                         // 관리자 전용 API
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         // 그 외 API는 인증 필수

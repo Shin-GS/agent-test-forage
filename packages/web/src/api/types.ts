@@ -118,7 +118,7 @@ export interface ConversationSummary {
   updatedAt: string;
 }
 
-/** POST /conversations/messages 응답 (첫 메시지로 대화방 생성) */
+/** POST /conversations 응답 (첫 메시지로 대화방 생성) */
 export interface ConversationStartResponse {
   accepted: boolean;
   conversation: ConversationDetail;
@@ -347,7 +347,7 @@ export interface PlanRecipeItem {
 
 export interface PlanCard {
   cardType: "plan";
-  /** 실행할 레시피 ID 순서 (plan-executions body 로 전달) */
+  /** 실행할 레시피 ID 순서 (executions body 의 recipeIds 로 전달) */
   recipeIds: number[];
   /** 레시피별 경량 정보 (표시용) */
   recipes: PlanRecipeItem[];

@@ -242,7 +242,7 @@ function normalizeInputs(
  * 플랜 제안 카드 (2단계 — 스킵 + 순서변경 편집 가능, plan.md "제안 카드 편집").
  * - 💡 rationale + 편집 가능한 레시피 목록(↑/↓ 이동 · 체크박스 스킵 · 순서번호 재매김 · 값 미리보기).
  * - 조정은 카드 로컬 상태로만 관리(payload 불변). [자동 실행] 시 체크된 항목만 화면 순서대로 recipeIds 구성.
- * - [취소] → 대화방 cancel API (FE 단독 해제 금지). [자동 실행] → plan-executions 시작 → 러너 구동.
+ * - [취소] → 대화방 cancel API (FE 단독 해제 금지). [자동 실행] → 실행 시작(POST /conversations/{id}/executions) → 러너 구동.
  * - 🔗 이전 결과 예측 표시 금지(실행 전 확정 불가). 값 미리보기는 기본값(📌)만.
  */
 export function PlanCard({
@@ -394,8 +394,8 @@ export function PlanCard({
     setRunning(true);
     setError(null);
     try {
-      // 플랜은 항상 AUTO. recipeIds 1개면 BE 가 단일(SINGLE)로 수렴한다.
-      const execution = await executionsApi.startPlan(convId, {
+      // 플랜은 항상 AUTO. recipeIds 1개면 BE 가 단일(SINGLE)로 수렴한다(단일/플랜 공통 엔드포인트).
+      const execution = await executionsApi.startExecution(convId, {
         recipeIds,
         recipeInputs,
         mode: "AUTO",

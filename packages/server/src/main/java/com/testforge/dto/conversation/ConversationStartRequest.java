@@ -6,11 +6,9 @@ package com.testforge.dto.conversation;
  *
  * <p>제목은 요청 title이 있으면(레시피명 등) 그대로 사용하고, 없으면 첫 메시지
  * content 앞부분으로 임시 제목을 파생한다(추후 AI 요약으로 교체 — 다음 조각).
- * userId는 인증 도메인 구현 전까지 요청으로 받는다(검증은 TODO).
+ * userId는 세션에서 도출한다(요청 바디에 없음).
  */
 public record ConversationStartRequest(
-        // 소유자 사용자 ID (인증 전까지 요청으로 수신)
-        Long userId,
         // 첫 메시지 본문 (Markdown). 비어 있으면 400
         String content,
         // 대상 서비스(스펙) ID (선택)

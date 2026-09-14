@@ -29,8 +29,8 @@ public class SpecRegistrationController {
         this.registrationService = registrationService;
     }
 
-    /** 전체 스펙 등록 (토큰 검증 후 처리) */
-    @PostMapping(value = "/register", consumes = MediaType.APPLICATION_JSON_VALUE)
+    /** 전체 스펙 등록 (토큰 검증 후 처리). 라이브러리 기동 시 1회 upsert. */
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public RegisterResponse register(
             @RequestHeader(value = TOKEN_HEADER, required = false) String token,
             @RequestBody RegisterRequest request) {

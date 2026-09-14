@@ -44,12 +44,8 @@ public class RecipeController {
     /** 레시피 생성 (v1, 생성 시 검증 수행). 순환 참조면 400, 공통 생성은 ADMIN만(아니면 403). */
     @PostMapping
     public ResponseEntity<RecipeDetailResponse> create(@RequestBody RecipeCreateRequest request) {
-        // ownerUserId(작성자)는 세션에서 도출 (클라이언트 값 무시).
-        RecipeCreateRequest secured = new RecipeCreateRequest(
-                CurrentUser.id(), request.apiSpecId(), request.name(), request.description(),
-                request.visibility(), request.tags(), request.variables(), request.steps(),
-                request.resultDefinition(), request.resultTemplate());
-        RecipeDetailResponse created = recipeService.create(secured);
+        // ownerUserId(작성자)는 세션에서 도출 (클라이언트 값 미수신).
+        RecipeDetailResponse created = recipeService.create(CurrentUser.id(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

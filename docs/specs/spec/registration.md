@@ -18,7 +18,7 @@ last-updated: 2026-09-18
     │ (재배포/재기동 시 다시 1회 등록되어 최신 스펙으로 갱신)
     │
     ▼
-ai-test-forge 서버 POST /api/v1/specs/register
+ai-test-forge 서버 POST /api/v1/specs
     │
     ▼
 DB 저장 → 레시피 작성 시 API 목록으로 활용

@@ -172,7 +172,7 @@ class OwnershipIntegrationTest {
 
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", id).with(testAuth.as(USER_B))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipeId\":999999}"))
+                        .content("{\"recipeIds\":[999999]}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("CONVERSATION_NOT_FOUND"));
     }
@@ -212,7 +212,7 @@ class OwnershipIntegrationTest {
         // B가 A의 PRIVATE 레시피 실행 시도 → 존재 은폐 404
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_B))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("RECIPE_NOT_FOUND"));
 
@@ -241,7 +241,7 @@ class OwnershipIntegrationTest {
 
         mockMvc.perform(post("/api/v1/conversations/{id}/executions", conversationId).with(testAuth.as(USER_B))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipeId\":" + recipeId + "}"))
+                        .content("{\"recipeIds\":[" + recipeId + "]}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status.code").value("RUNNING"));
     }

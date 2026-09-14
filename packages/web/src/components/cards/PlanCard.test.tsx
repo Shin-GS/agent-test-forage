@@ -7,7 +7,7 @@ import { render, screen, within, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // ── mock: api / 서비스 계층 ──
-const startPlanMock = vi.fn();
+const startExecutionMock = vi.fn();
 const cancelMock = vi.fn();
 const runExecutionMock = vi.fn();
 const applyRunResultMock = vi.fn();
@@ -22,7 +22,7 @@ vi.mock("../../api", () => ({
     }
   },
   conversationsApi: { cancel: (...args: unknown[]) => cancelMock(...args) },
-  executionsApi: { startPlan: (...args: unknown[]) => startPlanMock(...args) },
+  executionsApi: { startExecution: (...args: unknown[]) => startExecutionMock(...args) },
 }));
 
 vi.mock("../../services/executionRunner", () => ({
@@ -97,12 +97,12 @@ function isSkipped(name: string): boolean {
 }
 
 beforeEach(() => {
-  startPlanMock.mockReset();
+  startExecutionMock.mockReset();
   cancelMock.mockReset();
   runExecutionMock.mockReset();
   applyRunResultMock.mockReset();
   // 기본: 실행이 pendingInputs 없이 성공하는 흐름
-  startPlanMock.mockResolvedValue({ id: 999, pendingInputs: [] });
+  startExecutionMock.mockResolvedValue({ id: 999, pendingInputs: [] });
   runExecutionMock.mockResolvedValue({ outcome: "SUCCESS" });
   applyRunResultMock.mockResolvedValue(undefined);
   // 스토어 상태: idle + 대화방 지정
@@ -171,7 +171,7 @@ describe("PlanCard 편집 (스킵 + 순서변경)", () => {
     expect(screen.getByText(/최소 1개 선택/)).toBeInTheDocument();
   });
 
-  it("자동 실행: 스킵/순서변경이 반영된 recipeIds 로 startPlan 호출", async () => {
+  it("자동 실행: 스킵/순서변경이 반영된 recipeIds 로 startExecution 호출", async () => {
     const user = userEvent.setup();
     render(<PlanCard card={CARD} />);
 
@@ -184,10 +184,10 @@ describe("PlanCard 편집 (스킵 + 순서변경)", () => {
     // 자동 실행
     await user.click(screen.getByRole("button", { name: "플랜 자동 실행" }));
 
-    // startPlan 은 (conversationId, { recipeIds, mode }) 로 호출됨.
+    // startExecution 은 (conversationId, { recipeIds, mode }) 로 호출됨.
     // 배열 [20,10,30] 중 included=true 인 10,30 만 화면 순서대로 → [10, 30]
-    expect(startPlanMock).toHaveBeenCalledTimes(1);
-    const [convId, payload] = startPlanMock.mock.calls[0];
+    expect(startExecutionMock).toHaveBeenCalledTimes(1);
+    const [convId, payload] = startExecutionMock.mock.calls[0];
     expect(convId).toBe(1);
     expect(payload.recipeIds).toEqual([10, 30]);
     expect(payload.mode).toBe("AUTO");
@@ -201,7 +201,7 @@ describe("PlanCard 편집 (스킵 + 순서변경)", () => {
     await user.click(screen.getByRole("button", { name: "입사지원 위로 이동" }));
     await user.click(screen.getByRole("button", { name: "플랜 자동 실행" }));
 
-    const [, payload] = startPlanMock.mock.calls[0];
+    const [, payload] = startExecutionMock.mock.calls[0];
     expect(payload.recipeIds).toEqual([10, 30, 20]);
   });
 
@@ -247,7 +247,7 @@ describe("PlanCard 편집 (스킵 + 순서변경)", () => {
     await user.click(screen.getByRole("button", { name: "플랜 자동 실행" }));
 
     // 실행 순서: 스킵 제외하므로 [포지션(20), 입사지원(30)] — 스킵 행 위치와 무관
-    const [, payload] = startPlanMock.mock.calls[0];
+    const [, payload] = startExecutionMock.mock.calls[0];
     expect(payload.recipeIds).toEqual([20, 30]);
   });
 });
@@ -282,7 +282,7 @@ describe("PlanCard 값 사전 편집", () => {
 
     await user.click(screen.getByRole("button", { name: "플랜 자동 실행" }));
 
-    const [, payload] = startPlanMock.mock.calls[0];
+    const [, payload] = startExecutionMock.mock.calls[0];
     expect(payload.recipeIds).toEqual([10, 20]);
     // recipeInputs[0]은 recipeIds[0]=10(이력서)의 편집값. number 타입은 숫자 변환.
     expect(payload.recipeInputs).toEqual([{ name: "홍길동", career: 3 }, {}]);
@@ -316,7 +316,7 @@ describe("PlanCard 값 사전 편집", () => {
     // 아무 값도 편집하지 않고 바로 실행
     await user.click(screen.getByRole("button", { name: "플랜 자동 실행" }));
 
-    const [, payload] = startPlanMock.mock.calls[0];
+    const [, payload] = startExecutionMock.mock.calls[0];
     expect(payload.recipeIds).toEqual([10, 20]);
     expect(payload.recipeInputs).toEqual([{}, {}]);
   });

@@ -46,18 +46,13 @@ public class ConversationController {
     }
 
     /**
-     * 첫 메시지로 대화방 생성. 대화방 ID 없이 첫 메시지를 보내면 대화방을 생성하며
-     * 첫 사용자 메시지를 함께 저장한다(빈 대화방 원천 차단). content/userId 필수,
-     * apiSpecId/title/targetRecipeId/metadata는 선택.
+     * 대화방 생성 + 첫 메시지. 대화방을 생성하며 첫 사용자 메시지를 함께 저장한다(빈 대화방 원천 차단).
+     * content 필수, apiSpecId/title/targetRecipeId/metadata는 선택. userId는 세션에서 도출(요청 바디 미수신).
      */
-    @PostMapping("/messages")
+    @PostMapping
     public ResponseEntity<ConversationStartResponse> start(
             @RequestBody ConversationStartRequest request) {
-        // userId는 세션에서 도출 (클라이언트 값 무시)
-        ConversationStartRequest secured = new ConversationStartRequest(
-                CurrentUser.id(), request.content(), request.apiSpecId(),
-                request.title(), request.targetRecipeId(), request.metadata());
-        ConversationStartResponse response = conversationService.start(secured);
+        ConversationStartResponse response = conversationService.start(CurrentUser.id(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -124,11 +119,8 @@ public class ConversationController {
     @PostMapping("/{id}/messages")
     public ResponseEntity<MessageSendResponse> sendMessage(@PathVariable Long id,
                                                            @RequestBody MessageSendRequest request) {
-        // userId는 세션에서 도출 (클라이언트 값 무시)
-        Long requesterId = CurrentUser.id();
-        MessageSendRequest secured = new MessageSendRequest(
-                requesterId, request.content(), request.targetRecipeId(), request.metadata());
-        MessageSendResponse response = conversationService.sendMessage(id, requesterId, secured);
+        // userId는 세션에서 도출 (클라이언트 값 미수신)
+        MessageSendResponse response = conversationService.sendMessage(id, CurrentUser.id(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

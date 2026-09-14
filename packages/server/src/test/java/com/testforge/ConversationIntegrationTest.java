@@ -77,7 +77,7 @@ class ConversationIntegrationTest {
         String body = "{\"userId\":" + USER_ID
                 + ",\"content\":\"안녕하세요\",\"apiSpecId\":10,\"title\":\"회원가입 테스트\"}";
 
-        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accepted").value(true))
@@ -109,7 +109,7 @@ class ConversationIntegrationTest {
     void start_derivesTemporaryTitleFromContent() throws Exception {
         String body = "{\"userId\":" + USER_ID + ",\"content\":\"짧은 메시지\"}";
 
-        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.conversation.title").value("짧은 메시지"));
@@ -122,7 +122,7 @@ class ConversationIntegrationTest {
         String longContent = "가나다라마바사아자차카타파하가나다라마바사아자차카";
         String body = "{\"userId\":" + USER_ID + ",\"content\":\"" + longContent + "\"}";
 
-        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.conversation.title")
@@ -139,7 +139,7 @@ class ConversationIntegrationTest {
     // userId 신뢰의 원천이 세션이므로, 미인증 접근이 거부되는지를 검증한다.
     @Test
     void start_unauthenticated_returns401() throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/messages")
+        mockMvc.perform(post("/api/v1/conversations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"x\"}"))
                 .andExpect(status().isUnauthorized())
@@ -149,7 +149,7 @@ class ConversationIntegrationTest {
     // ── start: content 누락/공백 → 400 (빈 대화방 미생성) ──
     @Test
     void start_blankContent_returns400AndCreatesNoConversation() throws Exception {
-        mockMvc.perform(post("/api/v1/conversations/messages").with(testAuth.as(USER_ID))
+        mockMvc.perform(post("/api/v1/conversations").with(testAuth.as(USER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + USER_ID + ",\"content\":\"   \"}"))
                 .andExpect(status().isBadRequest())

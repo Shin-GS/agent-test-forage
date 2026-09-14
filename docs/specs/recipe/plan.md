@@ -71,7 +71,7 @@ AI 분석: propose_plan(recipeIds, rationale) — 결과 의존 순차 조합 �
 
 ### 스킵 · 순서변경 — 전부 FE에서 해결 (BE 계약 불변)
 
-스킵·순서변경 편집은 **BE 계약을 바꾸지 않는다.** BE는 이미 `startPlan`(POST `/conversations/{id}/plan-executions {recipeIds}`)에 전달된 `recipeIds` 배열을 **받은 순서대로** 실행하고, 배열이 1개면 내부적으로 SINGLE(N=1 플랜)로 수렴한다([내부 구현 통일](#내부-구현-통일-단일--n1-플랜)).
+스킵·순서변경 편집은 **BE 계약을 바꾸지 않는다.** BE는 실행 시작(POST `/conversations/{id}/executions {recipeIds}`)에 전달된 `recipeIds` 배열을 **받은 순서대로** 실행하고, 배열이 1개면 내부적으로 SINGLE(N=1 플랜)로 수렴한다([내부 구현 통일](#내부-구현-통일-단일--n1-플랜)). 단일 실행과 플랜 실행은 **동일 엔드포인트**(`POST /conversations/{id}/executions`)를 쓰며 `recipeIds` 길이로만 구분된다.
 
 | 편집 동작 | FE 처리 | BE 관점 |
 |-----------|---------|---------|

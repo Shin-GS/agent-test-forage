@@ -83,7 +83,7 @@ public class SpecRegistrationService {
         body.put("authProfiles", buildAuthProfiles());
 
         restClient.post()
-                .uri("/api/v1/specs/register")
+                .uri("/api/v1/specs")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-TestForge-Token", properties.getRegisterToken())
                 .body(body)
