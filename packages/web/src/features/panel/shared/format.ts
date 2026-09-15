@@ -47,6 +47,24 @@ export function relativeTime(iso: string | null): string | null {
 }
 
 /**
+ * startedAt(ISO) → 절대시각 "YYYY-MM-DD HH:mm:ss". 파싱 불가/없음 시 null.
+ * 히스토리 상세 요약 헤더의 실행 시각(절대시각 기본 + 상대시각 병기)용.
+ */
+export function formatAbsolute(iso: string | null): string | null {
+  if (!iso) return null;
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return null;
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+}
+
+/**
  * durationMs → 사람이 읽는 소요시간. "350ms" / "1.2초" / "1분 5초".
  * null/음수면 null.
  */

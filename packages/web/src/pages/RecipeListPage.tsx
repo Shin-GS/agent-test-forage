@@ -11,7 +11,6 @@
 // 데이터: GET /recipes (recipesApi.list), GET /specs (specsApi.list) 를 React Query 로 조회.
 
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQueryStates, parseAsString, parseAsStringEnum, parseAsArrayOf } from "nuqs";
 import { parseAsSearch, SEARCH_OPTIONS } from "../lib/urlFilters";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -71,7 +70,6 @@ function isInvalid(recipe: RecipeSummary): boolean {
 }
 
 export function RecipeListPage() {
-  const navigate = useNavigate();
   // 상세(편집) 진입 시 현재 목록 URL(필터 쿼리 포함)을 전달 → 편집에서 [← 목록으로] 시 필터 유지 복귀.
   const navigateToDetail = useListNavigation();
   const queryClient = useQueryClient();

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,6 +15,14 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
 
     /** ID로 미삭제 레시피 조회 (상세/수정/삭제 시 삭제 레시피 배제용) */
     Optional<Recipe> findByIdAndDeletedAtIsNull(Long id);
+
+    /**
+     * ID 목록으로 레시피 일괄 조회 (<b>소프트삭제 포함</b>). 히스토리 상세의 원본 레시피 상태 파생
+     * (recipeDeleted/recipeCurrentVersion) 산출용. 삭제된 원본도 "삭제됨"으로 판정해야 하므로
+     * {@code deletedAt} 필터 없이 전량 조회하고, 호출측이 {@code deletedAt}으로 살아있음/삭제를 가른다.
+     * (미포함 id = 원본 부재.) 여러 레시피(플랜) recipeId를 한 번에 조회해 N+1을 방지한다.
+     */
+    List<Recipe> findByIdIn(Collection<Long> ids);
 
     /** 특정 서비스(스펙)의 미삭제 레시피 목록 (스펙 단위 전체 — 소유 격리 없음, 실행 스냅샷 등 내부용) */
     List<Recipe> findByApiSpecIdAndDeletedAtIsNull(Long apiSpecId);

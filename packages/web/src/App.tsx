@@ -18,6 +18,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { RecipeListPage } from "./pages/RecipeListPage";
 import { RecipeEditPage } from "./pages/RecipeEditPage";
 import { HistoryPage } from "./pages/HistoryPage";
+import { HistoryDetailPage } from "./pages/HistoryDetailPage";
 import { AdminSpecListPage } from "./pages/admin/AdminSpecListPage";
 import { AdminSpecDetailPage } from "./pages/admin/AdminSpecDetailPage";
 import { AdminUserListPage } from "./pages/admin/AdminUserListPage";
@@ -38,6 +39,8 @@ function App() {
           <Route path="/recipes/new" element={<RecipeEditPage />} />
           <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          {/* 실행 결과 상세: 별도 페이지(모달 아님). :executionId 가 URL 의 단일 진실 소스 */}
+          <Route path="/history/:executionId" element={<HistoryDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
 
           {/* 관리자 전용 (RBAC) — 비-admin 은 RequireAdmin 이 "/" 로 리다이렉트 */}

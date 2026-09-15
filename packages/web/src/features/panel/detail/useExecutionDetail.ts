@@ -3,7 +3,7 @@
 // - enabled: executionId 가 있을 때만 조회(상세 뷰 진입 시).
 
 import { useQuery } from "@tanstack/react-query";
-import { executionsApi } from "../../../api";
+import { ApiError, executionsApi } from "../../../api";
 import type { ExecutionResponse } from "../../../api/types";
 
 export function useExecutionDetail(executionId: number | null) {
@@ -11,5 +11,7 @@ export function useExecutionDetail(executionId: number | null) {
     queryKey: ["execution", executionId],
     queryFn: () => executionsApi.getExecution(executionId as number),
     enabled: executionId != null,
+    // 404(타인 소유/삭제)는 재시도하지 않고 즉시 빈 상태로 안내한다(히스토리 상세 딥링크 대비).
+    retry: (count, err) => !(err instanceof ApiError && err.status === 404) && count < 2,
   });
 }

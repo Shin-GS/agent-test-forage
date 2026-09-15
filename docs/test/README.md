@@ -42,7 +42,7 @@ docs/test/
     ├── login.js           ← 로그인/인증 (8개 케이스)
     ├── spec.js            ← 스펙 등록/관리 (12개 케이스)
     ├── settings.js        ← 설정 (7개 케이스)
-    ├── history.js         ← 전체 히스토리 페이지 (16개 케이스)
+    ├── history.js         ← 전체 히스토리 페이지 (22개 케이스)
     └── admin.js           ← 관리자 페이지 A(스펙 관리+RBAC)+B(사용자 관리) (44개 케이스)
 ```
 
@@ -56,9 +56,9 @@ docs/test/
 | 로그인/인증 | high | 8 | LOGIN-xxx |
 | 스펙 등록/관리 | high | 12 | SPEC-xxx |
 | 설정 | medium | 7 | SETTINGS-xxx |
-| 전체 히스토리 페이지 | medium | 16 | HISTORY-xxx |
+| 전체 히스토리 페이지 | medium | 22 | HISTORY-xxx |
 | 관리자 페이지 A(스펙 관리+RBAC)+B(사용자 관리) | medium | 44 | ADMIN-xxx |
-| **합계** | | **275** | |
+| **합계** | | **281** | |
 
 > 관리자 페이지 케이스 구분: **A(완료)** = ADMIN-001~019 (RBAC + 스펙 관리), **별도 작업** = ADMIN-020 (서비스 설명 편집, SKIP — 위치 확보용, 삭제 금지), **B(이번 작업)** = ADMIN-030~053 (사용자 관리: 진입/목록/검색/생성/역할·상태·비밀번호 변경 + 자기 보호 + 마지막 ACTIVE ADMIN 보호 + 삭제 액션 없음).
 

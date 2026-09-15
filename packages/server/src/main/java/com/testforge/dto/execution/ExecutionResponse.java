@@ -20,6 +20,8 @@ public record ExecutionResponse(
         Long userId,
         Long conversationId,
         Long apiSpecId,
+        /** 서비스 표시명. serviceDescription > name. apiSpecId null이거나 스펙 없으면 null */
+        String serviceName,
         StatusView type,
         String title,
         StatusView mode,

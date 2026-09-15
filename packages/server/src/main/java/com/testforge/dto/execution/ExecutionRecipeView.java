@@ -26,5 +26,10 @@ public record ExecutionRecipeView(
         Map<String, String> resultLabels,
         List<ExecutionStepView> steps,
         LocalDateTime startedAt,
-        LocalDateTime finishedAt) {
+        LocalDateTime finishedAt,
+        // 원본 레시피의 현재 상태(응답 전용 파생값 — 엔티티/DB 불변). db/execution.md "상세 응답의 원본 레시피 상태" 계약.
+        // recipeDeleted: recipeId가 null이거나 원본 RECIPE 부재/DELETED_AT 있음 → true.
+        Boolean recipeDeleted,
+        // recipeCurrentVersion: 원본이 살아있으면 RECIPE.CURRENT_VERSION, 삭제/부재면 null (실행 당시 버전은 recipeVersionNo).
+        Integer recipeCurrentVersion) {
 }

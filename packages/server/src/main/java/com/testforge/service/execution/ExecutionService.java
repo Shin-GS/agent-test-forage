@@ -575,6 +575,20 @@ public class ExecutionService {
         return result;
     }
 
+    /**
+     * 단건 실행 상세용 서비스 표시명 조회. apiSpecId가 null이면 null. 조회는 <b>소프트삭제 포함</b>
+     * (findById)이라 INACTIVE/삭제된 스펙의 과거 실행도 이름을 채운다(displayName은 상태 무관).
+     * ExecutionSummaryView.serviceName과 동일 의미. 단건이라 성능 부담 없음.
+     */
+    private String resolveServiceName(Long apiSpecId) {
+        if (apiSpecId == null) {
+            return null;
+        }
+        return apiSpecRepository.findById(apiSpecId)
+                .map(this::displayName)
+                .orElse(null);
+    }
+
     /** 사람이 읽는 서비스 표시명: serviceDescription > name > null */
     private String displayName(ApiSpec spec) {
         String description = spec.getServiceDescription();
@@ -2272,13 +2286,19 @@ public class ExecutionService {
     private ExecutionResponse toResponse(Execution execution, List<Map<String, Object>> pendingInputs) {
         List<ExecutionRecipe> recipes =
                 executionRecipeRepository.findByExecutionIdOrderBySequenceAsc(execution.getId());
-        List<ExecutionRecipeView> recipeViews = recipes.stream().map(this::toRecipeView).toList();
+        // 원본 레시피 현재 상태(recipeDeleted/recipeCurrentVersion) 파생용 일괄 조회.
+        // 이 실행의 여러 레시피(플랜) recipeId를 모아 한 번에 조회해 N+1을 방지한다(resolveServiceNames와 동일 패턴).
+        Map<Long, Recipe> originRecipes = resolveOriginRecipes(recipes);
+        List<ExecutionRecipeView> recipeViews = recipes.stream()
+                .map(recipe -> toRecipeView(recipe, originRecipes))
+                .toList();
 
         return new ExecutionResponse(
                 execution.getId(),
                 execution.getUserId(),
                 execution.getConversationId(),
                 execution.getApiSpecId(),
+                resolveServiceName(execution.getApiSpecId()),
                 StatusView.of(execution.getType()),
                 execution.getTitle(),
                 StatusView.of(execution.getMode()),
@@ -2292,7 +2312,37 @@ public class ExecutionService {
                 execution.getDurationMs());
     }
 
-    private ExecutionRecipeView toRecipeView(ExecutionRecipe recipe) {
+    /**
+     * EXECUTION_RECIPE 목록의 recipeId를 모아 원본 RECIPE를 <b>소프트삭제 포함</b>으로 일괄 조회하고
+     * (N+1 방지 — resolveServiceNames와 동일 패턴), <b>살아있는 것만</b>(deletedAt == null) id → Recipe로 담는다.
+     * 삭제된 원본은 여기서 제외되어, 호출측(toRecipeView)에서 "부재"와 동일하게 recipeDeleted=true로 판정된다.
+     * recipeId가 null인 행(원본 연결 없음)은 조회 대상에서 빠진다.
+     */
+    private Map<Long, Recipe> resolveOriginRecipes(List<ExecutionRecipe> recipes) {
+        Set<Long> recipeIds = recipes.stream()
+                .map(ExecutionRecipe::getRecipeId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (recipeIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Recipe> result = new HashMap<>();
+        // findByIdIn은 deletedAt 필터 없이 전량 조회하므로, 여기서 살아있는 것만 골라 담는다(삭제/부재 = 미포함).
+        for (Recipe recipe : recipeRepository.findByIdIn(recipeIds)) {
+            if (recipe.getDeletedAt() == null) {
+                result.put(recipe.getId(), recipe);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * EXECUTION_RECIPE를 응답 뷰로 매핑한다. {@code originRecipes}는 살아있는 원본 RECIPE의 id → Recipe 맵
+     * ({@link #resolveOriginRecipes})으로, 원본 현재 상태 파생값(recipeDeleted/recipeCurrentVersion)을 채우는 데 쓴다.
+     * recipeId가 null이거나 맵에 없으면(삭제/부재) recipeDeleted=true, recipeCurrentVersion=null.
+     * 살아있으면 recipeDeleted=false, recipeCurrentVersion = 원본 현재 버전(실행 당시 버전은 recipeVersionNo 그대로 유지).
+     */
+    private ExecutionRecipeView toRecipeView(ExecutionRecipe recipe, Map<Long, Recipe> originRecipes) {
         List<ExecutionStep> steps =
                 executionStepRepository.findByExecutionRecipeIdOrderByStepIndexAsc(recipe.getId());
         List<ExecutionStepView> stepViews = steps.stream().map(this::toStepView).toList();
@@ -2302,6 +2352,12 @@ public class ExecutionService {
         Object snapshotObj = RecipeJsonUtil.toObject(recipe.getRecipeSnapshotJson());
         Map<String, Object> snapshot = snapshotObj instanceof Map<?, ?> ? asMap(snapshotObj) : null;
         Map<String, String> resultLabels = resolveResultLabels(snapshot);
+
+        // 원본 레시피 현재 상태 파생 (db/execution.md "상세 응답의 원본 레시피 상태"). 엔티티/DB 불변, 응답 전용.
+        Long recipeId = recipe.getRecipeId();
+        Recipe origin = recipeId == null ? null : originRecipes.get(recipeId);
+        boolean recipeDeleted = origin == null;
+        Integer recipeCurrentVersion = origin == null ? null : origin.getCurrentVersion();
 
         return new ExecutionRecipeView(
                 recipe.getId(),
@@ -2315,7 +2371,9 @@ public class ExecutionService {
                 resultLabels,
                 stepViews,
                 recipe.getStartedAt(),
-                recipe.getFinishedAt());
+                recipe.getFinishedAt(),
+                recipeDeleted,
+                recipeCurrentVersion);
     }
 
     private ExecutionStepView toStepView(ExecutionStep step) {

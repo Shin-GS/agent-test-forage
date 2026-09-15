@@ -105,7 +105,19 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 
 - 실행 시작 시 **현재 레시피를 통째로 `RECIPE_SNAPSHOT_JSON`에 복사** 저장
 - 히스토리 상세는 이 스냅샷 기준으로 렌더링 → 원본 레시피가 수정/삭제돼도 "그때 그 실행"을 정확히 재현
-- `RECIPE_ID`는 원본 링크용 (NULL 허용, 삭제 대비). `RECIPE_VERSION_NO`는 참고용
+- `RECIPE_ID`는 원본 링크용 (NULL 허용, 삭제 대비). `RECIPE_VERSION_NO`는 실행 시점 버전(참고용)
+
+#### 상세 응답의 원본 레시피 상태 (response 계층 파생, 엔티티 불변)
+
+히스토리 상세 페이지의 "원본 레시피" 링크·버전 안내를 위해, 상세 응답(`ExecutionRecipeView`)은 **엔티티 변경 없이** 원본 레시피의 현재 상태를 조회해 파생 필드로 내린다. `EXECUTION_RECIPE`는 스냅샷만 갖고 원본의 현재 상태를 모르므로, 응답 매핑 단계에서 `RECIPE_ID`로 원본 `RECIPE`를 조회(일괄, N+1 방지)해 채운다.
+
+| 파생 필드 | 산출 | 용도 |
+|-----------|------|------|
+| `recipeDeleted` (boolean) | `RECIPE_ID`가 NULL이거나 원본 `RECIPE`가 없음/`DELETED_AT` 있음 → true | 링크 비활성 + "원본 삭제됨" |
+| `recipeCurrentVersion` (int, nullable) | 원본이 살아있으면 `RECIPE.CURRENT_VERSION`, 삭제/부재면 null | 실행 시점 버전(`RECIPE_VERSION_NO`)과 비교해 "버전 바뀜" 안내 |
+
+- 이 두 필드는 **응답 전용 파생값**이다. `EXECUTION`/`EXECUTION_RECIPE`/`RECIPE` 엔티티·컬럼은 바뀌지 않는다(읽기만).
+- FE 표시 규칙은 [pages/history-full.md 원본 레시피 링크 판정](../specs/pages/history-full.md#원본-레시피-링크-판정) 참조.
 - 목적 구분:
   - `RECIPE_VERSION` (recipe.md) = 레시피 편집 이력/복원용
   - `EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON` = 실행 감사/히스토리 재현용 (실행과 완전 독립)

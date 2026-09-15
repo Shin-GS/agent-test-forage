@@ -238,6 +238,16 @@ export interface ExecutionRecipeView {
   recipeId: number;
   recipeName: string;
   recipeVersionNo: number;
+  /**
+   * 원본 레시피가 삭제/부재이면 true (response 계층 파생 — 엔티티 불변).
+   * 원본 레시피 링크 판정에 사용(history-full.md 원본 레시피 링크 판정). BE 추가 예정이라 optional.
+   */
+  recipeDeleted?: boolean;
+  /**
+   * 원본 레시피가 살아있으면 현재 버전, 아니면 null (response 계층 파생).
+   * recipeVersionNo(실행 시점)와 비교해 버전 안내 배지를 표시. BE 추가 예정이라 optional.
+   */
+  recipeCurrentVersion?: number | null;
   sequence: number;
   status: StatusView;
   recipeSnapshot: any;
@@ -273,6 +283,8 @@ export interface ExecutionResponse {
   userId: number;
   conversationId: number;
   apiSpecId: number;
+  /** 서비스 표시명(BE: serviceDescription > name). apiSpecId null이거나 스펙 없으면 null */
+  serviceName?: string | null;
   type: StatusView;
   title: string;
   mode: StatusView;

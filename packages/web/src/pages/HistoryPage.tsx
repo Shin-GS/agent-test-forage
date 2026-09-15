@@ -6,12 +6,13 @@
 // - URL 쿼리 동기화(q/spec/status/from/to). FE 가 API 호출 시 q→keyword, spec→apiSpecId 매핑.
 //   필터가 쿼리키에 포함되어(useHistoryList) 변경 시 커서 리셋 + 재조회.
 // - 무한 스크롤(useInfiniteQuery + useInfiniteScroll). 실패/중지 행 색 강조(토큰 기반).
-// - 행 클릭 → 상세 모달(HistoryDetailModal = ExecutionDetailView + 스텝 JSON 펼침).
+// - 행/카드 클릭 → 상세 페이지(/history/:executionId) push(모달 아님). 현재 목록 URL(필터)을 함께 전달해
+//   상세의 [← 목록으로]에서 필터 유지 복귀(useListNavigation).
 // - 빈 상태(이력 0 / 필터 결과 없음) 2종. <1024px 카드 폴백.
 //
 // 데이터: GET /executions (executionsApi.history), 서비스 옵션 GET /specs (specsApi.list).
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryStates, parseAsString, parseAsArrayOf, parseAsStringEnum } from "nuqs";
 import { parseAsSearch, SEARCH_OPTIONS } from "../lib/urlFilters";
@@ -19,12 +20,12 @@ import { useQuery } from "@tanstack/react-query";
 import { specsApi } from "../api";
 import type { ExecutionSummaryView, SpecListItem } from "../api/types";
 import { FilterDropdown, type FilterOption } from "../components/recipe/FilterDropdown";
-import { HistoryDetailModal } from "../components/history/HistoryDetailModal";
 import { PageShell } from "../components/layout/PageShell";
 import { PageToolbar } from "../components/layout/PageToolbar";
 import { useHistoryList } from "./history/useHistoryList";
 import { useInfiniteScroll } from "../features/panel/shared/useInfiniteScroll";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { formatDuration, statusIcon } from "../features/panel/shared/format";
 
 /** 상태 필터 옵션 (완료 이력 4종만 — history-full.md 확정) */
@@ -82,6 +83,8 @@ function serviceName(item: ExecutionSummaryView, specNameMap: Map<number, string
 
 export function HistoryPage() {
   const navigate = useNavigate();
+  // 행/카드 클릭 → 상세 페이지 push. 현재 목록 URL(필터 포함)을 state.fromList 로 전달(복귀 시 필터 유지).
+  const navigateToDetail = useListNavigation();
   const isCompact = useMediaQuery("(max-width: 1023px)");
 
   // --- URL 상태 (nuqs): 검색/서비스/상태/기간을 URL 쿼리에 동기화 (page-layout.md 목록 상태와 URL) ---
@@ -168,8 +171,10 @@ export function HistoryPage() {
     setMultiParam("status", selectedStatuses.filter((v) => v !== s));
   }
 
-  // --- 상세 모달 ---
-  const [detailId, setDetailId] = useState<number | null>(null);
+  // --- 상세 페이지 이동 (모달 아님) ---
+  function openDetail(id: number) {
+    navigateToDetail(`/history/${id}`);
+  }
 
   const hasAny = items.length > 0;
 
@@ -356,11 +361,11 @@ export function HistoryPage() {
                     key={item.id}
                     className={rowStatusClass(item.status.code)}
                     tabIndex={0}
-                    onClick={() => setDetailId(item.id)}
+                    onClick={() => openDetail(item.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setDetailId(item.id);
+                        openDetail(item.id);
                       }
                     }}
                   >
@@ -405,11 +410,11 @@ export function HistoryPage() {
                   className={`exec-card${cls ? ` exec-card--${cls.replace("row--", "")}` : ""}`}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setDetailId(item.id)}
+                  onClick={() => openDetail(item.id)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setDetailId(item.id);
+                      openDetail(item.id);
                     }
                   }}
                 >
@@ -447,11 +452,6 @@ export function HistoryPage() {
           </div>
         )}
       </div>
-
-      {/* 상세 모달 */}
-      {detailId != null && (
-        <HistoryDetailModal executionId={detailId} onClose={() => setDetailId(null)} />
-      )}
     </PageShell>
   );
 }

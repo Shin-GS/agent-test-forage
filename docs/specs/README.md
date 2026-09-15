@@ -42,6 +42,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 - [AI 프롬프트 설계](common/ai-config.md) — 모델 구성, 토큰 절약, 호출 구조
 - [AI 응답 가이드](common/response-guide.md)
 - [별도 페이지 공통 원칙](common/page-layout.md) — 상단 바(헤더/툴바/액션 바)·접근성 + 목록 필터의 URL 상태 동기화(nuqs)·상세→목록 복귀
+- [UI 상호작용 패턴](common/ui-patterns.md) — 모달 vs 페이지 vs 드로어 판단 기준
 
 ### 채팅
 - [채팅 인터페이스 구조](chat/overview.md)

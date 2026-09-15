@@ -3446,23 +3446,6 @@ select.input {
   color: var(--color-text-tertiary);
 }
 
-/* 히스토리 상세 모달: ExecutionDetailView 를 모달 안에서 스크롤 */
-.history-detail-modal {
-  display: flex;
-  flex-direction: column;
-  max-height: 85vh;
-  overflow: hidden;
-  padding: 0;
-}
-.history-detail-modal .side-panel__view {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.history-detail-modal .side-panel__body {
-  overflow-y: auto;
-}
-
 /* 스텝별 원본 JSON 펼침 (히스토리 상세, showStepJson) */
 .exec-detail__step-json-wrap {
   display: flex;
@@ -3496,6 +3479,189 @@ select.input {
   white-space: pre;
   overflow-x: auto;
   max-height: 200px;
+}
+
+/* ───────────────────────────────────────────────────────────
+   히스토리 실행 결과 상세 "페이지" (/history/:executionId) — 모달 아님.
+   ExecutionDetailView variant="page" 전용 스타일. 디자인: docs/design/web/history.html Case 2·3·6.
+   토큰만 사용(하드코딩 금지).
+   ─────────────────────────────────────────────────────────── */
+
+/* 상세 페이지 본문은 조금 더 좁게(가독성) */
+.detail-body {
+  max-width: 900px;
+}
+
+/* 요약 헤더 카드 */
+.exec-summary {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.exec-summary__metrics {
+  display: flex;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.exec-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.exec-summary__key {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+.exec-summary__val {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+.exec-summary__time {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.exec-summary__time-rel {
+  color: var(--color-text-tertiary);
+}
+
+/* 실패 요약 배너 + 점프 */
+.fail-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--color-error-subtle);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+.fail-banner__icon {
+  color: var(--color-error);
+}
+.fail-banner__jump {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* 레시피 블록 (단일=1개, 플랜=N개. 헤더에 레시피명 + 버전 안내 + 원본 링크) */
+.detail-recipe {
+  margin-bottom: var(--space-5);
+}
+.detail-recipe__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-1);
+  border-bottom: 2px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.detail-recipe__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+/* 버전 상이 안내 (v{실행} 기준 · 원본 현재 v{현재}) */
+.version-note {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-2);
+}
+/* 원본 레시피 링크 (헤더 우측 끝) */
+.detail-source-link {
+  margin-left: auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.detail-source-link:hover {
+  background: var(--color-bg-hover);
+}
+.detail-source-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.detail-source-link[aria-disabled="true"] {
+  color: var(--color-text-tertiary);
+  border-color: var(--color-border);
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* 결과값 key-value 행의 복사 버튼 정렬 (page variant) */
+.detail-recipe .exec-detail__kv-row {
+  align-items: center;
+}
+.detail-recipe .exec-detail__kv-value {
+  flex: 1;
+}
+
+/* 스텝 JSON 펼침 내부 복사 버튼 헤더 */
+.exec-detail__json-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-1) var(--space-2) 0;
+}
+
+/* 실패 스텝 강조 (page variant, 점프 대상) */
+.exec-detail__step--error {
+  border: 1px solid var(--color-error-border);
+  background: var(--color-error-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  scroll-margin-top: var(--header-height, 56px);
+}
+.exec-detail__step--error:focus-visible {
+  outline: 2px solid var(--color-error);
+  outline-offset: 2px;
+}
+
+/* 복사 버튼 (채팅 답변 복사와 동일 상호작용 — 공통 CopyButton) */
+.copy-btn {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.copy-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+.copy-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* 상세 페이지 좁은 폭: 요약 지표 세로 스택 */
+@media (max-width: 1023px) {
+  .exec-summary__metrics {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

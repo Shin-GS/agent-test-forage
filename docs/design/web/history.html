@@ -10,9 +10,13 @@
   <style>
     body { overflow: auto; }
     .page { min-height: 100vh; background: var(--color-bg-primary); }
-    /* 페이지 상단 바 개편: 제목 전용 헤더 제거. 히스토리=목록형이므로 툴바(.list-toolbar)로 바로 시작.
+    /* 페이지 상단 바 개편: 제목 전용 헤더 제거.
+       - 목록(/history) = 목록형 → 툴바(.list-toolbar)로 시작.
+       - 상세(/history/:executionId) = 상세/편집형 → .page-action-bar(공통)로 시작.
        제목은 sr-only <h1> 로만 남긴다(page-layout.md). */
     .page-body { max-width: 1100px; margin: 0 auto; padding: var(--space-6); }
+    /* 상세 페이지 본문은 조금 더 좁게(가독성) */
+    .detail-body { max-width: 900px; }
 
     /* ── 필터 툴바 (레시피 목록 FilterDropdown 패턴과 일관) ── */
     .list-toolbar { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); }
@@ -68,18 +72,61 @@
     .infinite-loader { display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-4); font-size: var(--font-size-sm); color: var(--color-text-tertiary); }
     .infinite-end { text-align: center; padding: var(--space-4); font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
 
-    /* ── 상세 모달 ── */
-    .exec-meta { display: flex; gap: var(--space-5); flex-wrap: wrap; font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); }
-    .exec-meta__item { display: flex; flex-direction: column; gap: 2px; }
-    .exec-meta__key { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
-    .exec-meta__val { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
+    /* ══════════════════════════════════════════════════════
+       상세 페이지 (/history/:executionId) — 모달 아님
+       상단은 공통 .page-action-bar(components.css) 사용.
+       ══════════════════════════════════════════════════════ */
+
+    /* 액션 바 우측 "원본 레시피" 링크 액션 */
+    .detail-source-link { font-size: var(--font-size-sm); color: var(--color-accent); background: none; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-1) var(--space-3); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
+    .detail-source-link:hover { background: var(--color-bg-hover); }
+    .detail-source-link[aria-disabled="true"] { color: var(--color-text-tertiary); border-color: var(--color-border); cursor: default; opacity: 0.6; }
+
+    /* 요약 헤더 카드 */
+    .exec-summary { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); margin-bottom: var(--space-4); }
+    .exec-summary__metrics { display: flex; gap: var(--space-5); flex-wrap: wrap; margin-bottom: var(--space-3); }
+    .exec-summary__item { display: flex; flex-direction: column; gap: 2px; }
+    .exec-summary__key { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+    .exec-summary__val { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
+    .exec-summary__time { font-size: var(--font-size-sm); color: var(--color-text-secondary); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+    .exec-summary__time-rel { color: var(--color-text-tertiary); }
+
+    /* 실패 요약 배너 + 점프 */
+    .fail-banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); background: var(--color-error-subtle); border: 1px solid var(--color-error-border); border-radius: var(--radius-md); font-size: var(--font-size-sm); color: var(--color-text-primary); }
+    .fail-banner__icon { color: var(--color-error); }
+    .fail-banner__jump { margin-left: auto; }
+
+    /* 결과값 블록 */
+    .detail-block__title { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); margin: var(--space-4) 0 var(--space-2); text-transform: uppercase; letter-spacing: 0.05em; }
+    .result-kv { display: flex; flex-direction: column; gap: var(--space-1); background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); }
+    .result-kv__row { display: flex; align-items: center; gap: var(--space-3); }
+    .result-kv__key { min-width: 120px; font-size: var(--font-size-sm); color: var(--color-text-tertiary); }
+    .result-kv__val { flex: 1; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* 스텝 */
     .detail-step { padding: var(--space-3); margin-bottom: var(--space-2); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
-    .detail-step--error { border-color: var(--color-error-border); }
+    .detail-step--error { border-color: var(--color-error-border); background: var(--color-error-subtle); }
     .detail-step__header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); cursor: pointer; width: 100%; background: none; border: none; text-align: left; color: var(--color-text-primary); padding: 0; }
     .detail-step__header:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
-    .detail-step__json { margin-top: var(--space-2); padding: var(--space-2); background: var(--color-bg-primary); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: pre; overflow-x: auto; max-height: 160px; }
-    .detail-block__title { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); margin: var(--space-4) 0 var(--space-2); text-transform: uppercase; letter-spacing: 0.05em; }
-    .modal--wide { max-width: 640px; }
+    .detail-step__error-msg { margin-top: var(--space-1); font-size: var(--font-size-xs); color: var(--color-error); }
+    .detail-step__json-wrap { margin-top: var(--space-2); }
+    .detail-step__json-head { display: flex; align-items: center; gap: var(--space-2); }
+    .detail-step__json-label { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+    .detail-step__json { margin-top: var(--space-1); padding: var(--space-2); background: var(--color-bg-primary); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: pre; overflow-x: auto; max-height: 220px; }
+
+    /* 복사 버튼 (채팅 답변 복사와 동일 상호작용 — 공통 컴포넌트로 통일 예정) */
+    .copy-btn { margin-left: auto; font-size: var(--font-size-xs); color: var(--color-text-tertiary); background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 2px var(--space-2); cursor: pointer; }
+    .copy-btn:hover { color: var(--color-text-primary); background: var(--color-bg-hover); }
+    .copy-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+
+    /* 레시피 블록 (단일=1개, 플랜=N개. 헤더에 레시피명 + 버전 안내 + 원본 링크) */
+    .detail-recipe { margin-bottom: var(--space-5); }
+    .detail-recipe__head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); padding-bottom: var(--space-1); border-bottom: 2px solid var(--color-border); flex-wrap: wrap; }
+    .detail-recipe__title { font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+    /* 버전 상이 안내 (v{실행} 기준 · 원본 현재 v{현재}) */
+    .version-note { font-size: var(--font-size-xs); color: var(--color-text-tertiary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-full); padding: 2px var(--space-2); }
+    /* 원본 링크를 헤더 우측 끝으로 */
+    .detail-recipe__head .detail-source-link { margin-left: auto; }
 
     /* ── 반응형 카드 폴백 ── */
     .exec-cards { display: none; flex-direction: column; gap: var(--space-3); }
@@ -96,10 +143,11 @@
     .demo-responsive .data-table { display: none; }
     .demo-responsive .exec-cards { display: flex; }
 
-    /* 실제 반응형 폴백 (<1024px) */
+    /* 상세 페이지 좁은 폭: 요약 지표 세로 스택 */
     @media (max-width: 1023px) {
       .page-body .data-table { display: none; }
       .page-body .exec-cards { display: flex; }
+      .exec-summary__metrics { flex-direction: column; gap: var(--space-2); }
     }
   </style>
 </head>
@@ -107,11 +155,14 @@
 
   <div class="case-switcher">
     <button class="case-switcher__btn active" onclick="showCase('list')">1. 목록</button>
-    <button class="case-switcher__btn" onclick="showCase('detail')">2. 상세 보기</button>
-    <button class="case-switcher__btn" onclick="showCase('empty')">3. 빈 상태</button>
-    <button class="case-switcher__btn" onclick="showCase('no-result')">4. 필터 결과 없음</button>
-    <button class="case-switcher__btn" onclick="showCase('responsive')">5. 반응형 카드</button>
-    <button class="case-switcher__btn" onclick="showCase('plan-backlog')">6. 플랜(백로그)</button>
+    <button class="case-switcher__btn" onclick="showCase('detail')">2. 상세 — 성공</button>
+    <button class="case-switcher__btn" onclick="showCase('detail-fail')">3. 상세 — 실패</button>
+    <button class="case-switcher__btn" onclick="showCase('detail-loading')">4. 상세 — 로딩</button>
+    <button class="case-switcher__btn" onclick="showCase('detail-404')">5. 상세 — 404</button>
+    <button class="case-switcher__btn" onclick="showCase('detail-plan')">6. 상세 — 플랜</button>
+    <button class="case-switcher__btn" onclick="showCase('empty')">7. 목록 빈 상태</button>
+    <button class="case-switcher__btn" onclick="showCase('no-result')">8. 필터 결과 없음</button>
+    <button class="case-switcher__btn" onclick="showCase('responsive')">9. 반응형 카드</button>
   </div>
 
   <!-- ═══ Case 1: 목록 (기본) ═══ -->
@@ -169,6 +220,8 @@
           </div>
         </div>
 
+        <!-- 행 클릭 → 상세 페이지(/history/:executionId)로 이동(push). 모달 아님.
+             데모에서는 openDetail()이 상세 케이스로 전환한다. -->
         <table class="data-table">
           <thead>
             <tr>
@@ -180,72 +233,67 @@
             </tr>
           </thead>
           <tbody>
-            <tr tabindex="0" onclick="openDetail()">
+            <tr tabindex="0" onclick="openDetail('detail')">
               <td class="time-cell">08/28 09:15</td>
               <td><div class="recipe-cell__name">회원가입 × 5</div><div class="recipe-cell__summary">5건 중 4건 가입 완료</div></td>
               <td><span class="badge badge--neutral">사람인</span></td>
               <td><span class="status-cell"><span class="badge badge--warning">부분성공</span></span></td>
               <td class="duration-cell">12.3s</td>
             </tr>
-            <tr tabindex="0" onclick="openDetail()">
+            <tr tabindex="0" onclick="openDetail('detail')">
               <td class="time-cell">08/28 08:42</td>
               <td><div class="recipe-cell__name">공고 등록</div><div class="recipe-cell__summary">공고번호 J-8842 발급</div></td>
               <td><span class="badge badge--neutral">사람인</span></td>
               <td><span class="status-cell"><span class="badge badge--success">✅ 성공</span></span></td>
               <td class="duration-cell">2.1s</td>
             </tr>
-            <tr tabindex="0" onclick="openDetail()">
+            <tr tabindex="0" onclick="openDetail('detail')">
               <td class="time-cell">08/28 08:10</td>
               <td><div class="recipe-cell__name">회원가입 × 3</div><div class="recipe-cell__summary">3건 모두 가입 완료</div></td>
               <td><span class="badge badge--neutral">사람인</span></td>
               <td><span class="status-cell"><span class="badge badge--success">✅ 성공</span></span></td>
               <td class="duration-cell">5.4s</td>
             </tr>
-            <tr class="row--error" tabindex="0" onclick="openDetail()">
+            <tr class="row--error" tabindex="0" onclick="openDetail('detail-fail')">
               <td class="time-cell">08/27 17:30</td>
               <td><div class="recipe-cell__name">입사지원</div><div class="recipe-cell__summary">서버 응답 없음 (타임아웃)</div></td>
               <td><span class="badge badge--neutral">잡코리아</span></td>
               <td><span class="status-cell"><span class="badge badge--error">❌ 실패</span></span></td>
               <td class="duration-cell">0.8s</td>
             </tr>
-            <tr class="row--stopped" tabindex="0" onclick="openDetail()">
+            <tr class="row--stopped" tabindex="0" onclick="openDetail('detail')">
               <td class="time-cell">08/27 16:05</td>
               <td><div class="recipe-cell__name">결제 플로우</div><div class="recipe-cell__summary">사용자가 실행을 중지함</div></td>
               <td><span class="badge badge--neutral">쇼핑몰</span></td>
               <td><span class="status-cell"><span class="badge badge--neutral">⏹️ 중지</span></span></td>
               <td class="duration-cell">1.9s</td>
             </tr>
-            <tr tabindex="0" onclick="openDetail()">
+            <tr tabindex="0" onclick="openDetail('detail')">
               <td class="time-cell">08/27 15:20</td>
               <td><div class="recipe-cell__name">결제 플로우</div><div class="recipe-cell__summary">주문번호 O-2201 결제 완료</div></td>
               <td><span class="badge badge--neutral">쇼핑몰</span></td>
               <td><span class="status-cell"><span class="badge badge--success">✅ 성공</span></span></td>
               <td class="duration-cell">3.2s</td>
             </tr>
-            <tr tabindex="0" onclick="openDetail()">
+            <tr tabindex="0" onclick="openDetail('detail-plan')">
               <td class="time-cell">08/26 16:45</td>
-              <td><div class="recipe-cell__name">회원가입</div><div class="recipe-cell__summary">가입 완료 (usr_x7k2m)</div></td>
+              <td><div class="recipe-cell__name">가입→로그인 플랜</div><div class="recipe-cell__summary">2개 레시피 순차 실행 완료</div></td>
               <td><span class="badge badge--neutral">사람인</span></td>
               <td><span class="status-cell"><span class="badge badge--success">✅ 성공</span></span></td>
-              <td class="duration-cell">1.8s</td>
+              <td class="duration-cell">3.6s</td>
             </tr>
           </tbody>
         </table>
 
-        <!-- 커서 무한 스크롤 하단 로딩 (다음 페이지 fetch 중).
-             데이터 계약: startedAt DESC 커서 기반 무한 스크롤. 하단 sentinel 도달 시 다음 커서 요청.
-             FE: 로딩 중 .infinite-loader 노출, 마지막 페이지 도달 시 .infinite-end 로 전환. -->
+        <!-- 커서 무한 스크롤 하단 로딩 (다음 페이지 fetch 중). -->
         <div class="infinite-loader" role="status" aria-live="polite">
           <span class="spinner"></span>
           <span>더 불러오는 중...</span>
         </div>
 
-        <!-- 카드 폴백 (반응형 시 노출)
-             주의(FE 구현): 이 목록은 데스크톱 테이블과 동일 데이터의 반응형 대체 표현.
-             현재 aria-hidden="true"로 스크린리더에서 중복 낭독을 막지만, 실제 <1024px 미디어쿼리로
-             카드가 노출될 때는 aria-hidden="false"로 토글해야 함(그렇지 않으면 노출된 콘텐츠가 낭독되지 않음). -->
+        <!-- 카드 폴백 (반응형 시 노출). 카드 클릭도 상세 페이지로 이동. -->
         <div class="exec-cards" aria-hidden="true">
-          <div class="exec-card" onclick="openDetail()">
+          <div class="exec-card" onclick="openDetail('detail')">
             <div class="exec-card__top"><span class="exec-card__name">회원가입 × 5</span><span class="badge badge--warning">부분성공</span></div>
             <div class="exec-card__summary">5건 중 4건 가입 완료</div>
             <div class="exec-card__meta"><span class="badge badge--neutral">사람인</span><span>· 12.3s</span><span>· 08/28 09:15</span></div>
@@ -253,93 +301,270 @@
         </div>
       </div>
     </div>
-    <!-- 상세 모달 (숨김, openDetail로 노출) -->
-    <div id="detail-modal-1" style="display:none;"></div>
   </div>
 
-  <!-- ═══ Case 2: 상세 보기 (모달) ═══ -->
+  <!-- ═══ Case 2: 상세 — 성공 (별도 페이지 /history/:executionId) ═══ -->
+  <!--
+       [전환 note] 모달이 아니라 별도 페이지다(ui-patterns.md / history-full.md).
+       - 상단: 공통 .page-action-bar (뒤로가기 + 제목 + 상태 배지 + [원본 레시피])
+       - [← 목록으로] 는 직전 목록 URL(필터 유지)로 복귀, 브라우저 뒤로가기도 동일. 딥링크 진입 시 /history 폴백. (FE 구현)
+       - 제목/문서타이틀은 PageShell 이 sr-only <h1> + document.title 처리 (FE 구현)
+  -->
   <div id="case-detail" class="screen">
     <div class="page">
-      <h1 class="sr-only">실행 히스토리</h1>
-      <div class="page-body">
-        <table class="data-table">
-          <thead><tr><th scope="col">실행 시각</th><th scope="col">레시피명 · 결과</th><th scope="col">서비스</th><th scope="col">상태</th><th scope="col">소요시간</th></tr></thead>
-          <tbody>
-            <tr class="row--error"><td class="time-cell">08/28 09:15</td><td><div class="recipe-cell__name">회원가입 × 5</div><div class="recipe-cell__summary">5건 중 3건 성공, 2건 실패</div></td><td><span class="badge badge--neutral">사람인</span></td><td><span class="badge badge--warning">부분성공</span></td><td class="duration-cell">12.3s</td></tr>
-          </tbody>
-        </table>
+      <h1 class="sr-only">실행 히스토리 — 회원가입 × 5</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('list')" aria-label="목록으로 돌아가기">← 목록으로</button>
+        <span class="page-action-bar__title">✅ 회원가입 × 5</span>
+        <span class="badge badge--warning" style="margin-left: var(--space-2);">부분성공</span>
       </div>
-    </div>
 
-    <!-- ExecutionDetailView (모달)
-         [접근성/FE 구현 note] 상세 모달은 다음 인터랙션을 FE에서 구현해야 함(recipe-editor 모달과 일관):
-         - ESC 키로 닫기 (아래 데모 JS로 연결됨)
-         - 모달 바깥(backdrop) 클릭 시 닫기 (아래 데모 JS로 연결됨)
-         - 열릴 때 모달 내부 첫 포커스 요소(닫기 ✕ 버튼)로 포커스 이동  ← FE 구현 범위(포커스 트랩)
-         - 닫으면 포커스를 트리거(목록 행)로 복귀                        ← FE 구현 범위(포커스 트랩)
-         이 명세 파일에서는 닫기 동작만 연결하고, 포커스 트랩/복귀는 FE(React) 구현 범위로 남긴다. -->
-    <div class="modal-backdrop" data-detail-backdrop>
-      <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-        <div class="modal__header">
-          <span class="modal__title" id="detail-title">회원가입 × 5 — 실행 상세</span>
-          <button class="btn btn--ghost btn--sm" aria-label="닫기" data-detail-close>✕</button>
+      <div class="page-body detail-body">
+        <!-- 요약 헤더 -->
+        <div class="exec-summary">
+          <div class="exec-summary__metrics">
+            <div class="exec-summary__item"><span class="exec-summary__key">서비스</span><span class="exec-summary__val">사람인</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">실행 모드</span><span class="exec-summary__val">자동</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">스텝 성공률</span><span class="exec-summary__val">2/3</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">소요시간</span><span class="exec-summary__val">12.3초</span></div>
+          </div>
+          <div class="exec-summary__time">
+            실행: 2026-08-28 09:15:04 <span class="exec-summary__time-rel">(3시간 전)</span>
+          </div>
         </div>
-        <div class="modal__body">
-          <!-- 실행 메타 -->
-          <div class="exec-meta">
-            <div class="exec-meta__item"><span class="exec-meta__key">실행 시각</span><span class="exec-meta__val">2026-08-28 09:15</span></div>
-            <div class="exec-meta__item"><span class="exec-meta__key">실행 모드</span><span class="exec-meta__val">자동</span></div>
-            <div class="exec-meta__item"><span class="exec-meta__key">상태</span><span class="exec-meta__val"><span class="badge badge--warning">부분성공</span></span></div>
-            <div class="exec-meta__item"><span class="exec-meta__key">소요시간</span><span class="exec-meta__val">12.3초</span></div>
+
+        <!-- 레시피 블록 (단일 실행도 레시피 헤더를 항상 표시 — N=1 플랜) -->
+        <div class="detail-recipe">
+          <div class="detail-recipe__head">
+            <span class="detail-recipe__title">회원가입</span>
+            <!-- 버전 상이: 실행 당시 v2, 원본 현재 v5 -->
+            <span class="version-note">이 실행은 v2 기준 · 원본 현재 v5</span>
+            <a class="detail-source-link" href="#" onclick="return false;">🔗 원본 레시피</a>
           </div>
 
-          <div class="detail-block__title">스텝별 결과</div>
+          <!-- 결과값 (복사) -->
+          <div class="detail-block__title">결과값</div>
+          <div class="result-kv">
+            <div class="result-kv__row"><span class="result-kv__key">created</span><span class="result-kv__val">3</span><button class="copy-btn" aria-label="created 값 복사">복사</button></div>
+            <div class="result-kv__row"><span class="result-kv__key">failed</span><span class="result-kv__val">2</span><button class="copy-btn" aria-label="failed 값 복사">복사</button></div>
+            <div class="result-kv__row"><span class="result-kv__key">memberIds</span><span class="result-kv__val">["usr_x7k2m", "usr_a1b2c", "usr_p9q8r"]</span><button class="copy-btn" aria-label="memberIds 값 복사">복사</button></div>
+          </div>
+
+          <!-- 실행 단계 -->
+          <div class="detail-block__title">실행 단계</div>
 
           <div class="detail-step">
             <button class="detail-step__header" aria-expanded="true">
               <span style="color: var(--color-success);">✓</span>
-              <span>Step 1: 이메일 생성</span>
+              <span>1. 이메일 생성</span>
               <span class="badge badge--success" style="margin-left: auto;">성공</span>
             </button>
-            <div class="detail-step__json">{"email": "test1724828100@company.co.kr", "password": "Test1234!"}</div>
+            <div class="detail-step__json-wrap">
+              <div class="detail-step__json-head"><span class="detail-step__json-label">원본 응답</span><button class="copy-btn" aria-label="1번 스텝 응답 복사">복사</button></div>
+              <div class="detail-step__json">{"email": "test1724828100@company.co.kr", "password": "Test1234!"}</div>
+            </div>
           </div>
 
           <div class="detail-step">
             <button class="detail-step__header" aria-expanded="true">
               <span style="color: var(--color-success);">✓</span>
-              <span>Step 2: 회원가입 API</span>
+              <span>2. 회원가입 API</span>
               <span class="badge badge--success" style="margin-left: auto;">성공</span>
             </button>
-            <div class="detail-step__json">{"status": 201, "data": {"memberId": "usr_x7k2m", "email": "test1724828100@company.co.kr"}}</div>
+            <div class="detail-step__json-wrap">
+              <div class="detail-step__json-head"><span class="detail-step__json-label">원본 응답</span><button class="copy-btn" aria-label="2번 스텝 응답 복사">복사</button></div>
+              <div class="detail-step__json">{"status": 201, "data": {"memberId": "usr_x7k2m", "email": "test1724828100@company.co.kr"}}</div>
+            </div>
           </div>
 
-          <div class="detail-step detail-step--error">
+          <div class="detail-step detail-step--error" id="step-3">
             <button class="detail-step__header" aria-expanded="true">
               <span style="color: var(--color-error);">✕</span>
-              <span>Step 3: 프로필 설정</span>
+              <span>3. 프로필 설정</span>
               <span class="badge badge--error" style="margin-left: auto;">2건 실패</span>
             </button>
-            <div class="detail-step__json">{"error": "DUPLICATE_NICKNAME", "message": "이미 사용 중인 닉네임입니다"}</div>
+            <div class="detail-step__error-msg">DUPLICATE_NICKNAME — 이미 사용 중인 닉네임입니다</div>
+            <div class="detail-step__json-wrap">
+              <div class="detail-step__json-head"><span class="detail-step__json-label">원본 응답</span><button class="copy-btn" aria-label="3번 스텝 응답 복사">복사</button></div>
+              <div class="detail-step__json">{"error": "DUPLICATE_NICKNAME", "message": "이미 사용 중인 닉네임입니다"}</div>
+            </div>
           </div>
-
-          <div class="detail-block__title">사용자 입력값</div>
-          <div class="detail-step">
-            <div class="detail-step__json">{"quantity": 5, "domain": "@company.co.kr"}</div>
-          </div>
-
-          <div class="detail-block__title">결과</div>
-          <div class="detail-step">
-            <div class="detail-step__json">{"created": 3, "failed": 2, "memberIds": ["usr_x7k2m", "usr_a1b2c", "usr_p9q8r"]}</div>
-          </div>
-        </div>
-        <div class="modal__footer">
-          <button class="btn btn--secondary" data-detail-close>닫기</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══ Case 3: 빈 상태 (실행 이력 없음) ═══ -->
+  <!-- ═══ Case 3: 상세 — 실패 (실패 배너 + 점프 + 강조) ═══ -->
+  <div id="case-detail-fail" class="screen">
+    <div class="page">
+      <h1 class="sr-only">실행 히스토리 — 입사지원</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('list')" aria-label="목록으로 돌아가기">← 목록으로</button>
+        <span class="page-action-bar__title">❌ 입사지원</span>
+        <span class="badge badge--error" style="margin-left: var(--space-2);">실패</span>
+      </div>
+
+      <div class="page-body detail-body">
+        <div class="exec-summary">
+          <div class="exec-summary__metrics">
+            <div class="exec-summary__item"><span class="exec-summary__key">서비스</span><span class="exec-summary__val">잡코리아</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">실행 모드</span><span class="exec-summary__val">자동</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">스텝 성공률</span><span class="exec-summary__val">2/4</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">소요시간</span><span class="exec-summary__val">0.8초</span></div>
+          </div>
+          <div class="exec-summary__time">실행: 2026-08-27 17:30:12 <span class="exec-summary__time-rel">(어제)</span></div>
+        </div>
+
+        <!-- 실패 요약 배너 (가장 처음 실패한 스텝 기준) + 점프 -->
+        <div class="fail-banner">
+          <span class="fail-banner__icon" aria-hidden>⚠️</span>
+          <span><strong>3번 스텝 "결제 승인"에서 실패</strong> — 402 Payment Required</span>
+          <a class="btn btn--secondary btn--sm fail-banner__jump" href="#fail-step-3">실패 지점으로 이동 ↓</a>
+        </div>
+
+        <!-- 레시피 블록 (단일도 헤더 표시). 원본 삭제 예시 → 링크 비활성 -->
+        <div class="detail-recipe">
+          <div class="detail-recipe__head">
+            <span class="detail-recipe__title">입사지원</span>
+            <a class="detail-source-link" href="#" aria-disabled="true" onclick="return false;">🔗 원본 삭제됨</a>
+          </div>
+
+          <div class="detail-block__title">실행 단계</div>
+
+          <div class="detail-step">
+            <button class="detail-step__header" aria-expanded="false">
+              <span style="color: var(--color-success);">✓</span>
+              <span>1. 장바구니 담기</span>
+              <span class="badge badge--success" style="margin-left: auto;">성공</span>
+            </button>
+          </div>
+          <div class="detail-step">
+            <button class="detail-step__header" aria-expanded="false">
+              <span style="color: var(--color-success);">✓</span>
+              <span>2. 주문서 생성</span>
+              <span class="badge badge--success" style="margin-left: auto;">성공</span>
+            </button>
+          </div>
+          <div class="detail-step detail-step--error" id="fail-step-3">
+            <button class="detail-step__header" aria-expanded="true">
+              <span style="color: var(--color-error);">✕</span>
+              <span>3. 결제 승인</span>
+              <span class="badge badge--error" style="margin-left: auto;">실패</span>
+            </button>
+            <div class="detail-step__error-msg">402 Payment Required — 잔액이 부족합니다 (INSUFFICIENT_BALANCE)</div>
+            <div class="detail-step__json-wrap">
+              <div class="detail-step__json-head"><span class="detail-step__json-label">원본 응답</span><button class="copy-btn" aria-label="3번 스텝 응답 복사">복사</button></div>
+              <div class="detail-step__json">{"status": 402, "error": "INSUFFICIENT_BALANCE", "message": "잔액이 부족합니다"}</div>
+            </div>
+          </div>
+          <div class="detail-step">
+            <button class="detail-step__header" aria-expanded="false" disabled>
+              <span style="color: var(--color-text-tertiary);">⏸️</span>
+              <span style="color: var(--color-text-tertiary);">4. 배송 등록</span>
+              <span class="badge badge--neutral" style="margin-left: auto;">미실행</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 4: 상세 — 로딩 (딥링크/새로고침 직접 진입) ═══ -->
+  <div id="case-detail-loading" class="screen">
+    <div class="page">
+      <h1 class="sr-only">실행 히스토리</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('list')" aria-label="목록으로 돌아가기">← 목록으로</button>
+        <span class="page-action-bar__title" style="color: var(--color-text-tertiary);">실행 결과</span>
+      </div>
+      <div class="page-body detail-body">
+        <div class="infinite-loader" role="status" aria-live="polite" style="padding: var(--space-8);">
+          <span class="spinner spinner--lg"></span>
+          <span>불러오는 중…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 5: 상세 — 404 / 권한 없음 (타인·삭제 실행 딥링크 접근) ═══ -->
+  <!-- 스펙 상세(admin.html)와 동일 패턴: 토스트가 아니라 전용 빈 상태 + [목록으로] -->
+  <div id="case-detail-404" class="screen">
+    <div class="page">
+      <h1 class="sr-only">실행 히스토리</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('list')" aria-label="목록으로 돌아가기">← 목록으로</button>
+        <span class="page-action-bar__title">실행 결과</span>
+      </div>
+      <div class="page-body detail-body">
+        <div class="empty-state">
+          <div class="empty-state__icon">🔍</div>
+          <h3 class="empty-state__title">해당 실행 기록을 찾을 수 없어요</h3>
+          <p class="empty-state__desc">접근 권한이 없거나 삭제되었을 수 있어요.</p>
+          <button class="btn btn--primary" onclick="showCase('list')">목록으로</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 6: 상세 — 플랜(다중 레시피) ═══ -->
+  <!-- EXECUTION.TYPE=PLAN: 레시피별로 세로 나열(레시피명 구분 + 각 결과값/스텝). 탭/목차는 백로그. -->
+  <div id="case-detail-plan" class="screen">
+    <div class="page">
+      <h1 class="sr-only">실행 히스토리 — 가입→로그인 플랜</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('list')" aria-label="목록으로 돌아가기">← 목록으로</button>
+        <span class="page-action-bar__title">✅ 가입→로그인 플랜</span>
+        <span class="badge badge--success" style="margin-left: var(--space-2);">성공</span>
+      </div>
+
+      <div class="page-body detail-body">
+        <div class="exec-summary">
+          <div class="exec-summary__metrics">
+            <div class="exec-summary__item"><span class="exec-summary__key">유형</span><span class="exec-summary__val">플랜 (2개 레시피)</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">실행 모드</span><span class="exec-summary__val">자동</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">스텝 성공률</span><span class="exec-summary__val">4/4</span></div>
+            <div class="exec-summary__item"><span class="exec-summary__key">소요시간</span><span class="exec-summary__val">3.6초</span></div>
+          </div>
+          <div class="exec-summary__time">실행: 2026-08-26 16:45:20 <span class="exec-summary__time-rel">(2일 전)</span></div>
+        </div>
+
+        <!-- 레시피 1 — 원본 링크 활성, 버전 동일(안내 생략) -->
+        <div class="detail-recipe">
+          <div class="detail-recipe__head">
+            <span class="detail-recipe__title">1. 회원가입</span>
+            <a class="detail-source-link" href="#" onclick="return false;">🔗 원본 레시피</a>
+          </div>
+          <div class="detail-block__title">결과값</div>
+          <div class="result-kv">
+            <div class="result-kv__row"><span class="result-kv__key">memberId</span><span class="result-kv__val">usr_x7k2m</span><button class="copy-btn" aria-label="memberId 복사">복사</button></div>
+          </div>
+          <div class="detail-block__title">실행 단계</div>
+          <div class="detail-step">
+            <button class="detail-step__header" aria-expanded="false"><span style="color: var(--color-success);">✓</span><span>1. 회원가입 API</span><span class="badge badge--success" style="margin-left:auto;">성공</span></button>
+          </div>
+        </div>
+
+        <!-- 레시피 2 — 버전 상이 안내 -->
+        <div class="detail-recipe">
+          <div class="detail-recipe__head">
+            <span class="detail-recipe__title">2. 로그인</span>
+            <span class="version-note">이 실행은 v1 기준 · 원본 현재 v3</span>
+            <a class="detail-source-link" href="#" onclick="return false;">🔗 원본 레시피</a>
+          </div>
+          <div class="detail-block__title">결과값</div>
+          <div class="result-kv">
+            <div class="result-kv__row"><span class="result-kv__key">accessToken</span><span class="result-kv__val">eyJhbGciOiJIUzI1Ni... (생략)</span><button class="copy-btn" aria-label="accessToken 복사">복사</button></div>
+          </div>
+          <div class="detail-block__title">실행 단계</div>
+          <div class="detail-step">
+            <button class="detail-step__header" aria-expanded="false"><span style="color: var(--color-success);">✓</span><span>1. 로그인 API</span><span class="badge badge--success" style="margin-left:auto;">성공</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 7: 목록 빈 상태 (실행 이력 없음) ═══ -->
   <div id="case-empty" class="screen">
     <div class="page">
       <h1 class="sr-only">실행 히스토리</h1>
@@ -354,7 +579,7 @@
     </div>
   </div>
 
-  <!-- ═══ Case 4: 필터 결과 없음 ═══ -->
+  <!-- ═══ Case 8: 필터 결과 없음 ═══ -->
   <div id="case-no-result" class="screen">
     <div class="page">
       <h1 class="sr-only">실행 히스토리</h1>
@@ -392,7 +617,7 @@
     </div>
   </div>
 
-  <!-- ═══ Case 5: 반응형 카드 폴백 (Tablet 이하) ═══ -->
+  <!-- ═══ Case 9: 반응형 카드 폴백 (Tablet 이하) ═══ -->
   <div id="case-responsive" class="screen">
     <div class="page">
       <h1 class="sr-only">실행 히스토리</h1>
@@ -402,47 +627,30 @@
           <span class="badge badge--neutral">Tablet 미리보기</span>
         </div>
         <div class="exec-cards">
-          <div class="exec-card" tabindex="0" onclick="openDetail()">
+          <div class="exec-card" tabindex="0" onclick="openDetail('detail')">
             <div class="exec-card__top"><span class="exec-card__name">회원가입 × 5</span><span class="badge badge--warning">부분성공</span></div>
             <div class="exec-card__summary">5건 중 4건 가입 완료</div>
             <div class="exec-card__meta"><span class="badge badge--neutral">사람인</span><span>· 12.3s</span><span>· 08/28 09:15</span></div>
           </div>
-          <div class="exec-card exec-card--error" tabindex="0" onclick="openDetail()">
+          <div class="exec-card exec-card--error" tabindex="0" onclick="openDetail('detail-fail')">
             <div class="exec-card__top"><span class="exec-card__name">입사지원</span><span class="badge badge--error">❌ 실패</span></div>
             <div class="exec-card__summary">서버 응답 없음 (타임아웃)</div>
             <div class="exec-card__meta"><span class="badge badge--neutral">잡코리아</span><span>· 0.8s</span><span>· 08/27 17:30</span></div>
           </div>
-          <div class="exec-card exec-card--stopped" tabindex="0" onclick="openDetail()">
+          <div class="exec-card exec-card--stopped" tabindex="0" onclick="openDetail('detail')">
             <div class="exec-card__top"><span class="exec-card__name">결제 플로우</span><span class="badge badge--neutral">⏹️ 중지</span></div>
             <div class="exec-card__summary">사용자가 실행을 중지함</div>
             <div class="exec-card__meta"><span class="badge badge--neutral">쇼핑몰</span><span>· 1.9s</span><span>· 08/27 16:05</span></div>
           </div>
-          <div class="exec-card" tabindex="0" onclick="openDetail()">
+          <div class="exec-card" tabindex="0" onclick="openDetail('detail')">
             <div class="exec-card__top"><span class="exec-card__name">회원가입</span><span class="badge badge--success">✅ 성공</span></div>
             <div class="exec-card__summary">가입 완료 (usr_x7k2m)</div>
             <div class="exec-card__meta"><span class="badge badge--neutral">사람인</span><span>· 1.8s</span><span>· 08/26 16:45</span></div>
           </div>
         </div>
         <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: var(--space-4);">
-          실제 화면(&lt;1024px)에서는 테이블이 숨겨지고 이 카드 목록으로 자동 전환됩니다. 카드 클릭 시 상세 모달은 데스크톱과 동일하게 동작합니다.
+          실제 화면(&lt;1024px)에서는 테이블이 숨겨지고 이 카드 목록으로 자동 전환됩니다. 카드 클릭 시 상세 <strong>페이지</strong>(/history/:executionId)로 이동합니다(모달 아님).
         </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ Case 6: 플랜 히스토리 (백로그) ═══ -->
-  <div id="case-plan-backlog" class="screen">
-    <div class="page">
-      <h1 class="sr-only">실행 히스토리</h1>
-      <div class="page-body">
-        <div class="alert alert--info" style="margin-bottom: var(--space-4);">
-          <span>ℹ️ <strong>플랜 히스토리는 백로그입니다.</strong> 플랜 실행 기능 구현 후 제공됩니다.</span>
-        </div>
-        <div class="empty-state">
-          <div class="empty-state__icon">📋</div>
-          <h3 class="empty-state__title">플랜 히스토리 (예정)</h3>
-          <p class="empty-state__desc">플랜(레시피 묶음) 실행이 구현되면, 여기서 플랜 단위 실행을 묶어서 보고 펼쳐서 개별 레시피 결과를 확인할 수 있습니다. 현재는 단일 레시피 실행 이력만 목록에 표시됩니다.</p>
-        </div>
       </div>
     </div>
   </div>
@@ -456,46 +664,32 @@
       trigger.setAttribute('aria-expanded', String(!menu.hidden));
     }
 
-    // 상세 모달: Case 2로 이동시켜 모달 상태를 보여줌 (디자인 명세 데모)
-    function openDetail() {
-      showCase('detail');
+    // 행/카드 클릭 → 상세 "페이지"로 이동.
+    // 실제 FE: navigate(`/history/${id}`, { state:{ fromList } }) (push). 데모에서는 케이스 전환.
+    // caseId 로 성공/실패/플랜 상세 중 어떤 데모를 보여줄지 선택.
+    function openDetail(caseId) {
+      showCase(caseId || 'detail');
+      window.scrollTo(0, 0);
     }
-
-    // 상세 모달 닫기: 데모에서는 목록(Case 1)으로 복귀.
-    // (실제 FE에서는 모달 언마운트 + 포커스를 트리거 행으로 복귀 — 위 note 참조)
-    function closeDetail() {
-      showCase('list');
-    }
-
-    // 닫기 버튼(헤더 ✕ / 하단 [닫기]) 연결
-    document.querySelectorAll('[data-detail-close]').forEach(function (btn) {
-      btn.addEventListener('click', closeDetail);
-    });
-
-    // backdrop 바깥 클릭 시 닫기 (모달 내부 클릭은 무시)
-    var detailBackdrop = document.querySelector('[data-detail-backdrop]');
-    if (detailBackdrop) {
-      detailBackdrop.addEventListener('click', function (e) {
-        if (e.target === detailBackdrop) closeDetail();
-      });
-    }
-
-    // ESC 로 닫기 (상세 케이스가 활성일 때만)
-    document.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape') return;
-      var detail = document.getElementById('case-detail');
-      if (detail && detail.classList.contains('active')) closeDetail();
-    });
 
     // 스텝 펼침/접힘 (aria-expanded 동기화)
     document.addEventListener('click', function (e) {
       var header = e.target.closest('.detail-step__header');
-      if (!header) return;
-      var json = header.parentElement.querySelector('.detail-step__json');
-      if (!json) return;
+      if (!header || header.disabled) return;
+      var wrap = header.parentElement.querySelector('.detail-step__json-wrap');
+      if (!wrap) return;
       var expanded = header.getAttribute('aria-expanded') === 'true';
       header.setAttribute('aria-expanded', String(!expanded));
-      json.style.display = expanded ? 'none' : 'block';
+      wrap.style.display = expanded ? 'none' : 'block';
+    });
+
+    // 복사 버튼 데모: 실제 FE는 navigator.clipboard.writeText + "복사되었습니다" 토스트 + 잠깐 ✓.
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-btn');
+      if (!btn) return;
+      var original = btn.textContent;
+      btn.textContent = '✓ 복사됨';
+      setTimeout(function () { btn.textContent = original; }, 1200);
     });
 
     function showCase(caseId) {
