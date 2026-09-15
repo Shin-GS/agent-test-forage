@@ -33,7 +33,6 @@ public class SettingsController {
     /** 현재 적용된 설정 조회 (읽기 전용, 시크릿 제외) */
     @GetMapping("/settings")
     public SettingsView get() {
-        // TODO: 인증/권한 (auth 도메인 구현 후: 로그인 사용자로 제한)
         return new SettingsView(
                 PROVIDER,
                 aiSettings.reasoningModel(),
