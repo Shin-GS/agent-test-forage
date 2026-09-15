@@ -16,6 +16,8 @@ import type { CreateUserBody } from "../../api/users";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { UserCreateModal } from "./UserCreateModal";
 import { PasswordChangeModal } from "./PasswordChangeModal";
+import { PageShell } from "../../components/layout/PageShell";
+import { PageToolbar } from "../../components/layout/PageToolbar";
 import { useToastStore } from "../../store/toastStore";
 import { useAuthStore } from "../../store/authStore";
 
@@ -136,17 +138,21 @@ export function AdminUserListPage() {
   }
 
   return (
-    <div className="recipe-page">
-      <div className="page-header">
-        <span className="page-header__title">관리자 · 사용자 관리</span>
-        <span className="badge badge--info" title="관리자 전용 화면">
-          🔒 관리자 전용
-        </span>
-      </div>
-
-      <div className="page-body">
-        {/* 툴바: 검색 + 카운트 + 추가 */}
-        <div className="admin-user-toolbar">
+    <PageShell
+      title="사용자 관리"
+      toolbar={
+        <PageToolbar
+          actions={
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => setCreateOpen(true)}
+            >
+              + 사용자 추가
+            </button>
+          }
+        >
+          {/* 검색 + 카운트 */}
           <div className="admin-user-search">
             <span className="admin-user-search__icon" aria-hidden>
               🔍
@@ -163,16 +169,10 @@ export function AdminUserListPage() {
           <span className="list-count" role="status" aria-live="polite">
             총 {users?.length ?? 0}명
           </span>
-          <span className="page-header__spacer" style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
-            onClick={() => setCreateOpen(true)}
-          >
-            + 사용자 추가
-          </button>
-        </div>
-
+        </PageToolbar>
+      }
+    >
+      <div className="page-body">
         {isLoading && (
           <div className="recipe-state" role="status" aria-live="polite">
             사용자 목록을 불러오는 중입니다…
@@ -369,7 +369,7 @@ export function AdminUserListPage() {
         }}
         onCancel={() => setPasswordTarget(null)}
       />
-    </div>
+    </PageShell>
   );
 }
 

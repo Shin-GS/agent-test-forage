@@ -18,6 +18,8 @@ import type { RecipeSummary, SpecListItem } from "../api/types";
 import type { RecipeSort, SortDirection } from "../api/recipes";
 import { FilterDropdown, type FilterOption } from "../components/recipe/FilterDropdown";
 import { ConfirmModal } from "../components/common/ConfirmModal";
+import { PageShell } from "../components/layout/PageShell";
+import { PageToolbar } from "../components/layout/PageToolbar";
 import { useToastStore } from "../store/toastStore";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 
@@ -227,78 +229,75 @@ export function RecipeListPage() {
   }
 
   return (
-    <div className="recipe-page">
-      <div className="page-header">
-        <span className="page-header__title">레시피 관리</span>
-        <div className="page-header__actions">
-          <button type="button" className="btn btn--primary" onClick={() => navigate("/recipes/new")}>
-            + 레시피 만들기
-          </button>
-        </div>
-      </div>
-
-      <div className="page-body">
-        {/* 툴바: 검색 + 필터 드롭다운 + 정렬 */}
-        <div className="list-toolbar">
-          <div className="list-toolbar__row">
-            <input
-              className="input"
-              type="text"
-              placeholder="🔍 이름/설명 검색..."
-              aria-label="레시피 검색"
-              style={{ maxWidth: "260px" }}
-              value={keywordInput}
-              onChange={(e) => setKeywordInput(e.target.value)}
-            />
-
-            <FilterDropdown
-              label="서비스"
-              options={specOptions}
-              selected={selectedSpecIds}
-              onChange={(next) => setMultiParam("spec", next)}
-            />
-            <FilterDropdown
-              label="범위"
-              options={VISIBILITY_OPTIONS}
-              selected={selectedVisibility}
-              onChange={(next) => setMultiParam("visibility", next)}
-            />
-            <FilterDropdown
-              label="태그"
-              options={tagOptions}
-              selected={selectedTags}
-              onChange={(next) => setMultiParam("tag", next)}
-            />
-
-            <div className="list-toolbar__spacer" />
-
-            <select
-              className="input"
-              aria-label="정렬 기준"
-              style={{ maxWidth: "150px" }}
-              value={sort}
-              onChange={(e) => updateParams((p) => p.set("sort", e.target.value))}
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="sort-dir"
-              aria-label={`정렬 방향: ${direction === "desc" ? "내림차순" : "오름차순"}`}
-              title={direction === "desc" ? "내림차순" : "오름차순"}
-              onClick={toggleDirection}
-            >
-              {direction === "desc" ? "▼" : "▲"}
+    <PageShell
+      title="레시피 관리"
+      toolbar={
+        <PageToolbar
+          actions={
+            <button type="button" className="btn btn--primary" onClick={() => navigate("/recipes/new")}>
+              + 레시피 만들기
             </button>
-          </div>
+          }
+        >
+          {/* 검색 + 필터 드롭다운 + 정렬 */}
+          <input
+            className="input"
+            type="text"
+            placeholder="🔍 이름/설명 검색..."
+            aria-label="레시피 검색"
+            style={{ maxWidth: "260px" }}
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+          />
 
-          {/* 필터 칩 요약 */}
-          {activeFilterCount > 0 && (
-            <div className="filter-summary">
+          <FilterDropdown
+            label="서비스"
+            options={specOptions}
+            selected={selectedSpecIds}
+            onChange={(next) => setMultiParam("spec", next)}
+          />
+          <FilterDropdown
+            label="범위"
+            options={VISIBILITY_OPTIONS}
+            selected={selectedVisibility}
+            onChange={(next) => setMultiParam("visibility", next)}
+          />
+          <FilterDropdown
+            label="태그"
+            options={tagOptions}
+            selected={selectedTags}
+            onChange={(next) => setMultiParam("tag", next)}
+          />
+
+          <select
+            className="input"
+            aria-label="정렬 기준"
+            style={{ maxWidth: "150px" }}
+            value={sort}
+            onChange={(e) => updateParams((p) => p.set("sort", e.target.value))}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="sort-dir"
+            aria-label={`정렬 방향: ${direction === "desc" ? "내림차순" : "오름차순"}`}
+            title={direction === "desc" ? "내림차순" : "오름차순"}
+            onClick={toggleDirection}
+          >
+            {direction === "desc" ? "▼" : "▲"}
+          </button>
+        </PageToolbar>
+      }
+    >
+      <div className="page-body">
+        {/* 필터 칩 요약 */}
+        {activeFilterCount > 0 && (
+          <div className="filter-summary">
               <span className="filter-summary__label">활성 필터 {activeFilterCount}개 ·</span>
               {selectedSpecIds.map((id) => (
                 <span key={`spec-${id}`} className="filter-chip">
@@ -346,7 +345,6 @@ export function RecipeListPage() {
               {recipes && <span className="list-count">총 {recipes.length}개</span>}
             </div>
           )}
-        </div>
 
         {isLoading && (
           <div className="recipe-state" role="status" aria-live="polite">
@@ -593,7 +591,7 @@ export function RecipeListPage() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
         onCancel={() => setDeleteTarget(null)}
       />
-    </div>
+    </PageShell>
   );
 }
 

@@ -18,6 +18,8 @@ import { ResultDefinitionSection } from "../components/recipe/ResultDefinitionSe
 import { VersionDrawer } from "../components/recipe/VersionDrawer";
 import { VersionPreviewModal } from "../components/recipe/VersionPreviewModal";
 import { ConfirmModal } from "../components/common/ConfirmModal";
+import { PageShell } from "../components/layout/PageShell";
+import { PageActionBar } from "../components/layout/PageActionBar";
 import { useToastStore } from "../store/toastStore";
 import {
   detailToForm,
@@ -228,44 +230,42 @@ export function RecipeEditPage() {
   }
 
   return (
-    <div className="recipe-page">
-      <div className="page-header">
-        <button
-          type="button"
-          className="page-header__back"
-          onClick={() => navigateAway("/recipes")}
-        >
-          ← 목록으로
-        </button>
-        <span className="page-header__title">
-          {readOnly ? `${form.name || "레시피"} (읽기 전용)` : title}
-        </span>
-        <div className="page-header__actions">
-          {isEdit && (
-            <button
-              ref={versionTriggerRef}
-              type="button"
-              className="btn btn--secondary version-badge-btn"
-              aria-haspopup="true"
-              aria-expanded={drawerOpen}
-              onClick={() => setDrawerOpen((prev) => !prev)}
-            >
-              🕘 버전 기록 <span className="badge badge--neutral">v{currentVersion}</span>
-            </button>
-          )}
-          {!readOnly && (
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={saveMutation.isPending}
-              onClick={handleSave}
-            >
-              {saveMutation.isPending ? "저장 중…" : "저장"}
-            </button>
-          )}
-        </div>
-      </div>
-
+    <PageShell
+      title={isEdit ? "레시피 편집" : "새 레시피"}
+      subject={form.name || undefined}
+      actionBar={
+        <PageActionBar
+          onBack={() => navigateAway("/recipes")}
+          title={readOnly ? `${form.name || "레시피"} (읽기 전용)` : title}
+          actions={
+            <>
+              {isEdit && (
+                <button
+                  ref={versionTriggerRef}
+                  type="button"
+                  className="btn btn--secondary version-badge-btn"
+                  aria-haspopup="true"
+                  aria-expanded={drawerOpen}
+                  onClick={() => setDrawerOpen((prev) => !prev)}
+                >
+                  🕘 버전 기록 <span className="badge badge--neutral">v{currentVersion}</span>
+                </button>
+              )}
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={saveMutation.isPending}
+                  onClick={handleSave}
+                >
+                  {saveMutation.isPending ? "저장 중…" : "저장"}
+                </button>
+              )}
+            </>
+          }
+        />
+      }
+    >
       <div className="page-body">
         {/* 읽기 전용 배너 (공통 레시피 × non-admin) */}
         {readOnly && (
@@ -400,6 +400,6 @@ export function RecipeEditPage() {
         onConfirm={() => restoreVersionNo != null && restoreMutation.mutate(restoreVersionNo)}
         onCancel={() => setRestoreVersionNo(null)}
       />
-    </div>
+    </PageShell>
   );
 }

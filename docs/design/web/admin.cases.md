@@ -61,7 +61,7 @@ ref: docs/specs/pages/admin.md
 
 엔드포인트가 많아 **모달이 아닌 별도 페이지**(`/admin/specs/:id`).
 
-- 헤더: **← 목록으로** + 서비스명 + [비활성화]/[활성화] + [삭제].
+- 상단(상세형 액션 바, 페이지 최상단): **← 목록으로** + 서비스명 + 상태 배지 + [비활성화]/[활성화] + [삭제]. 콘텐츠 카드 안쪽에 파묻지 않고 페이지 최상단 `.page-action-bar`에 둔다([page-layout.md](../../specs/common/page-layout.md)).
 - 기본 정보: baseUrl / 상태(색상+텍스트 배지) / 등록 시각.
 - **서비스 설명(읽기 전용)**: description / domain / capabilities / notes 표시.
   - 관리자 수정본이 있으면 그것을, 없으면 yml 원본을 표시(관리자 우선 규칙).
@@ -182,7 +182,7 @@ ref: docs/specs/pages/admin.md
 
 - 관리자 전용 화면(`/admin/**`). 라우트 가드(RequireAdmin)가 비-admin을 `"/"`로 리다이렉트.
 - nav 노출은 UX 게이팅일 뿐이며, 실제 권한은 서버가 매 요청 재확인해 강제한다.
-- 화면 상단에 "관리자 전용" 표시(admin 배지)로 맥락을 명확히 한다.
+- **"관리자 전용" 배지는 두지 않는다.** 사이드바 "관리" 섹션 nav로 진입 자체가 관리자에게만 노출되므로 화면 안에 배지로 다시 표기하지 않는다(중복 제거, [page-layout.md](../../specs/common/page-layout.md)). 제목 전용 상단 헤더도 두지 않으며, 목록형(스펙/사용자)은 카운트·툴바로, 상세형(스펙 상세)은 액션 바로 시작한다.
 
 ## 접근성
 
@@ -192,7 +192,7 @@ ref: docs/specs/pages/admin.md
 - 액션 아이콘 버튼에 `aria-label`/`title` 제공.
 - 행 상세 이동은 클릭뿐 아니라 **키보드 경로**를 제공한다. 디자인 HTML에서는 서비스명을 링크형 버튼(`cell-name__link`)으로 노출해 Tab/Enter로 상세 진입이 가능하다. 액션 셀은 `stopPropagation`으로 행 클릭과 분리한다.
 - **사용자 관리(B)**: 폼 모달(계정 생성/비밀번호 변경)은 `label for`/`id`로 입력을 연결하고 `role="dialog"` `aria-modal="true"` + `aria-labelledby`를 둔다. 위험 액션(본인/마지막 ACTIVE ADMIN의 강등·비활성) 버튼은 `disabled` 대신 `aria-disabled="true"` + 이유 툴팁으로 노출해 스크린리더가 상태를 읽을 수 있게 한다.
-- 사용자 관리 탭(B, 미구현)은 tab 패턴에 맞게 `disabled` 대신 `aria-disabled="true"`로 표기한다.
+- 스펙 관리·사용자 관리는 화면 내 탭이 아니라 **사이드바 "관리" 섹션 nav**로 전환한다(`/admin/specs`, `/admin/users`). 화면 상단에 탭 바를 두지 않는다.
 
 ### FE 구현 필수 (디자인 HTML 한계 — 명세로만 표기)
 

@@ -18,6 +18,8 @@ import { specsApi } from "../api";
 import type { ExecutionSummaryView, SpecListItem } from "../api/types";
 import { FilterDropdown, type FilterOption } from "../components/recipe/FilterDropdown";
 import { HistoryDetailModal } from "../components/history/HistoryDetailModal";
+import { PageShell } from "../components/layout/PageShell";
+import { PageToolbar } from "../components/layout/PageToolbar";
 import { useHistoryList } from "./history/useHistoryList";
 import { useInfiniteScroll } from "../features/panel/shared/useInfiniteScroll";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -202,68 +204,66 @@ export function HistoryPage() {
   const hasAny = items.length > 0;
 
   return (
-    <div className="recipe-page">
-      <div className="page-header">
-        <span className="page-header__title">실행 히스토리</span>
-      </div>
+    <PageShell
+      title="실행 히스토리"
+      toolbar={
+        <PageToolbar>
+          {/* 검색 + 서비스/상태 필터 + 날짜 범위 */}
+          <input
+            className="input"
+            type="text"
+            placeholder="🔍 레시피명 검색..."
+            aria-label="레시피명 검색"
+            style={{ maxWidth: "240px" }}
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+          />
 
-      <div className="page-body">
-        {/* 툴바: 검색 + 서비스/상태 필터 + 날짜 범위 */}
-        <div className="list-toolbar">
-          <div className="list-toolbar__row">
+          <FilterDropdown
+            label="서비스"
+            options={specOptions}
+            selected={selectedSpecIds}
+            onChange={(next) => setMultiParam("spec", next)}
+          />
+          <FilterDropdown
+            label="상태"
+            options={STATUS_OPTIONS}
+            selected={selectedStatuses}
+            onChange={(next) => setMultiParam("status", next)}
+          />
+
+          <div className="date-range">
+            <label className="date-range__label" htmlFor="hist-from">
+              기간
+            </label>
             <input
               className="input"
-              type="text"
-              placeholder="🔍 레시피명 검색..."
-              aria-label="레시피명 검색"
-              style={{ maxWidth: "240px" }}
-              value={keywordInput}
-              onChange={(e) => setKeywordInput(e.target.value)}
+              type="date"
+              id="hist-from"
+              aria-label="시작일"
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setSingleParam("from", e.target.value)}
             />
-
-            <FilterDropdown
-              label="서비스"
-              options={specOptions}
-              selected={selectedSpecIds}
-              onChange={(next) => setMultiParam("spec", next)}
+            <span className="date-range__label" aria-hidden>
+              ~
+            </span>
+            <input
+              className="input"
+              type="date"
+              aria-label="종료일"
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setSingleParam("to", e.target.value)}
             />
-            <FilterDropdown
-              label="상태"
-              options={STATUS_OPTIONS}
-              selected={selectedStatuses}
-              onChange={(next) => setMultiParam("status", next)}
-            />
-
-            <div className="date-range">
-              <label className="date-range__label" htmlFor="hist-from">
-                기간
-              </label>
-              <input
-                className="input"
-                type="date"
-                id="hist-from"
-                aria-label="시작일"
-                value={from}
-                max={to || undefined}
-                onChange={(e) => setSingleParam("from", e.target.value)}
-              />
-              <span className="date-range__label" aria-hidden>
-                ~
-              </span>
-              <input
-                className="input"
-                type="date"
-                aria-label="종료일"
-                value={to}
-                min={from || undefined}
-                onChange={(e) => setSingleParam("to", e.target.value)}
-              />
-            </div>
           </div>
-
-          {/* 필터 칩 요약 */}
-          {activeFilterCount > 0 && (
-            <div className="filter-summary">
+        </PageToolbar>
+      }
+    >
+      <div className="page-body">
+        {/* 필터 칩 요약 */}
+        {activeFilterCount > 0 && (
+          <div className="filter-summary">
               <span className="filter-summary__label">활성 필터 {activeFilterCount}개 ·</span>
               {selectedSpecIds.map((id) => (
                 <span key={`spec-${id}`} className="filter-chip">
@@ -320,7 +320,6 @@ export function HistoryPage() {
               )}
             </div>
           )}
-        </div>
 
         {/* 로딩(첫 페이지) */}
         {isLoading && (
@@ -488,6 +487,6 @@ export function HistoryPage() {
       {detailId != null && (
         <HistoryDetailModal executionId={detailId} onClose={() => setDetailId(null)} />
       )}
-    </div>
+    </PageShell>
   );
 }

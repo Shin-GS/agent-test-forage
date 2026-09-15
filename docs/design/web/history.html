@@ -10,8 +10,8 @@
   <style>
     body { overflow: auto; }
     .page { min-height: 100vh; background: var(--color-bg-primary); }
-    .page-header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-6); background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: var(--z-sticky); }
-    .page-header__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); flex: 1; }
+    /* 페이지 상단 바 개편: 제목 전용 헤더 제거. 히스토리=목록형이므로 툴바(.list-toolbar)로 바로 시작.
+       제목은 sr-only <h1> 로만 남긴다(page-layout.md). */
     .page-body { max-width: 1100px; margin: 0 auto; padding: var(--space-6); }
 
     /* ── 필터 툴바 (레시피 목록 FilterDropdown 패턴과 일관) ── */
@@ -117,7 +117,7 @@
   <!-- ═══ Case 1: 목록 (기본) ═══ -->
   <div id="case-list" class="screen active">
     <div class="page">
-      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <h1 class="sr-only">실행 히스토리</h1>
       <div class="page-body">
         <div class="list-toolbar">
           <div class="list-toolbar__row">
@@ -260,7 +260,7 @@
   <!-- ═══ Case 2: 상세 보기 (모달) ═══ -->
   <div id="case-detail" class="screen">
     <div class="page">
-      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <h1 class="sr-only">실행 히스토리</h1>
       <div class="page-body">
         <table class="data-table">
           <thead><tr><th scope="col">실행 시각</th><th scope="col">레시피명 · 결과</th><th scope="col">서비스</th><th scope="col">상태</th><th scope="col">소요시간</th></tr></thead>
@@ -342,7 +342,7 @@
   <!-- ═══ Case 3: 빈 상태 (실행 이력 없음) ═══ -->
   <div id="case-empty" class="screen">
     <div class="page">
-      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <h1 class="sr-only">실행 히스토리</h1>
       <div class="page-body">
         <div class="empty-state">
           <div class="empty-state__icon">🕘</div>
@@ -357,7 +357,7 @@
   <!-- ═══ Case 4: 필터 결과 없음 ═══ -->
   <div id="case-no-result" class="screen">
     <div class="page">
-      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <h1 class="sr-only">실행 히스토리</h1>
       <div class="page-body">
         <div class="list-toolbar">
           <div class="list-toolbar__row">
@@ -395,9 +395,12 @@
   <!-- ═══ Case 5: 반응형 카드 폴백 (Tablet 이하) ═══ -->
   <div id="case-responsive" class="screen">
     <div class="page">
-      <div class="page-header"><span class="page-header__title">실행 히스토리 <span class="badge badge--neutral" style="margin-left: var(--space-2);">Tablet 미리보기</span></span></div>
+      <h1 class="sr-only">실행 히스토리</h1>
       <div class="page-body demo-responsive" style="max-width: 640px;">
-        <div class="list-count" style="margin-bottom: var(--space-3);" role="status" aria-live="polite">총 4건</div>
+        <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3);">
+          <span class="list-count" role="status" aria-live="polite">총 4건</span>
+          <span class="badge badge--neutral">Tablet 미리보기</span>
+        </div>
         <div class="exec-cards">
           <div class="exec-card" tabindex="0" onclick="openDetail()">
             <div class="exec-card__top"><span class="exec-card__name">회원가입 × 5</span><span class="badge badge--warning">부분성공</span></div>
@@ -430,7 +433,7 @@
   <!-- ═══ Case 6: 플랜 히스토리 (백로그) ═══ -->
   <div id="case-plan-backlog" class="screen">
     <div class="page">
-      <div class="page-header"><span class="page-header__title">실행 히스토리</span></div>
+      <h1 class="sr-only">실행 히스토리</h1>
       <div class="page-body">
         <div class="alert alert--info" style="margin-bottom: var(--space-4);">
           <span>ℹ️ <strong>플랜 히스토리는 백로그입니다.</strong> 플랜 실행 기능 구현 후 제공됩니다.</span>

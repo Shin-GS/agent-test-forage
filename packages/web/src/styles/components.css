@@ -1727,22 +1727,6 @@ select.input {
   overflow-y: auto;
 }
 
-.settings-page__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-6);
-  background: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.settings-page__title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
 .settings-page__body {
   width: 100%;
   max-width: 640px;
@@ -1838,39 +1822,6 @@ select.input {
   min-height: 0;
   overflow-y: auto;
   background: var(--color-bg-primary);
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-6);
-  background: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.page-header__back {
-  font-size: var(--font-size-sm);
-  color: var(--color-accent);
-  cursor: pointer;
-  background: none;
-  border: none;
-  padding: 0;
-}
-
-.page-header__title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  flex: 1;
-}
-
-.page-header__actions {
-  display: flex;
-  gap: var(--space-2);
 }
 
 .page-body {
@@ -3775,14 +3726,7 @@ select.input {
    ─ 아래는 사용자 관리 전용 추가 스타일(토큰만 사용, 하드코딩 금지).
    ═══════════════════════════════════════════════════════════ */
 
-/* 툴바: 검색 + 카운트 + 추가 */
-.admin-user-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
+/* 아이디 검색 입력 (PageToolbar 안에서 사용) */
 .admin-user-search {
   position: relative;
   display: flex;
@@ -4069,4 +4013,61 @@ select.input {
 
 .reference-link:hover .reference-link__external {
   color: var(--color-accent);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Page Bars (별도 페이지 상단 바) — docs/specs/common/page-layout.md
+   ─ 제목 전용 헤더(.page-header) 대체. 목록형=.page-toolbar / 상세·편집형=.page-action-bar / 콘텐츠형=바 없음.
+   ─ 높이는 --header-height 토큰으로 통일. PageShell/PageToolbar/PageActionBar 컴포넌트가 사용.
+   ═══════════════════════════════════════════════════════════ */
+
+/* 목록형 툴바: 검색/필터 + 우측 액션. 좁으면 wrap. sticky. */
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-height: var(--header-height);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+/* 우측 정렬용 스페이서: 이후 요소(주요 액션 버튼)를 오른쪽 끝으로 민다. */
+.page-toolbar__spacer {
+  flex: 1;
+}
+
+/* 상세/편집형 액션 바: 뒤로가기 + 제목 + 우측 액션. sticky. */
+.page-action-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--header-height);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+.page-action-bar__back {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: nowrap;
+}
+.page-action-bar__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+/* 우측 정렬용 스페이서: 제목/부가정보와 우측 액션 버튼을 분리한다. */
+.page-action-bar__spacer {
+  flex: 1;
 }

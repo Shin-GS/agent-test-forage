@@ -48,6 +48,7 @@ docs/design/
 - **토큰 기반** — 모든 시각값은 `tokens.css` 변수 참조 (하드코딩 금지)
 - **실구현 가능** — React + TailwindCSS로 바로 옮길 수 있는 구조
 - **접근성** — focus-visible, sr-only, 충분한 색상 대비
+- **제목 전용 헤더 금지** — 별도 페이지 상단에 제목만 있는 헤더를 두지 않는다(사이드바가 위치를 표시). 상단 바는 기능(뒤로가기·저장·필터·액션)이 있을 때만 존재한다. 상세: [페이지 상단 바 원칙](../specs/common/page-layout.md)
 
 ## 상태 범례
 
@@ -63,3 +64,4 @@ docs/design/
 3. 새 토큰이 필요하면 `tokens.css`에 먼저 추가 후 사용
 4. cases.md에 정의된 케이스를 HTML에서 모두 구현
 5. 화면명은 `docs/specs/glossary.md`의 용어와 일치
+6. 별도 페이지 상단 구성은 [페이지 상단 바 원칙](../specs/common/page-layout.md)을 따른다 — 목록형은 툴바(`.page-toolbar`), 상세/편집형은 액션 바(`.page-action-bar`), 콘텐츠형은 바 없음. 제목은 `sr-only`로만 둔다. 컴포넌트 규격은 `shared/system.html` 카탈로그의 "Page Bars" 섹션 참조

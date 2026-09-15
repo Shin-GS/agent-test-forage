@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, specsApi } from "../../api";
 import type { SpecListItem } from "../../api/types";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
+import { PageShell } from "../../components/layout/PageShell";
 import { useToastStore } from "../../store/toastStore";
 
 /** status(StatusView | enum 문자열) → 대문자 코드 */
@@ -99,14 +100,7 @@ export function AdminSpecListPage() {
   }
 
   return (
-    <div className="recipe-page">
-      <div className="page-header">
-        <span className="page-header__title">관리자 · 스펙 관리</span>
-        <span className="badge badge--info" title="관리자 전용 화면">
-          🔒 관리자 전용
-        </span>
-      </div>
-
+    <PageShell title="스펙 관리">
       <div className="page-body">
         {isLoading && (
           <div className="recipe-state" role="status" aria-live="polite">
@@ -262,7 +256,7 @@ export function AdminSpecListPage() {
         }}
         onCancel={() => setConfirm(null)}
       />
-    </div>
+    </PageShell>
   );
 }
 

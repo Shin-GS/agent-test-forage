@@ -8,6 +8,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { settingsApi } from "../api";
 import type { SettingsResponse } from "../api/types";
+import { PageShell } from "../components/layout/PageShell";
 
 /** 읽기 전용 설정 한 줄 (라벨/설명 + 값) */
 function SettingRow({ label, desc, value }: { label: string; desc?: string; value: string }) {
@@ -84,10 +85,7 @@ export function SettingsPage() {
   });
 
   return (
-    <div className="settings-page">
-      <div className="settings-page__header">
-        <span className="settings-page__title">설정</span>
-      </div>
+    <PageShell title="설정" className="settings-page">
       <div className="settings-page__body">
         {isLoading && (
           <div className="settings-state" role="status" aria-live="polite">
@@ -106,6 +104,6 @@ export function SettingsPage() {
 
         {data && <SettingsContent data={data} />}
       </div>
-    </div>
+    </PageShell>
   );
 }

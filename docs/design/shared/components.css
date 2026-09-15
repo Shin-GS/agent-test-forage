@@ -1651,3 +1651,59 @@
 .result-values__val {
   color: var(--color-text-primary);
 }
+
+/* ═══════════════════════════════════
+   Page Bars (별도 페이지 상단 바)
+   ─ 제목 전용 헤더 대체. 목록형=toolbar / 상세형=action-bar / 콘텐츠형=바 없음.
+   ─ 규격: docs/specs/common/page-layout.md. 높이는 --header-height 토큰으로 통일.
+   ═══════════════════════════════════ */
+
+/* 목록형 툴바: 검색/필터 + 우측 액션. 좁으면 wrap. sticky. */
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-height: var(--header-height);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+/* 우측 정렬용 스페이서: 이후 요소(주요 액션 버튼)를 오른쪽 끝으로 민다. */
+.page-toolbar__spacer {
+  flex: 1;
+}
+
+/* 상세/편집형 액션 바: 뒤로가기 + 제목 + 우측 액션. sticky. */
+.page-action-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--header-height);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+.page-action-bar__back {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.page-action-bar__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+/* 우측 정렬용 스페이서: 제목/부가정보와 우측 액션 버튼을 분리한다. */
+.page-action-bar__spacer {
+  flex: 1;
+}

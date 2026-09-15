@@ -41,6 +41,7 @@ AI 기반 API 워크플로우 실행 플랫폼. 사용자가 채팅으로 의도
 - [메시징 및 SSE 이벤트](common/messaging.md) — 메시지 포맷, SSE 이벤트 타입, 연결 정책
 - [AI 프롬프트 설계](common/ai-config.md) — 모델 구성, 토큰 절약, 호출 구조
 - [AI 응답 가이드](common/response-guide.md)
+- [페이지 상단 바 원칙](common/page-layout.md) — 별도 페이지 상단 헤더/툴바/액션 바 규칙, 접근성
 
 ### 채팅
 - [채팅 인터페이스 구조](chat/overview.md)

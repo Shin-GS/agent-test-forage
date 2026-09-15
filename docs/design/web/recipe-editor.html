@@ -12,15 +12,25 @@
 
     .page { min-height: 100vh; background: var(--color-bg-primary); }
 
-    .page-header {
-      display: flex; align-items: center; gap: var(--space-3);
-      padding: var(--space-3) var(--space-6);
+    /* 페이지 상단 바 개편(page-layout.md): 제목 전용 헤더 제거.
+       목록형=툴바(.page-toolbar) / 편집형=액션 바(.page-action-bar). 규격은 shared/components.css 와 동일. */
+    .page-toolbar {
+      display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+      min-height: var(--header-height); padding: var(--space-3) var(--space-6);
       background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border);
       position: sticky; top: 0; z-index: var(--z-sticky);
     }
-    .page-header__back { font-size: var(--font-size-sm); color: var(--color-text-link); cursor: pointer; }
-    .page-header__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); flex: 1; }
-    .page-header__actions { display: flex; gap: var(--space-2); }
+    .page-toolbar__spacer { flex: 1; }
+
+    .page-action-bar {
+      display: flex; align-items: center; gap: var(--space-3);
+      min-height: var(--header-height); padding: var(--space-3) var(--space-6);
+      background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border);
+      position: sticky; top: 0; z-index: var(--z-sticky);
+    }
+    .page-action-bar__back { font-size: var(--font-size-sm); color: var(--color-accent); cursor: pointer; background: none; border: none; padding: 0; }
+    .page-action-bar__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+    .page-action-bar__spacer { flex: 1; }
 
     .page-body { max-width: 1200px; margin: 0 auto; padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); }
 
@@ -122,7 +132,7 @@
     .demo-responsive .recipe-cards { display: flex; }
 
     /* ── 버전 기록 drawer ── */
-    /* header(56px) + page-header(약 sticky) 를 뺀 높이. 페이지 상단 헤더 높이를 var로 참조 */
+    /* 앱 header + 페이지 액션 바(.page-action-bar, sticky) 를 뺀 높이. 상단 바 높이는 --header-height 토큰 참조 */
     .drawer-layout { position: relative; display: flex; flex-direction: row; overflow: hidden; height: calc(100vh - var(--header-height) - var(--space-8)); }
     .drawer-layout__main { flex: 1; min-width: 0; }
     .version-drawer { width: var(--panel-width); min-width: var(--panel-width); background: var(--color-bg-secondary); border-left: 1px solid var(--color-border); display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
@@ -182,18 +192,16 @@
   <!-- ═══ Case 1: 레시피 목록 ═══ -->
   <div id="case-list" class="screen active">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">레시피 관리</span>
-        <div class="page-header__actions">
-          <button class="btn btn--primary">+ 레시피 만들기</button>
-        </div>
+      <h1 class="sr-only">레시피 관리</h1>
+      <!-- 목록형: 제목 헤더 제거 → 툴바(검색/필터) + 우측 끝 [+ 레시피 만들기] -->
+      <div class="page-toolbar">
+        <input class="input" type="text" placeholder="🔍 레시피 검색..." style="max-width: 300px;">
+        <select class="input" style="max-width: 160px;"><option>전체 서비스</option><option>사람인</option><option>잡코리아</option><option>쇼핑몰</option></select>
+        <select class="input" style="max-width: 120px;"><option>전체</option><option>공통</option><option>개인</option></select>
+        <span class="page-toolbar__spacer"></span>
+        <button class="btn btn--primary">+ 레시피 만들기</button>
       </div>
       <div class="page-body">
-        <div class="list-filters">
-          <input class="input" type="text" placeholder="🔍 레시피 검색..." style="max-width: 300px;">
-          <select class="input" style="max-width: 160px;"><option>전체 서비스</option><option>사람인</option><option>잡코리아</option><option>쇼핑몰</option></select>
-          <select class="input" style="max-width: 120px;"><option>전체</option><option>공통</option><option>개인</option></select>
-        </div>
         <table class="data-table">
           <thead>
             <tr><th>레시피명</th><th>서비스</th><th>범위</th><th>태그</th><th>수정일</th><th>액션</th></tr>
@@ -240,10 +248,12 @@
   <!-- ═══ Case 2: 새 레시피 생성 ═══ -->
   <div id="case-create" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">새 레시피</span>
-        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
+      <h1 class="sr-only">새 레시피</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">새 레시피</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body">
         <!-- ① 메타 정보 -->
@@ -328,10 +338,13 @@
   <!-- ═══ Case 3: 스텝 편집 (API 타입) ═══ -->
   <div id="case-step-api" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">회원가입 레시피 편집</span>
-        <div class="page-header__actions"><button class="btn btn--secondary">미리보기</button><button class="btn btn--primary">저장</button></div>
+      <h1 class="sr-only">회원가입 레시피 편집</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">회원가입 레시피 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary">미리보기</button>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body">
         <!-- 스텝 목록 (축약) -->
@@ -484,10 +497,12 @@
   <!-- ═══ Case 4: 스텝 편집 (스크립트) ═══ -->
   <div id="case-step-script" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">회원가입 레시피 편집</span>
-        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
+      <h1 class="sr-only">회원가입 레시피 편집</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">회원가입 레시피 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body">
         <div class="section">
@@ -560,10 +575,12 @@
   <!-- ═══ Case 5: 유효성 에러 ═══ -->
   <div id="case-validation" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">회원가입 레시피 편집</span>
-        <div class="page-header__actions"><button class="btn btn--primary">저장</button></div>
+      <h1 class="sr-only">회원가입 레시피 편집</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">회원가입 레시피 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body">
         <!-- 에러 요약 -->
@@ -623,10 +640,13 @@
   <!-- ═══ Case 6: 스텝 편집 (서브레시피 타입) ═══ -->
   <div id="case-step-sub" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">입사지원 플로우 레시피 편집</span>
-        <div class="page-header__actions"><button class="btn btn--secondary">미리보기</button><button class="btn btn--primary">저장</button></div>
+      <h1 class="sr-only">입사지원 플로우 레시피 편집</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">입사지원 플로우 레시피 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary">미리보기</button>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body">
         <div class="section">
@@ -737,11 +757,11 @@
   <!-- ═══ Case 7: 목록 — 다중 필터 / 정렬 / 권한 게이팅 (일반 사용자 시점) ═══ -->
   <div id="case-list-advanced" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">레시피 관리</span>
-        <div class="page-header__actions">
-          <button class="btn btn--primary">+ 레시피 만들기</button>
-        </div>
+      <h1 class="sr-only">레시피 관리</h1>
+      <!-- 목록형: 제목 헤더 제거 → 우측 끝 [+ 레시피 만들기]. 검색/필터/정렬은 아래 본문 툴바에 유지. -->
+      <div class="page-toolbar">
+        <span class="page-toolbar__spacer"></span>
+        <button class="btn btn--primary">+ 레시피 만들기</button>
       </div>
       <div class="page-body">
         <div class="list-toolbar">
@@ -880,9 +900,10 @@
   <!-- ═══ Case 8: 목록 — 빈 상태 / 필터 결과 없음 ═══ -->
   <div id="case-list-empty" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">레시피 관리</span>
-        <div class="page-header__actions"><button class="btn btn--primary">+ 레시피 만들기</button></div>
+      <h1 class="sr-only">레시피 관리</h1>
+      <div class="page-toolbar">
+        <span class="page-toolbar__spacer"></span>
+        <button class="btn btn--primary">+ 레시피 만들기</button>
       </div>
       <div class="page-body">
         <!-- 8a. 레시피 0개 -->
@@ -919,9 +940,10 @@
   <!-- ═══ Case 9: 목록 — 삭제 확인 모달 ═══ -->
   <div id="case-list-delete" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">레시피 관리</span>
-        <div class="page-header__actions"><button class="btn btn--primary">+ 레시피 만들기</button></div>
+      <h1 class="sr-only">레시피 관리</h1>
+      <div class="page-toolbar">
+        <span class="page-toolbar__spacer"></span>
+        <button class="btn btn--primary">+ 레시피 만들기</button>
       </div>
       <div class="page-body">
         <table class="data-table">
@@ -959,9 +981,11 @@
   <!-- ═══ Case 10: 목록 — 반응형(Tablet 이하) 카드 폴백 ═══ -->
   <div id="case-list-responsive" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">레시피 관리 <span class="badge badge--neutral" style="margin-left: var(--space-2);">Tablet 미리보기</span></span>
-        <div class="page-header__actions"><button class="btn btn--primary">+</button></div>
+      <h1 class="sr-only">레시피 관리</h1>
+      <div class="page-toolbar">
+        <span class="badge badge--neutral">Tablet 미리보기</span>
+        <span class="page-toolbar__spacer"></span>
+        <button class="btn btn--primary">+</button>
       </div>
       <div class="page-body demo-responsive" style="max-width: 640px;">
         <div class="list-count" style="margin-bottom: var(--space-3);">총 2개</div>
@@ -1007,13 +1031,13 @@
   <!-- ═══ Case 11: 편집 — 버전 기록 drawer ═══ -->
   <div id="case-version-drawer" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">회원가입 레시피 편집</span>
-        <div class="page-header__actions">
-          <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
-          <button class="btn btn--primary">저장</button>
-        </div>
+      <h1 class="sr-only">회원가입 레시피 편집</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">회원가입 레시피 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body drawer-layout" style="max-width: none; padding: 0;">
         <div class="drawer-layout__main" style="padding: var(--space-6); overflow-y: auto;">
@@ -1110,10 +1134,13 @@
   <!-- ═══ Case 12: 편집 — 버전 미리보기 모달 ═══ -->
   <div id="case-version-preview" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">회원가입 레시피 편집</span>
-        <div class="page-header__actions"><button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button><button class="btn btn--primary">저장</button></div>
+      <h1 class="sr-only">회원가입 레시피 편집</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">회원가입 레시피 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body"><p style="color: var(--color-text-tertiary); font-size: var(--font-size-sm);">편집 화면 위에 미리보기 모달 오픈 상태</p></div>
     </div>
@@ -1163,10 +1190,13 @@
   <!-- ═══ Case 13: 편집 — 복원 확인 모달 + 토스트 ═══ -->
   <div id="case-version-restore" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">회원가입 레시피 편집</span>
-        <div class="page-header__actions"><button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button><button class="btn btn--primary">저장</button></div>
+      <h1 class="sr-only">회원가입 레시피 편집</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">회원가입 레시피 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
+        <button class="btn btn--primary">저장</button>
       </div>
       <div class="page-body"><p style="color: var(--color-text-tertiary); font-size: var(--font-size-sm);">복원 확인 모달 + 복원 성공 토스트 상태</p></div>
     </div>
@@ -1200,13 +1230,13 @@
   <!-- ═══ Case 14: 편집 — 읽기 전용 모드 (공통 × non-admin) ═══ -->
   <div id="case-readonly" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__back">← 목록으로</span>
-        <span class="page-header__title">회원가입 레시피 (읽기 전용)</span>
-        <div class="page-header__actions">
-          <!-- 저장/삭제 숨김. 버전 기록은 노출 -->
-          <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
-        </div>
+      <h1 class="sr-only">회원가입 레시피 (읽기 전용)</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back">← 목록으로</button>
+        <span class="page-action-bar__title">회원가입 레시피 (읽기 전용)</span>
+        <span class="page-action-bar__spacer"></span>
+        <!-- 저장/삭제 숨김. 버전 기록은 노출 -->
+        <button class="btn btn--secondary version-badge-btn">🕘 버전 기록 <span class="badge badge--neutral">v5</span></button>
       </div>
       <div class="page-body">
         <!-- 읽기 전용 배너 -->

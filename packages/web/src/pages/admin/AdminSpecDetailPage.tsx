@@ -15,6 +15,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, specsApi } from "../../api";
 import type { SpecDetail, SpecEndpointItem } from "../../api/types";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
+import { PageShell } from "../../components/layout/PageShell";
+import { PageActionBar } from "../../components/layout/PageActionBar";
 import { useToastStore } from "../../store/toastStore";
 
 /** StatusView → 대문자 코드 */
@@ -116,14 +118,63 @@ export function AdminSpecDetailPage() {
   const notFound = isError && error instanceof ApiError && error.status === 404;
 
   return (
-    <div className="recipe-page">
-      <div className="page-header">
-        <span className="page-header__title">관리자 · 스펙 상세</span>
-        <span className="badge badge--info" title="관리자 전용 화면">
-          🔒 관리자 전용
-        </span>
-      </div>
-
+    <PageShell
+      title="스펙 상세"
+      subject={spec?.name}
+      actionBar={
+        <PageActionBar
+          onBack={() => navigate("/admin/specs")}
+          title={spec?.name ?? "스펙 상세"}
+          meta={
+            spec &&
+            (isSpecActive(spec) ? (
+              <span className="badge badge--success">
+                <span className="status-dot status-dot--active" aria-hidden />
+                ACTIVE
+              </span>
+            ) : (
+              <span className="badge badge--neutral">
+                <span className="status-dot status-dot--inactive" aria-hidden />
+                INACTIVE
+              </span>
+            ))
+          }
+          actions={
+            spec && (
+              <>
+                {isSpecActive(spec) ? (
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    disabled={deactivateMutation.isPending}
+                    onClick={() => setConfirm("deactivate")}
+                  >
+                    ⏸️ 비활성화
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    disabled={activateMutation.isPending}
+                    onClick={() => activateMutation.mutate()}
+                  >
+                    ▶️ 활성화
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--danger btn--sm"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => setConfirm("delete")}
+                >
+                  🗑️ 삭제
+                </button>
+              </>
+            )
+          }
+        />
+      }
+    >
       <div className="page-body">
         {isLoading && (
           <div className="recipe-state" role="status" aria-live="polite">
@@ -155,45 +206,6 @@ export function AdminSpecDetailPage() {
 
         {spec && (
           <div className="spec-detail">
-            <div className="spec-detail__header">
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => navigate("/admin/specs")}
-                aria-label="목록으로 돌아가기"
-              >
-                ← 목록으로
-              </button>
-              <span className="spec-detail__title">{spec.name}</span>
-              {isSpecActive(spec) ? (
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--sm"
-                  disabled={deactivateMutation.isPending}
-                  onClick={() => setConfirm("deactivate")}
-                >
-                  ⏸️ 비활성화
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--sm"
-                  disabled={activateMutation.isPending}
-                  onClick={() => activateMutation.mutate()}
-                >
-                  ▶️ 활성화
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn--danger btn--sm"
-                disabled={deleteMutation.isPending}
-                onClick={() => setConfirm("delete")}
-              >
-                🗑️ 삭제
-              </button>
-            </div>
-
             {/* 기본 정보 */}
             <div className="spec-section">
               <div className="spec-meta">
@@ -346,7 +358,7 @@ export function AdminSpecDetailPage() {
         }}
         onCancel={() => setConfirm(null)}
       />
-    </div>
+    </PageShell>
   );
 }
 

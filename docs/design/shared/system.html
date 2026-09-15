@@ -465,5 +465,45 @@
     </div>
   </section>
 
+  <!-- ═══ Page Bars (별도 페이지 상단 바) ═══ -->
+  <section class="catalog-section">
+    <h2>Page Bars</h2>
+    <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-4);">
+      별도 전체 화면 페이지의 상단 영역. 제목 전용 헤더는 두지 않는다(사이드바가 위치 표시). 상단 바는 기능이 있을 때만 존재하며 3가지 유형으로 나뉜다.
+      규격 근거: <code>docs/specs/common/page-layout.md</code>. 모든 페이지는 <code>PageShell</code>로 감싸고 필요한 슬롯(<code>toolbar</code>/<code>actionBar</code>)만 채운다.
+      제목은 <code>PageShell</code>이 <code>sr-only &lt;h1&gt;</code> + <code>document.title</code>로 자동 처리한다(화면에 크게 노출하지 않음).
+    </p>
+
+    <h3>목록형 — Page Toolbar (검색/필터 + 우측 액션)</h3>
+    <div style="border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: var(--space-4);">
+      <div class="page-toolbar">
+        <input class="input" type="text" placeholder="🔍 이름/설명 검색..." style="max-width: 240px;">
+        <div class="filter-dropdown"><button class="filter-dropdown__trigger">서비스 ▾</button></div>
+        <div class="filter-dropdown"><button class="filter-dropdown__trigger">범위 ▾</button></div>
+        <span class="page-toolbar__spacer"></span>
+        <button class="btn btn--primary">+ 레시피 만들기</button>
+      </div>
+      <div style="padding: var(--space-4); color: var(--color-text-tertiary); font-size: var(--font-size-sm);">…목록/테이블…</div>
+    </div>
+
+    <h3>상세/편집형 — Page Action Bar (뒤로가기 + 제목 + 우측 액션)</h3>
+    <div style="border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden;">
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" aria-label="목록으로 돌아가기">← 목록으로</button>
+        <span class="page-action-bar__title">demo-shop</span>
+        <span class="badge badge--success"><span class="status-dot status-dot--active"></span>ACTIVE</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary btn--sm">⏸️ 비활성화</button>
+        <button class="btn btn--danger btn--sm">🗑️ 삭제</button>
+      </div>
+      <div style="padding: var(--space-4); color: var(--color-text-tertiary); font-size: var(--font-size-sm);">…상세 본문…</div>
+    </div>
+
+    <h3>콘텐츠형 — 바 없음</h3>
+    <p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary);">
+      상단에 담을 기능이 없는 페이지(예: 설정 조회)는 상단 바 없이 콘텐츠(섹션 카드)가 바로 시작한다. 제목은 <code>sr-only</code>로만 둔다.
+    </p>
+  </section>
+
 </body>
 </html>

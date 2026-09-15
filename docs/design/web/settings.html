@@ -10,8 +10,8 @@
   <style>
     body { overflow: auto; }
     .page { min-height: 100vh; background: var(--color-bg-primary); }
-    .page-header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-6); background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: var(--z-sticky); }
-    .page-header__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); flex: 1; }
+    /* 페이지 상단 바 개편: 설정은 콘텐츠형이라 상단 바 없음. 설정 섹션 카드가 바로 시작.
+       제목은 sr-only <h1> 로만 남긴다(page-layout.md). */
     .page-body { max-width: 640px; margin: 0 auto; padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
     .settings-section { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); }
     .settings-section__title { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2); }
@@ -36,9 +36,7 @@
   <!-- Case 1: 기본 (읽기 전용) -->
   <div id="case-default" class="screen active">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">설정</span>
-      </div>
+      <h1 class="sr-only">설정</h1>
       <div class="page-body">
         <div class="settings-section">
           <div class="settings-section__title">🤖 AI 설정 <span class="badge badge--neutral">읽기 전용</span></div>
@@ -92,9 +90,7 @@
   <!-- Case 2: 비밀번호 변경 -->
   <div id="case-password" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">설정</span>
-      </div>
+      <h1 class="sr-only">설정</h1>
       <div class="page-body">
         <div class="settings-section">
           <div class="settings-section__title">👤 계정</div>
@@ -119,9 +115,7 @@
   <!-- Case 3: 비밀번호 변경 완료 -->
   <div id="case-saved" class="screen">
     <div class="page">
-      <div class="page-header">
-        <span class="page-header__title">설정</span>
-      </div>
+      <h1 class="sr-only">설정</h1>
       <div class="page-body">
         <div class="settings-section">
           <div class="settings-section__title">👤 계정</div>
