@@ -5,12 +5,16 @@ import com.testforge.entity.conversation.Conversation;
 import com.testforge.entity.user.enums.UserRole;
 import com.testforge.repository.conversation.ConversationRepository;
 import com.testforge.repository.conversation.MessageRepository;
+import com.testforge.sse.SseEventPublisher;
+import com.testforge.sse.enums.SseEventType;
 import com.testforge.support.SyncChatExecutorTestConfig;
 import com.testforge.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -21,6 +25,8 @@ import org.springframework.web.context.WebApplicationContext;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -55,6 +61,10 @@ class ConversationIntegrationTest {
 
     @Autowired
     private TestAuthSupport testAuth;
+
+    // markRead 의 조건부 SSE 발행(안 읽음일 때만) 검증용. 실제 발행은 그대로 두고 호출만 기록한다.
+    @MockitoSpyBean
+    private SseEventPublisher ssePublisher;
 
     // 응답 JSON에서 nextCursor 등을 읽기 위한 파서 (컨텍스트 빈 불필요, 읽기 전용)
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -233,19 +243,47 @@ class ConversationIntegrationTest {
                 .isEqualTo("바뀐 제목");
     }
 
-    // ── markRead: lastReadAt 갱신 ──
+    // ── markRead(안 읽음): lastReadAt 갱신 + 목록 갱신 SSE 발행 ──
     @Test
-    void markRead_updatesLastReadAt() throws Exception {
+    void markRead_whenUnread_updatesLastReadAtAndPublishesEvent() throws Exception {
         Conversation c = new Conversation(USER_ID);
-        c.setLastMessageAt(LocalDateTime.now());
+        c.setLastMessageAt(LocalDateTime.now()); // 메시지만 있고 아직 안 읽음 → unread=true
         Long id = conversationRepository.save(c).getId();
         assertThat(conversationRepository.findById(id).orElseThrow().getLastReadAt()).isNull();
+        Mockito.reset(ssePublisher);
 
         mockMvc.perform(patch("/api/v1/conversations/{id}/read", id).with(testAuth.as(USER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.unread").value(false));
 
+        // 읽은 시각 갱신됨
         assertThat(conversationRepository.findById(id).orElseThrow().getLastReadAt()).isNotNull();
+        // 안 읽음 → 읽음 전이라 목록 갱신 SSE 1회 발행
+        Mockito.verify(ssePublisher).toUser(eq(USER_ID), eq(SseEventType.SESSION_LIST_UPDATE), eq(id), any());
+    }
+
+    // ── markRead(이미 읽음): lastReadAt 은 갱신하되 목록 갱신 SSE 는 발행하지 않는다(no-op 이벤트) ──
+    @Test
+    void markRead_whenAlreadyRead_updatesLastReadAtButSkipsEvent() throws Exception {
+        // 이미 읽은 상태: lastReadAt > lastMessageAt → unread=false.
+        // beforeReadAt 을 과거로 명시해, markRead 가 lastReadAt 을 실제로 now 로 갱신했는지 isAfter 로 엄격 검증.
+        Conversation c = new Conversation(USER_ID);
+        c.setLastMessageAt(LocalDateTime.now().minusHours(2));
+        LocalDateTime beforeReadAt = LocalDateTime.now().minusHours(1);
+        c.setLastReadAt(beforeReadAt);
+        Long id = conversationRepository.save(c).getId();
+        Mockito.reset(ssePublisher);
+
+        mockMvc.perform(patch("/api/v1/conversations/{id}/read", id).with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unread").value(false));
+
+        // 읽은 시각은 여전히 갱신된다(읽음 행위 기록) — 안 갱신 버그를 잡도록 isAfter 로 검증
+        LocalDateTime afterReadAt = conversationRepository.findById(id).orElseThrow().getLastReadAt();
+        assertThat(afterReadAt).isAfter(beforeReadAt);
+        // 이미 읽음이었으므로 목록 갱신 SSE 는 발행되지 않는다
+        Mockito.verify(ssePublisher, Mockito.never())
+                .toUser(any(), eq(SseEventType.SESSION_LIST_UPDATE), any(), any());
     }
 
     // ── delete: 소프트 삭제 → 목록/상세에서 사라짐 ──

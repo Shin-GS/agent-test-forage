@@ -305,14 +305,23 @@ public class ConversationService {
     @Transactional
     public ConversationDetailResponse markRead(Long id, Long requesterId) {
         Conversation conversation = getOwnedOrThrow(id, requesterId);
+
+        // 읽은 시각은 항상 갱신한다(읽음 행위 자체는 기록).
+        // 단, 목록 갱신 SSE는 "안 읽음 → 읽음"으로 실제 뱃지가 바뀔 때만 발행한다:
+        // 이미 다 읽은 상태(unread=false)에서 다시 read가 와도 목록 표시는 그대로라 발행이 불필요하다.
+        // FE는 조건 없이 read를 호출하고, 이 게이트가 중복 이벤트 + 수신 측 목록 재조회를 걸러낸다.
+        boolean wasUnread = isUnread(conversation);
+
         conversation.setLastReadAt(LocalDateTime.now());
         Conversation saved = conversationRepository.save(conversation);
 
-        // SSE: 목록 한 줄 갱신 (읽음 → unread=false 를 모든 탭 뱃지에 동기화)
-        publishAfterCommit(saved.getUserId(), SseEventType.SESSION_LIST_UPDATE, saved.getId(),
-                SessionListUpdatePayload.upsert(toListSnapshot(saved)));
+        if (wasUnread) {
+            // SSE: 목록 한 줄 갱신 (읽음 → unread=false 를 모든 탭 뱃지에 동기화)
+            publishAfterCommit(saved.getUserId(), SseEventType.SESSION_LIST_UPDATE, saved.getId(),
+                    SessionListUpdatePayload.upsert(toListSnapshot(saved)));
+        }
 
-        log.info("Conversation marked read: conversationId={}", id);
+        log.info("Conversation marked read: conversationId={}, eventPublished={}", id, wasUnread);
         return toDetail(saved);
     }
 

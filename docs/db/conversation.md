@@ -65,6 +65,8 @@ ref: docs/specs/chat/overview.md, docs/specs/common/messaging.md
 - 읽음은 **DB에 저장**(`LAST_READ_AT`)하여 여러 탭/기기에서 일관되게 동기화한다 (클라이언트 로컬 상태 아님)
 - 대화방 진입 시 읽음 API → `LAST_READ_AT = now` → `session_list_update`(upsert, unread=false)로 **모든 탭 뱃지 동기화**
 - 안 읽음 판정: `LAST_MESSAGE_AT > LAST_READ_AT`
+- **`LAST_READ_AT`은 읽음 API 호출 시 항상 갱신**한다(읽음 행위 자체의 기록). 단 **`session_list_update` 발행은 "안 읽음 → 읽음"으로 뱃지가 실제 바뀔 때만** 한다: 호출 시점에 `unread`였으면 발행하고, 이미 다 읽은 상태(`LAST_READ_AT >= LAST_MESSAGE_AT`)면 목록 표시가 그대로라 **발행을 스킵**한다. 목록 갱신 이벤트가 실제 변경이 있을 때만 나가므로 불필요한 SSE 발행·수신 측 목록 재조회를 막는다.
+- **FE는 읽음 판정을 하지 않는다.** 대화방 진입(메시지 로드) 시 조건 없이 읽음 API를 호출하고, 위 서버 게이트(이벤트 조건부 발행)가 중복 이벤트를 걸러낸다. read 유발 경로가 늘어도(멀티 탭·알림 등) 서버 게이트 하나가 방어한다(판정 단일화 = 유지보수성/확장성).
 - 다중 사용자 공유 대화방이 생기면 `CONVERSATION_READ(USER_ID, CONVERSATION_ID, LAST_READ_AT)` 테이블로 승격 (현재는 대화방 소유자 1명이라 컬럼으로 충분)
 - **빈 대화방은 서버에 생성하지 않음.** 첫 메시지 전송 시 대화방 + 메시지를 함께 생성(트랜잭션) + `session_list_update`(upsert) 발행 → orphan 방지 (overview.md)
 - 첫 메시지 시 제목은 임시(첫 메시지 앞 20자 이내 절단), AI 요약 후 교체 (overview.md)
