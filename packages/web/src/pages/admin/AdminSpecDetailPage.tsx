@@ -10,13 +10,14 @@
 // 데이터: GET /specs/{id} (specsApi.getSpec).
 
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, specsApi } from "../../api";
 import type { SpecDetail, SpecEndpointItem } from "../../api/types";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { PageShell } from "../../components/layout/PageShell";
 import { PageActionBar } from "../../components/layout/PageActionBar";
+import { useBackToList } from "../../hooks/useListNavigation";
 import { useToastStore } from "../../store/toastStore";
 
 /** StatusView → 대문자 코드 */
@@ -53,7 +54,8 @@ function methodClass(method: string): string {
 type ConfirmAction = "deactivate" | "delete";
 
 export function AdminSpecDetailPage() {
-  const navigate = useNavigate();
+  // [← 목록으로] / 삭제 후 이동: 직전 스펙 목록 URL로 복귀(없으면 /admin/specs 폴백).
+  const backToList = useBackToList("/admin/specs");
   const queryClient = useQueryClient();
   const showToast = useToastStore((s) => s.show);
   const { id } = useParams<{ id: string }>();
@@ -105,7 +107,7 @@ export function AdminSpecDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-specs"] });
       void queryClient.invalidateQueries({ queryKey: ["specs"] });
       showToast("스펙을 삭제했습니다", "success");
-      navigate("/admin/specs");
+      backToList();
     },
     onError: (err) => {
       setConfirm(null);
@@ -123,7 +125,7 @@ export function AdminSpecDetailPage() {
       subject={spec?.name}
       actionBar={
         <PageActionBar
-          onBack={() => navigate("/admin/specs")}
+          onBack={backToList}
           title={spec?.name ?? "스펙 상세"}
           meta={
             spec &&
@@ -188,7 +190,7 @@ export function AdminSpecDetailPage() {
             <div className="empty-state__icon">🗑️</div>
             <div className="empty-state__title">존재하지 않는 스펙입니다</div>
             <div className="empty-state__desc">삭제되었거나 잘못된 경로일 수 있습니다.</div>
-            <button type="button" className="btn btn--primary" onClick={() => navigate("/admin/specs")}>
+            <button type="button" className="btn btn--primary" onClick={backToList}>
               목록으로
             </button>
           </div>
@@ -198,7 +200,7 @@ export function AdminSpecDetailPage() {
         {isError && !notFound && (
           <div className="recipe-state recipe-state--error" role="alert">
             <div>스펙 정보를 불러오지 못했습니다{error instanceof Error ? `: ${error.message}` : ""}</div>
-            <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate("/admin/specs")}>
+            <button type="button" className="btn btn--secondary btn--sm" onClick={backToList}>
               목록으로
             </button>
           </div>

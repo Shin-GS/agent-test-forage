@@ -11,8 +11,10 @@
 //
 // 데이터: GET /executions (executionsApi.history), 서비스 옵션 GET /specs (specsApi.list).
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryStates, parseAsString, parseAsArrayOf, parseAsStringEnum } from "nuqs";
+import { parseAsSearch, SEARCH_OPTIONS } from "../lib/urlFilters";
 import { useQuery } from "@tanstack/react-query";
 import { specsApi } from "../api";
 import type { ExecutionSummaryView, SpecListItem } from "../api/types";
@@ -81,61 +83,36 @@ function serviceName(item: ExecutionSummaryView, specNameMap: Map<number, string
 export function HistoryPage() {
   const navigate = useNavigate();
   const isCompact = useMediaQuery("(max-width: 1023px)");
-  const [searchParams, setSearchParams] = useSearchParams();
 
-  // --- URL → 상태 파싱 ---
-  const urlKeyword = searchParams.get("q") ?? "";
-  const selectedSpecIds = searchParams.getAll("spec");
-  const selectedStatuses = searchParams.getAll("status");
-  const from = searchParams.get("from") ?? "";
-  const to = searchParams.get("to") ?? "";
+  // --- URL 상태 (nuqs): 검색/서비스/상태/기간을 URL 쿼리에 동기화 (page-layout.md 목록 상태와 URL) ---
+  // 필터 변경은 nuqs 기본 history=replace. 검색어(q)만 throttleMs 로 디바운스 커밋.
+  // status 는 화이트리스트(4종) enum 파싱으로 조작 URL 값을 자동 제거(useHistoryList 의 수동 필터 대체).
+  const [filters, setFilters] = useQueryStates({
+    q: parseAsSearch.withDefault("").withOptions(SEARCH_OPTIONS),
+    spec: parseAsArrayOf(parseAsString).withDefault([]),
+    status: parseAsArrayOf(
+      parseAsStringEnum(["SUCCESS", "FAILED", "STOPPED", "CANCELLED"]),
+    ).withDefault([]),
+    from: parseAsString.withDefault("").withOptions({ clearOnDefault: true }),
+    to: parseAsString.withDefault("").withOptions({ clearOnDefault: true }),
+  });
 
-  // 검색 입력: 로컬 상태 + 디바운스 후 URL 커밋 (RecipeListPage 패턴 동일)
-  const [keywordInput, setKeywordInput] = useState(urlKeyword);
-  const committedKeywordRef = useRef(urlKeyword);
+  // 하위 코드 호환용 파생값 (기존 변수명 유지)
+  const urlKeyword = filters.q;
+  const selectedSpecIds = filters.spec;
+  const selectedStatuses = filters.status;
+  const from = filters.from;
+  const to = filters.to;
+  // 검색 입력값: nuqs state 즉시 반영 + URL 쓰기만 throttle → 입력 매끄러움.
+  const keywordInput = filters.q;
+  const setKeywordInput = (value: string) => void setFilters({ q: value });
 
-  useEffect(() => {
-    if (urlKeyword === committedKeywordRef.current) return;
-    committedKeywordRef.current = urlKeyword;
-    setKeywordInput(urlKeyword);
-  }, [urlKeyword]);
-
-  useEffect(() => {
-    const trimmed = keywordInput.trim();
-    if (trimmed === committedKeywordRef.current) return;
-    const handle = setTimeout(() => {
-      committedKeywordRef.current = trimmed;
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (trimmed) next.set("q", trimmed);
-          else next.delete("q");
-          return next;
-        },
-        { replace: true },
-      );
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [keywordInput, setSearchParams]);
-
-  function updateParams(mutate: (params: URLSearchParams) => void) {
-    const next = new URLSearchParams(searchParams);
-    mutate(next);
-    setSearchParams(next, { replace: true });
+  function setMultiParam(key: "spec" | "status", values: string[]) {
+    void setFilters({ [key]: values });
   }
 
-  function setMultiParam(key: string, values: string[]) {
-    updateParams((params) => {
-      params.delete(key);
-      for (const v of values) params.append(key, v);
-    });
-  }
-
-  function setSingleParam(key: string, value: string) {
-    updateParams((params) => {
-      if (value) params.set(key, value);
-      else params.delete(key);
-    });
+  function setSingleParam(key: "from" | "to", value: string) {
+    void setFilters({ [key]: value });
   }
 
   // 서비스 옵션 (레시피 목록과 동일 소스)
@@ -180,15 +157,8 @@ export function HistoryPage() {
   const hasActiveQuery = activeFilterCount > 0 || urlKeyword.trim().length > 0;
 
   function clearAllFilters() {
-    updateParams((params) => {
-      params.delete("spec");
-      params.delete("status");
-      params.delete("from");
-      params.delete("to");
-      params.delete("q");
-    });
-    setKeywordInput("");
-    committedKeywordRef.current = "";
+    // 검색어 포함 전체 초기화 (기존 동작 유지 — 히스토리는 q 도 함께 초기화).
+    void setFilters({ q: "", spec: [], status: [], from: "", to: "" });
   }
 
   function removeSpec(id: string) {
@@ -298,12 +268,7 @@ export function HistoryPage() {
                     type="button"
                     className="filter-chip__remove"
                     aria-label="기간 필터 제거"
-                    onClick={() =>
-                      updateParams((p) => {
-                        p.delete("from");
-                        p.delete("to");
-                      })
-                    }
+                    onClick={() => void setFilters({ from: "", to: "" })}
                   >
                     ✕
                   </button>

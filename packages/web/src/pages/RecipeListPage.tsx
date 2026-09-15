@@ -5,13 +5,15 @@
 // - 행: 범위 배지(🌐공통/🔒개인), 이름+설명 1줄, INVALID ⚠️, 상대시간, hover 액션(편집/복제/삭제).
 // - 권한 게이팅: canEdit=false → 편집/삭제 숨김(복제만). 결과 카운트 "총 N개".
 // - 삭제 ConfirmModal(window.confirm 금지), 복제 → 성공 토스트 후 편집 페이지 진입.
-// - URL 쿼리 동기화(useSearchParams): 검색/필터/정렬 복원. 검색 디바운스 300ms.
+// - URL 쿼리 동기화(nuqs useQueryStates): 검색/필터/정렬 복원. 검색 디바운스(throttle) 300ms.
 // - < 1024px 카드형 폴백. 빈 상태(레시피 0개 / 필터 결과 없음) 2종.
 //
 // 데이터: GET /recipes (recipesApi.list), GET /specs (specsApi.list) 를 React Query 로 조회.
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryStates, parseAsString, parseAsStringEnum, parseAsArrayOf } from "nuqs";
+import { parseAsSearch, SEARCH_OPTIONS } from "../lib/urlFilters";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, recipesApi, specsApi } from "../api";
 import type { RecipeSummary, SpecListItem } from "../api/types";
@@ -20,6 +22,7 @@ import { FilterDropdown, type FilterOption } from "../components/recipe/FilterDr
 import { ConfirmModal } from "../components/common/ConfirmModal";
 import { PageShell } from "../components/layout/PageShell";
 import { PageToolbar } from "../components/layout/PageToolbar";
+import { useListNavigation } from "../hooks/useListNavigation";
 import { useToastStore } from "../store/toastStore";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 
@@ -69,66 +72,41 @@ function isInvalid(recipe: RecipeSummary): boolean {
 
 export function RecipeListPage() {
   const navigate = useNavigate();
+  // 상세(편집) 진입 시 현재 목록 URL(필터 쿼리 포함)을 전달 → 편집에서 [← 목록으로] 시 필터 유지 복귀.
+  const navigateToDetail = useListNavigation();
   const queryClient = useQueryClient();
   const showToast = useToastStore((s) => s.show);
   const isCompact = useMediaQuery("(max-width: 1023px)");
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  // --- URL 상태 (nuqs): 검색/필터/정렬을 URL 쿼리에 동기화 (page-layout.md 목록 상태와 URL) ---
+  // 필터 변경은 nuqs 기본 history=replace(오염 방지). 검색어(q)만 throttleMs 로 디바운스 커밋.
+  // enum(sort/dir)은 화이트리스트 파싱으로 조작 URL 을 기본값으로 안전 흡수. 기본값은 clearOnDefault 로 URL 미기록.
+  const [filters, setFilters] = useQueryStates({
+    q: parseAsSearch.withDefault("").withOptions(SEARCH_OPTIONS),
+    spec: parseAsArrayOf(parseAsString).withDefault([]),
+    visibility: parseAsArrayOf(parseAsString).withDefault([]),
+    tag: parseAsArrayOf(parseAsString).withDefault([]),
+    sort: parseAsStringEnum<RecipeSort>(["recent", "usage", "name", "updated"])
+      .withDefault("recent")
+      .withOptions({ clearOnDefault: true }),
+    dir: parseAsStringEnum<SortDirection>(["asc", "desc"])
+      .withDefault("desc")
+      .withOptions({ clearOnDefault: true }),
+  });
 
-  // --- URL → 상태 파싱 ---
-  const urlKeyword = searchParams.get("q") ?? "";
-  const selectedSpecIds = searchParams.getAll("spec");
-  const selectedVisibility = searchParams.getAll("visibility");
-  const selectedTags = searchParams.getAll("tag");
-  const sort = (searchParams.get("sort") as RecipeSort) || "recent";
-  const direction = (searchParams.get("dir") as SortDirection) || "desc";
+  // 하위 코드 호환용 파생값 (기존 변수명 유지 → 렌더/쿼리 로직 변경 최소화)
+  const urlKeyword = filters.q;
+  const selectedSpecIds = filters.spec;
+  const selectedVisibility = filters.visibility;
+  const selectedTags = filters.tag;
+  const sort = filters.sort;
+  const direction = filters.dir;
+  // 검색 입력값: nuqs state 는 즉시 반영되고 URL 쓰기만 throttle 되므로 입력이 매끄럽다.
+  const keywordInput = filters.q;
+  const setKeywordInput = (value: string) => void setFilters({ q: value });
 
-  // 검색 입력은 로컬 상태(단일 입력 소스) + 디바운스 후 URL 커밋.
-  // URL(urlKeyword)은 "커밋 결과"이자 외부 변경(뒤로가기/새로고침) 감지용.
-  const [keywordInput, setKeywordInput] = useState(urlKeyword);
-  // 마지막으로 URL 에 커밋한(또는 URL 에서 동기화한) 값. 외부 변경 판별 기준.
-  const committedKeywordRef = useRef(urlKeyword);
-
-  // 외부에서 urlKeyword 가 바뀌면(뒤로가기 등, 우리가 커밋한 값과 다를 때만) 입력값을 동기화.
-  // 타이핑으로 우리가 방금 커밋한 값은 여기서 무시되어 입력값이 튀지 않는다.
-  useEffect(() => {
-    if (urlKeyword === committedKeywordRef.current) return;
-    committedKeywordRef.current = urlKeyword;
-    setKeywordInput(urlKeyword);
-  }, [urlKeyword]);
-
-  // keywordInput 변경만을 기준으로 디바운스 커밋. committedKeywordRef 로 "이미 반영된 값인지"를
-  // 판별해 불필요한 커밋을 건너뛴다. setSearchParams 는 안정적인 참조라 deps 로 넣어도 안전(억제 불필요).
-  useEffect(() => {
-    const trimmed = keywordInput.trim();
-    if (trimmed === committedKeywordRef.current) return;
-    const handle = setTimeout(() => {
-      committedKeywordRef.current = trimmed;
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (trimmed) next.set("q", trimmed);
-          else next.delete("q");
-          return next;
-        },
-        { replace: true },
-      );
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [keywordInput, setSearchParams]);
-
-  /** searchParams 를 함수형으로 갱신 (replace 로 히스토리 오염 방지) */
-  function updateParams(mutate: (params: URLSearchParams) => void) {
-    const next = new URLSearchParams(searchParams);
-    mutate(next);
-    setSearchParams(next, { replace: true });
-  }
-
-  function setMultiParam(key: string, values: string[]) {
-    updateParams((params) => {
-      params.delete(key);
-      for (const v of values) params.append(key, v);
-    });
+  function setMultiParam(key: "spec" | "visibility" | "tag", values: string[]) {
+    void setFilters({ [key]: values });
   }
 
   const { data: specs } = useQuery({ queryKey: ["specs"], queryFn: () => specsApi.list() });
@@ -190,7 +168,7 @@ export function RecipeListPage() {
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ["recipes"] });
       showToast(`'${created.name}' 개인 사본을 만들었습니다`, "success");
-      navigate(`/recipes/${created.id}/edit`);
+      navigateToDetail(`/recipes/${created.id}/edit`);
     },
     onError: (err) => showToast(errorMessage(err, "복제에 실패했습니다"), "error"),
   });
@@ -199,11 +177,8 @@ export function RecipeListPage() {
   const activeFilterCount = selectedSpecIds.length + selectedVisibility.length + selectedTags.length;
 
   function clearAllFilters() {
-    updateParams((params) => {
-      params.delete("spec");
-      params.delete("visibility");
-      params.delete("tag");
-    });
+    // 필터(서비스/범위/태그)만 초기화. 검색어(q)는 기존 동작대로 유지.
+    void setFilters({ spec: [], visibility: [], tag: [] });
   }
 
   function removeSpec(id: string) {
@@ -217,7 +192,7 @@ export function RecipeListPage() {
   }
 
   function toggleDirection() {
-    updateParams((params) => params.set("dir", direction === "desc" ? "asc" : "desc"));
+    void setFilters({ dir: direction === "desc" ? "asc" : "desc" });
   }
 
   const hasAnyRecipe = (recipes?.length ?? 0) > 0;
@@ -234,7 +209,7 @@ export function RecipeListPage() {
       toolbar={
         <PageToolbar
           actions={
-            <button type="button" className="btn btn--primary" onClick={() => navigate("/recipes/new")}>
+            <button type="button" className="btn btn--primary" onClick={() => navigateToDetail("/recipes/new")}>
               + 레시피 만들기
             </button>
           }
@@ -274,7 +249,7 @@ export function RecipeListPage() {
             aria-label="정렬 기준"
             style={{ maxWidth: "150px" }}
             value={sort}
-            onChange={(e) => updateParams((p) => p.set("sort", e.target.value))}
+            onChange={(e) => void setFilters({ sort: e.target.value as RecipeSort })}
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -369,7 +344,7 @@ export function RecipeListPage() {
             <div className="empty-state__desc">
               첫 레시피를 만들어 워크플로우를 등록해보세요. 채팅에서 자연어로 실행할 수 있습니다.
             </div>
-            <button type="button" className="btn btn--primary" onClick={() => navigate("/recipes/new")}>
+            <button type="button" className="btn btn--primary" onClick={() => navigateToDetail("/recipes/new")}>
               + 레시피 만들기
             </button>
           </div>
@@ -407,7 +382,7 @@ export function RecipeListPage() {
               {recipes.map((recipe) => (
                 <tr
                   key={recipe.id}
-                  onClick={() => navigate(`/recipes/${recipe.id}/edit`)}
+                  onClick={() => navigateToDetail(`/recipes/${recipe.id}/edit`)}
                   style={{ cursor: "pointer" }}
                 >
                   <td>
@@ -458,7 +433,7 @@ export function RecipeListPage() {
                           className="btn btn--ghost btn--sm"
                           title="편집"
                           aria-label={`${recipe.name} 편집`}
-                          onClick={() => navigate(`/recipes/${recipe.id}/edit`)}
+                          onClick={() => navigateToDetail(`/recipes/${recipe.id}/edit`)}
                         >
                           ✏️
                         </button>
@@ -502,9 +477,9 @@ export function RecipeListPage() {
                 className="recipe-card"
                 role="button"
                 tabIndex={0}
-                onClick={() => navigate(`/recipes/${recipe.id}/edit`)}
+                onClick={() => navigateToDetail(`/recipes/${recipe.id}/edit`)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") navigate(`/recipes/${recipe.id}/edit`);
+                  if (e.key === "Enter") navigateToDetail(`/recipes/${recipe.id}/edit`);
                 }}
               >
                 <div className="recipe-card__top">
@@ -545,7 +520,7 @@ export function RecipeListPage() {
                       type="button"
                       className="btn btn--ghost btn--sm"
                       aria-label={`${recipe.name} 편집`}
-                      onClick={() => navigate(`/recipes/${recipe.id}/edit`)}
+                      onClick={() => navigateToDetail(`/recipes/${recipe.id}/edit`)}
                     >
                       ✏️ 편집
                     </button>

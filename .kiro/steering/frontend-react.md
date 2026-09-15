@@ -52,6 +52,16 @@ function Card({ title, description }: CardProps) {
 | 복잡 로컬 | useReducer | 다단계 폼, 복잡한 상태 전이 |
 | 서버 상태 | @tanstack/react-query | API 데이터 캐싱, 로딩/에러 상태 |
 | 전역 상태 | zustand | 인증 정보, 앱 전역 상태 등 |
+| **URL 상태** | **nuqs** (useSearchParams 직접 사용 지양) | 목록 페이지의 검색/필터/정렬 — 새로고침·공유·뒤로가기 대응 |
+
+### 목록 페이지 필터는 URL 상태로 (필수)
+
+목록/테이블 페이지의 **검색·필터·정렬은 `useState`가 아니라 URL 쿼리(nuqs `useQueryStates`)로 관리**한다. URL을 단일 진실 소스로 두어 새로고침·링크 공유·뒤로가기에 대응한다.
+
+- 필터/정렬 변경은 **replace**(히스토리 오염 방지), 검색어는 **디바운스(throttleMs) 후 커밋**, enum은 `parseAsStringEnum`으로 허용값 화이트리스트 파싱(조작 URL 방어), 기본값은 `clearOnDefault`로 URL 미기록.
+- 상세 페이지가 있으면 **목록→상세 진입 시 목록 URL을 navigation state로 전달**하고, 상세의 [← 목록으로]는 그 URL로 복귀(없으면 기본 목록 경로 폴백). 공통 헬퍼로 표준화한다.
+- 정본 원칙: [docs/specs/common/page-layout.md 목록 상태와 URL](../../docs/specs/common/page-layout.md#목록-상태와-url-목록형-페이지-공통).
+- 예외: 사이드 패널 등 채팅 보조 탐색 목록은 딥링크 니즈가 없으면 로컬 상태 허용(URL 오염 방지).
 
 ## 6. API 호출 규칙
 
@@ -84,6 +94,8 @@ export async function getResources(): Promise<Resource[]> {
 - index.ts barrel 파일 남용 → 순환 참조 위험
 - `console.log` 프로덕션 코드에 남기기
 - 인라인 스타일 사용 → Tailwind 사용
+- 목록 페이지 검색/필터/정렬을 `useState`로 관리 → URL(nuqs)로 관리(위 5번)
+- `useSearchParams`로 URL 쿼리를 손으로 파싱/조립 → nuqs 파서 사용(타입 미검증·직렬화 버그 방지)
 
 ## 9. 디자인 문서 참조 규칙
 

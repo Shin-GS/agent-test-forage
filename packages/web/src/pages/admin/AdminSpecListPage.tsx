@@ -11,12 +11,12 @@
 // 데이터: GET /specs?includeInactive=true (React Query).
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, specsApi } from "../../api";
 import type { SpecListItem } from "../../api/types";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { PageShell } from "../../components/layout/PageShell";
+import { useListNavigation } from "../../hooks/useListNavigation";
 import { useToastStore } from "../../store/toastStore";
 
 /** status(StatusView | enum 문자열) → 대문자 코드 */
@@ -34,7 +34,7 @@ function isActive(spec: SpecListItem): boolean {
 type ConfirmAction = "deactivate" | "delete";
 
 export function AdminSpecListPage() {
-  const navigate = useNavigate();
+  const navigateToDetail = useListNavigation();
   const queryClient = useQueryClient();
   const showToast = useToastStore((s) => s.show);
 
@@ -96,7 +96,8 @@ export function AdminSpecListPage() {
   const hasAny = (specs?.length ?? 0) > 0;
 
   function openSpec(id: number) {
-    navigate(`/admin/specs/${id}`);
+    // 현재 목록 URL을 전달 → 상세의 [← 목록으로] 시 복귀(스펙 목록은 현재 필터 없으나 공통 방식 적용).
+    navigateToDetail(`/admin/specs/${id}`);
   }
 
   return (

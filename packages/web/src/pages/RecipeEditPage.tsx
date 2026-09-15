@@ -7,7 +7,7 @@
 // 저장 전 클라이언트 유효성 검증(validateRecipe)으로 필드 하이라이트.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, recipesApi } from "../api";
 import type { RecipeCreateRequest, RecipeDetail, RecipeUpdateRequest } from "../api/types";
@@ -45,6 +45,7 @@ const EMPTY_VALIDATION: RecipeValidationResult = {
 
 export function RecipeEditPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const params = useParams<{ id?: string }>();
   const showToast = useToastStore((s) => s.show);
@@ -110,15 +111,16 @@ export function RecipeEditPage() {
   }, [isDirty]);
 
   // 목록 이동(뒤로가기 버튼) 시 dirty 확인
-  const navigateAway = useCallback(
-    (to: string) => {
-      if (isDirty && !window.confirm("저장하지 않은 변경사항이 있습니다. 목록으로 이동할까요?")) {
-        return;
-      }
-      navigate(to);
-    },
-    [isDirty, navigate],
-  );
+  // 진입 시 전달된 직전 목록 URL(필터 걸린 목록). 없으면(딥링크 진입) 기본 목록 경로로 폴백.
+  const listUrl = (location.state as { fromList?: string } | null)?.fromList ?? "/recipes";
+
+  // 목록 이동(뒤로가기 버튼) 시 dirty 확인 + 직전 목록 URL(필터 유지) 복귀.
+  const navigateAway = useCallback(() => {
+    if (isDirty && !window.confirm("저장하지 않은 변경사항이 있습니다. 목록으로 이동할까요?")) {
+      return;
+    }
+    navigate(listUrl);
+  }, [isDirty, navigate, listUrl]);
 
   function patchForm(patch: Partial<RecipeFormState>) {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -133,7 +135,8 @@ export function RecipeEditPage() {
       void queryClient.invalidateQueries({ queryKey: ["recipes"] });
       if (isEdit) void queryClient.invalidateQueries({ queryKey: ["recipe", recipeId] });
       setSaved(true); // 이탈 경고 해제 후 이동
-      navigate("/recipes");
+      navigate(listUrl); // 직전 목록(필터 유지)으로 복귀
+
     },
     onError: (err) => {
       if (err instanceof ApiError) {
@@ -220,7 +223,7 @@ export function RecipeEditPage() {
             레시피를 불러오지 못했습니다
             {detailError instanceof Error ? `: ${detailError.message}` : ""}
           </div>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate("/recipes")}>
+          <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate(listUrl)}>
             목록으로
           </button>
           {/* 위 에러 상태는 로드 실패 화면(폼 미표시)이므로 dirty 경고 불필요 */}
@@ -235,7 +238,7 @@ export function RecipeEditPage() {
       subject={form.name || undefined}
       actionBar={
         <PageActionBar
-          onBack={() => navigateAway("/recipes")}
+          onBack={navigateAway}
           title={readOnly ? `${form.name || "레시피"} (읽기 전용)` : title}
           actions={
             <>

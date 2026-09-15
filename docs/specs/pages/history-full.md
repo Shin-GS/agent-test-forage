@@ -76,7 +76,7 @@ ref: docs/specs/panel/history.md, docs/specs/recipe/execution.md, docs/db/execut
 
 ## URL 쿼리 동기화
 
-검색어/필터 상태를 URL 쿼리에 반영한다. 새로고침·링크 공유 시 동일한 목록 상태가 복원된다.
+검색어/필터 상태를 URL 쿼리에 반영한다. 새로고침·링크 공유 시 동일한 목록 상태가 복원된다. 목록형 페이지 공통 규칙([common/page-layout.md 목록 상태와 URL](../common/page-layout.md#목록-상태와-url-목록형-페이지-공통))을 따른다: URL이 상태의 단일 진실 소스이며, 필터 변경은 **replace**(히스토리 오염 방지), 검색어는 **디바운스 후 커밋**, enum(상태)은 허용값 화이트리스트로 파싱한다. 구현은 nuqs.
 
 FE는 URL 쿼리키를 **API 파라미터명으로 매핑**해 `GET /api/v1/executions`를 호출한다(`q`→`keyword`, `spec`→`apiSpecId`). API 계약: [recipe/execution.md 히스토리 조회 API 계약](../recipe/execution.md#히스토리-조회-api-계약-get-executions).
 

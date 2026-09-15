@@ -18,6 +18,8 @@ import { UserCreateModal } from "./UserCreateModal";
 import { PasswordChangeModal } from "./PasswordChangeModal";
 import { PageShell } from "../../components/layout/PageShell";
 import { PageToolbar } from "../../components/layout/PageToolbar";
+import { useQueryState } from "nuqs";
+import { parseAsSearch, SEARCH_OPTIONS } from "../../lib/urlFilters";
 import { useToastStore } from "../../store/toastStore";
 import { useAuthStore } from "../../store/authStore";
 
@@ -51,8 +53,9 @@ export function AdminUserListPage() {
   const showToast = useToastStore((s) => s.show);
   const me = useAuthStore((s) => s.user);
 
-  // 검색어(디바운스 없이 소수 대상 — 입력 즉시 queryKey 반영). trim 은 API 레이어에서 처리.
-  const [search, setSearch] = useState("");
+  // 검색어: URL 쿼리(?q=)에 동기화. 입력값(state)은 즉시 반영되고, URL 쓰기만 throttle(300ms)되어
+  // 히스토리 오염을 막는다(page-layout.md 목록 상태와 URL). 기본값 ""는 clearOnDefault 로 URL 미기록.
+  const [search, setSearch] = useQueryState("q", parseAsSearch.withDefault("").withOptions(SEARCH_OPTIONS));
 
   const {
     data: users,

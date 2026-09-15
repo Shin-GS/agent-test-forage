@@ -48,7 +48,7 @@ ref: docs/specs/recipe/versioning.md, docs/specs/common/auth.md, docs/specs/reci
 | 이름순 | 이름 기준 |
 | 최근 수정순 | 수정 시각 기준 |
 
-**URL 쿼리 동기화**: 검색어/필터/정렬 상태를 URL 쿼리에 반영한다. 새로고침·링크 공유 시 동일한 목록 상태가 복원된다.
+**URL 쿼리 동기화**: 검색어/필터/정렬 상태를 URL 쿼리에 반영한다(`q`/`spec`/`visibility`/`tag`/`sort`/`dir`). 새로고침·링크 공유 시 동일한 목록 상태가 복원된다. 목록형 페이지 공통 규칙([common/page-layout.md 목록 상태와 URL](../common/page-layout.md#목록-상태와-url-목록형-페이지-공통))을 따른다: 필터 변경은 replace, 검색어는 디바운스, 정렬은 허용값 화이트리스트 파싱. 구현은 nuqs.
 
 ### 목록 행 표기
 
@@ -79,6 +79,8 @@ ref: docs/specs/recipe/versioning.md, docs/specs/common/auth.md, docs/specs/reci
 ## 편집 페이지
 
 사이드 패널 + 채팅 없이 전체 화면 사용. **상세/편집형 페이지**([상단 바 원칙](../common/page-layout.md))로, 뒤로가기·저장 등 컨텍스트 액션을 담은 **액션 바**(제목 전용 헤더가 아님)를 최상단에 둔다. 스펙 상세와 동일한 상단 구조·위치를 공유한다.
+
+**[← 목록으로] 복귀 시 목록 필터 유지**: 목록에서 이 편집 화면으로 진입할 때 목록의 현재 URL(필터 쿼리 포함)을 전달받아, 뒤로가기 시 그 필터가 걸린 목록으로 복귀한다. URL로 편집 화면에 직접 진입한 경우(전달값 없음)엔 기본 목록 경로(`/recipes`)로 폴백한다([common/page-layout.md 상세 → 목록 복귀](../common/page-layout.md#상세--목록-복귀-필터-유지)).
 
 ```
 ┌──────────────────────────────────────────────────────────┐
