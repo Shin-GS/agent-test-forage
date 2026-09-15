@@ -1,6 +1,6 @@
 // 대화 목록 (개편: ChatGPT식 통합 사이드바의 대화 기록 영역).
 // - 각 항목: 아이콘 + 제목 + 상태 뱃지(우선순위 1개) + 서비스 배지(serviceName)
-// - hover 시 더보기(⋮) → 드롭다운(이름 변경 / 삭제)
+// - hover 시 더보기(⋮) → 드롭다운(이름 변경 / 삭제). 오버레이 동작은 AppMenu(Base UI)에 위임.
 // - 인라인 이름 편집(ChatGPT식): input 전환, 전체선택, Enter/blur 저장, ESC 취소
 // - 삭제: ConfirmModal(브라우저 confirm 금지)
 //
@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ConversationSummary } from "../../api/types";
 import { ConfirmModal } from "../common/ConfirmModal";
+import { AppMenu } from "../common/AppMenu";
 
 interface Props {
   conversations: ConversationSummary[];
@@ -64,8 +65,6 @@ export function ConversationSidebar({
   // active(현재) 대화 항목 ref — 펼침 상태에서 목록으로 진입/전환 시 화면 안으로 스크롤한다.
   const activeItemRef = useRef<HTMLDivElement>(null);
 
-  // 열린 더보기 메뉴 대화 id
-  const [menuId, setMenuId] = useState<number | null>(null);
   // 인라인 편집 중인 대화 id + 현재 입력값
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -95,20 +94,7 @@ export function ConversationSidebar({
     }
   }, [editingId]);
 
-  // 바깥 클릭 시 더보기 메뉴 닫기
-  useEffect(() => {
-    if (menuId == null) return;
-    const close = () => setMenuId(null);
-    // 다음 틱부터 등록(현재 클릭이 즉시 닫는 것 방지)
-    const t = setTimeout(() => document.addEventListener("click", close), 0);
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener("click", close);
-    };
-  }, [menuId]);
-
   const startEditing = (c: ConversationSummary) => {
-    setMenuId(null);
     setEditingId(c.id);
     setEditValue(c.title ?? "");
   };
@@ -213,44 +199,34 @@ export function ConversationSidebar({
               </div>
             )}
 
-            {/* 더보기 버튼 */}
-            <button
-              type="button"
-              className={`sidebar-item__more${menuId === c.id ? " is-open" : ""}`}
-              aria-label="대화 메뉴"
-              aria-haspopup="menu"
-              aria-expanded={menuId === c.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuId((prev) => (prev === c.id ? null : c.id));
-              }}
-            >
-              ⋮
-            </button>
-
-            {menuId === c.id && (
-              <div className="dropdown-menu" role="menu" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="dropdown-item"
-                  onClick={() => startEditing(c)}
-                >
+            {/* 더보기 버튼 + 메뉴 (AppMenu → Base UI). 트리거 클릭이 항목 select 로 전파되지 않도록 stopPropagation. */}
+            <div className="sidebar-item__more-wrap" onClick={(e) => e.stopPropagation()}>
+              <AppMenu
+                side="bottom"
+                align="end"
+                popupClassName="dropdown-menu"
+                ariaLabel="대화 메뉴"
+                trigger={
+                  <button
+                    type="button"
+                    className="sidebar-item__more"
+                    aria-label="대화 메뉴"
+                  >
+                    ⋮
+                  </button>
+                }
+              >
+                <AppMenu.Item className="dropdown-item" onClick={() => startEditing(c)}>
                   ✏️ 이름 변경
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
+                </AppMenu.Item>
+                <AppMenu.Item
                   className="dropdown-item dropdown-item--danger"
-                  onClick={() => {
-                    setMenuId(null);
-                    setDeleteTarget(c);
-                  }}
+                  onClick={() => setDeleteTarget(c)}
                 >
                   🗑️ 삭제
-                </button>
-              </div>
-            )}
+                </AppMenu.Item>
+              </AppMenu>
+            </div>
           </div>
         );
       })}

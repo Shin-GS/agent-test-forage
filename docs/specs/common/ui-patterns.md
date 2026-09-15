@@ -48,6 +48,28 @@ ref: docs/specs/common/page-layout.md
 | 사용자 생성 / 비밀번호 변경 | 모달 | 짧은 입력 폼 |
 | 실행 확인(사이드 패널) | 모달 | 짧은 확인 |
 
+## 오버레이 구현 규칙 (Base UI 래퍼로만)
+
+> **모든 오버레이(모달·드로어·메뉴·툴팁)는 `packages/web/src/components/common/`의 앱 공통 래퍼로만 만든다.** 앱 코드에서 `@base-ui/react`를 직접 import 하거나, 오버레이 동작(포커스 트랩·ESC·바깥클릭·스크롤락·배경 inert·중첩 top-most·포커스 복귀)을 직접 구현하지 않는다.
+
+### 래퍼 목록
+
+| 오버레이 | 래퍼 | 기반 | 용도 |
+|----------|------|------|------|
+| 모달 | `AppModal` | Base UI Dialog | 확인/폼 등 모든 모달의 기반 |
+| 확인 모달 | `ConfirmModal` | `AppModal` | yes/no 결정 (삭제·중지·복원·서비스 변경 등) |
+| 드로어 | `AppDrawer` | Base UI Dialog | slide-in 참조 패널 (버전 기록 등) |
+| 메뉴 | `AppMenu` | Base UI Menu | 드롭다운/드롭업 메뉴, 체크박스 다중선택, 옵션 선택 |
+| 툴팁 | `AppTooltip` | Base UI Tooltip | hover/focus 보조 설명 |
+
+### 규칙
+
+- **직접 구현 금지**: `document.addEventListener("click"/"mousedown")` 기반 바깥클릭 닫기, 수동 Tab 포커스 트랩, `role="dialog"`/`aria-modal` 수동 지정, 자체 ESC 핸들러를 새로 만들지 않는다. 래퍼(Base UI)가 모두 처리한다.
+- **시각은 디자인 토큰 유지**: 래퍼는 오버레이 *동작*만 Base UI에 위임하고, 시각은 기존 토큰 클래스(`.modal`, `.dropdown-menu` 등)를 그대로 입힌다. 새 오버레이도 토큰 클래스로 스타일한다.
+- **중첩(nested) 오버레이**: 자식 오버레이(드로어 안의 미리보기/확인 모달 등)는 부모의 React 트리 *안에* 렌더한다. 그래야 Base UI가 중첩을 인식해 top-most만 ESC/바깥클릭을 받고, 배경 `aria-hidden`이 포커스 요소를 가리지 않는다. "열림 플래그를 형제로 띄우기"는 금지.
+- **초기 포커스**: 폼 모달은 첫 입력(`initialFocusRef`), 위험 확인 모달은 취소 버튼(`initialFocus="cancel"`)에 최초 포커스를 둔다.
+- **제어형 상태**: `open`/`onClose`(또는 `onOpenChange`)는 부모가 소유한다. 래퍼는 상태를 갖지 않는다.
+
 ## 페이지로 만들 때 지켜야 할 것
 
 새 상세/편집 페이지는 [page-layout.md](./page-layout.md)의 상세/편집형 규칙을 따른다.

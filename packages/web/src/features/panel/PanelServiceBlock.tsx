@@ -9,10 +9,12 @@
 //     기존 대화 → ConfirmModal 후 updateService API 호출
 // - 미지정은 오류가 아니라 정상 기본 상태 → 중립 톤(경고색/아이콘 금지).
 // - 접힘/오버레이로 패널이 안 보이면 이 블록도 안 보인다(폴백은 좌측 목록 배지, 표시만).
+// - 오버레이 동작(열림/닫힘·ESC·바깥클릭·roving focus·포커스 복귀·aria)은 AppMenu(Base UI Menu)에 위임.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { conversationsApi } from "../../api";
 import type { SpecListItem } from "../../api/types";
+import { AppMenu } from "../../components/common/AppMenu";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { useToastStore } from "../../store/toastStore";
 import { useServices } from "./recipes/useRecipes";
@@ -45,10 +47,8 @@ export function PanelServiceBlock({
   const { data: services } = useServices();
   const showToast = useToastStore((s) => s.show);
 
-  const [menuOpen, setMenuOpen] = useState(false);
   // 기존 대화 변경 확인 대기: 선택한 apiSpecId(null=미지정) 보관
   const [pendingChange, setPendingChange] = useState<{ apiSpecId: number | null } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
 
   const isNewConversation = conversationId == null;
   // 표시 소스: 새 대화면 pending, 기존 대화면 대화방 값
@@ -60,24 +60,8 @@ export function PanelServiceBlock({
     (!isNewConversation && conversationServiceName?.trim()) ||
     (matched ? specLabel(matched) : null);
 
-  // 바깥 클릭 시 드롭다운 닫기
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    const t = setTimeout(() => document.addEventListener("mousedown", onDocClick), 0);
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener("mousedown", onDocClick);
-    };
-  }, [menuOpen]);
-
-  // 옵션 선택: 새 대화면 pending 갱신, 기존 대화면 확인 모달
+  // 옵션 선택: 새 대화면 pending 갱신, 기존 대화면 확인 모달. (메뉴 닫힘은 AppMenu 가 처리)
   const handleSelect = (apiSpecId: number | null) => {
-    setMenuOpen(false);
     if (apiSpecId === activeApiSpecId) return; // 변경 없음
     if (isNewConversation) {
       onChangePending(apiSpecId);
@@ -101,55 +85,52 @@ export function PanelServiceBlock({
   };
 
   return (
-    <div className="panel-service" ref={rootRef}>
-      <button
-        type="button"
-        className={`panel-service__trigger${activeLabel ? "" : " panel-service__trigger--unset"}`}
-        aria-haspopup="listbox"
-        aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((v) => !v)}
+    <div className="panel-service">
+      <AppMenu
+        side="bottom"
+        align="start"
+        popupClassName="panel-service__menu"
+        ariaLabel="대상 서비스 선택"
+        trigger={
+          <button
+            type="button"
+            className={`panel-service__trigger${activeLabel ? "" : " panel-service__trigger--unset"}`}
+            aria-haspopup="menu"
+          >
+            <span className="panel-service__icon" aria-hidden>
+              🏷️
+            </span>
+            <span className="panel-service__label">
+              {activeLabel ? (
+                <>
+                  <span className="panel-service__label-prefix">대상 서비스:</span> {activeLabel}
+                </>
+              ) : (
+                "서비스 선택 안 됨"
+              )}
+            </span>
+            <span className="panel-service__caret" aria-hidden>
+              ▾
+            </span>
+          </button>
+        }
       >
-        <span className="panel-service__icon" aria-hidden>
-          🏷️
-        </span>
-        <span className="panel-service__label">
-          {activeLabel ? (
-            <>
-              <span className="panel-service__label-prefix">대상 서비스:</span> {activeLabel}
-            </>
-          ) : (
-            "서비스 선택 안 됨"
-          )}
-        </span>
-        <span className="panel-service__caret" aria-hidden>
-          ▾
-        </span>
-      </button>
-
-      {menuOpen && (
-        <ul className="panel-service__menu" role="listbox" aria-label="대상 서비스 선택">
-          <li role="option" aria-selected={activeApiSpecId == null}>
-            <button
-              type="button"
-              className={`panel-service__option${activeApiSpecId == null ? " is-active" : ""}`}
-              onClick={() => handleSelect(null)}
-            >
-              선택 안 함 (미지정)
-            </button>
-          </li>
-          {(services ?? []).map((spec) => (
-            <li key={spec.id} role="option" aria-selected={spec.id === activeApiSpecId}>
-              <button
-                type="button"
-                className={`panel-service__option${spec.id === activeApiSpecId ? " is-active" : ""}`}
-                onClick={() => handleSelect(spec.id)}
-              >
-                {specLabel(spec)}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+        <AppMenu.Item
+          className={`panel-service__option${activeApiSpecId == null ? " is-active" : ""}`}
+          onClick={() => handleSelect(null)}
+        >
+          선택 안 함 (미지정)
+        </AppMenu.Item>
+        {(services ?? []).map((spec) => (
+          <AppMenu.Item
+            key={spec.id}
+            className={`panel-service__option${spec.id === activeApiSpecId ? " is-active" : ""}`}
+            onClick={() => handleSelect(spec.id)}
+          >
+            {specLabel(spec)}
+          </AppMenu.Item>
+        ))}
+      </AppMenu>
 
       <ConfirmModal
         open={pendingChange != null}

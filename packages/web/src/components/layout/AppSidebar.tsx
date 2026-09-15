@@ -8,10 +8,11 @@
 // - 접힘(레일)에서도 메뉴 아이콘으로 페이지 이동 가능(현재 라우트 active 강조).
 // - 회원정보는 authStore.user 로 렌더, 클릭 시 드롭업(로그아웃).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { conversationsApi } from "../../api";
 import { ConversationSidebar } from "../chat/ConversationSidebar";
+import { AppMenu } from "../common/AppMenu";
 import { useChatStore } from "../../store/chatStore";
 import { useToastStore } from "../../store/toastStore";
 import { useAuthStore } from "../../store/authStore";
@@ -42,10 +43,6 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const setConversations = useChatStore((s) => s.setConversations);
   const clearConversation = useChatStore((s) => s.clearConversation);
-
-  // 회원 드롭업 메뉴 열림 상태
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // 대화 목록 로드 (앱 진입 시 1회, 전역)
   const loadConversations = useCallback(async () => {
@@ -129,21 +126,6 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
     },
     [conversations, setConversations, currentConversationId, clearConversation, showToast, loadConversations]
   );
-
-  // 회원 메뉴 바깥 클릭 시 닫기
-  useEffect(() => {
-    if (!userMenuOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    };
-    const t = setTimeout(() => document.addEventListener("click", onClick), 0);
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener("click", onClick);
-    };
-  }, [userMenuOpen]);
 
   return (
     <aside className={`app-sidebar${collapsed ? " collapsed" : ""}`} aria-label="네비게이션">
@@ -246,41 +228,34 @@ export function AppSidebar({ collapsed, onToggleCollapse, onLogout }: Props) {
       />
       </div>{/* /.sidebar-scroll */}
 
-      {/* 회원정보 (하단 고정) + 드롭업 메뉴 */}
-      <div className="sidebar-user" ref={userMenuRef}>
-        <button
-          type="button"
-          className="sidebar-user__trigger"
-          aria-haspopup="menu"
-          aria-expanded={userMenuOpen}
-          aria-label={`${user?.name ?? user?.username ?? "사용자"} 계정 메뉴`}
-          title={user?.name ?? user?.username ?? "사용자"}
-          onClick={() => setUserMenuOpen((v) => !v)}
-        >
-          <span className="sidebar-user__avatar" aria-hidden>
-            {userInitials(user?.name, user?.username)}
-          </span>
-          <span className="sidebar-user__info">
-            <span className="sidebar-user__name">{user?.name ?? user?.username ?? "사용자"}</span>
-            {user?.username && <span className="sidebar-user__id">@{user.username}</span>}
-          </span>
-        </button>
-
-        {userMenuOpen && (
-          <div className="sidebar-user__menu" role="menu">
+      {/* 회원정보 (하단 고정) + 드롭업 메뉴 (AppMenu → 위쪽으로 펼침) */}
+      <div className="sidebar-user">
+        <AppMenu
+          side="top"
+          align="start"
+          popupClassName="sidebar-user__menu dropdown-menu"
+          ariaLabel={`${user?.name ?? user?.username ?? "사용자"} 계정 메뉴`}
+          trigger={
             <button
               type="button"
-              role="menuitem"
-              className="dropdown-item dropdown-item--danger"
-              onClick={() => {
-                setUserMenuOpen(false);
-                onLogout();
-              }}
+              className="sidebar-user__trigger"
+              aria-label={`${user?.name ?? user?.username ?? "사용자"} 계정 메뉴`}
+              title={user?.name ?? user?.username ?? "사용자"}
             >
-              🚪 로그아웃
+              <span className="sidebar-user__avatar" aria-hidden>
+                {userInitials(user?.name, user?.username)}
+              </span>
+              <span className="sidebar-user__info">
+                <span className="sidebar-user__name">{user?.name ?? user?.username ?? "사용자"}</span>
+                {user?.username && <span className="sidebar-user__id">@{user.username}</span>}
+              </span>
             </button>
-          </div>
-        )}
+          }
+        >
+          <AppMenu.Item className="dropdown-item dropdown-item--danger" onClick={onLogout}>
+            🚪 로그아웃
+          </AppMenu.Item>
+        </AppMenu>
       </div>
     </aside>
   );

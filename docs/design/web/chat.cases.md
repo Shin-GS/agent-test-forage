@@ -155,7 +155,8 @@ ref: docs/specs/chat/overview.md, docs/specs/chat/action-picker.md, docs/specs/c
 
 - 실행 중 [중지] 클릭 시 노출 (`role="dialog" aria-modal="true"`)
 - "완료된 N개 레시피는 되돌릴 수 없습니다. 중단하시겠습니까?" + 생성 데이터 유지 안내
-- [계속 실행] / [중단](danger)
+- [계속 실행] / [중단](danger). 초기 포커스는 [계속 실행](취소)
+- 구현: **`ConfirmModal`(danger, Base UI Dialog 기반) 재사용** — role/aria/ESC/바깥클릭/포커스 트랩·복귀는 래퍼가 담당([ui-patterns.md](../../specs/common/ui-patterns.md#오버레이-구현-규칙-base-ui-래퍼로만))
 
 ### Case 21: 플랜 결과 (RESULT)
 

@@ -118,4 +118,4 @@ ref: docs/specs/panel/overview.md, docs/specs/panel/history.md, docs/specs/commo
 - 스택 네비게이션: 뒤로가기 버튼에 aria-label
 - 레시피 목록: role="list" + role="listitem"
 - 실행 버튼: aria-disabled when 대화방 처리 중
-- 실행/재실행 확인 모달 (Case 6/7): `role="dialog"` + `aria-modal`, focus trap, 초기 포커스 [취소], ESC/배경 클릭으로 닫힘
+- 실행/재실행 확인 모달 (Case 6/7): `role="dialog"` + `aria-modal`, focus trap, 초기 포커스 [취소], ESC/배경 클릭으로 닫힘. 이 동작은 **`ConfirmModal`(Base UI Dialog) 래퍼가 담당**하며 FE가 직접 구현하지 않는다([ui-patterns.md](../../specs/common/ui-patterns.md#오버레이-구현-규칙-base-ui-래퍼로만)). 대상 서비스 선택 드롭다운은 `AppMenu`(Base UI Menu) 사용.

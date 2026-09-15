@@ -16,8 +16,7 @@ import { VariablesSection } from "../components/recipe/VariablesSection";
 import { StepsSection } from "../components/recipe/StepsSection";
 import { ResultDefinitionSection } from "../components/recipe/ResultDefinitionSection";
 import { VersionDrawer } from "../components/recipe/VersionDrawer";
-import { VersionPreviewModal } from "../components/recipe/VersionPreviewModal";
-import { ConfirmModal } from "../components/common/ConfirmModal";
+import { AppTooltip } from "../components/common/AppTooltip";
 import { PageShell } from "../components/layout/PageShell";
 import { PageActionBar } from "../components/layout/PageActionBar";
 import { useToastStore } from "../store/toastStore";
@@ -63,9 +62,6 @@ export function RecipeEditPage() {
 
   // 버전 UI 상태
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [previewVersionNo, setPreviewVersionNo] = useState<number | null>(null);
-  const [restoreVersionNo, setRestoreVersionNo] = useState<number | null>(null);
-  const versionTriggerRef = useRef<HTMLButtonElement>(null);
 
   // 읽기 전용: 편집 모드 + canEdit=false (공통 레시피를 non-admin 이 연 경우)
   const readOnly = isEdit && !canEdit;
@@ -164,8 +160,6 @@ export function RecipeEditPage() {
       void queryClient.invalidateQueries({ queryKey: ["recipe", recipeId] });
       void queryClient.invalidateQueries({ queryKey: ["recipe", recipeId, "versions"] });
       void queryClient.invalidateQueries({ queryKey: ["recipes"] });
-      setRestoreVersionNo(null);
-      setPreviewVersionNo(null);
       setDrawerOpen(false);
       const invalid = (restored.validationStatus?.code ?? "").toUpperCase() === "INVALID";
       showToast(
@@ -174,7 +168,6 @@ export function RecipeEditPage() {
       );
     },
     onError: (err) => {
-      setRestoreVersionNo(null);
       showToast(
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : "복원에 실패했습니다",
         "error",
@@ -244,10 +237,9 @@ export function RecipeEditPage() {
             <>
               {isEdit && (
                 <button
-                  ref={versionTriggerRef}
                   type="button"
                   className="btn btn--secondary version-badge-btn"
-                  aria-haspopup="true"
+                  aria-haspopup="dialog"
                   aria-expanded={drawerOpen}
                   onClick={() => setDrawerOpen((prev) => !prev)}
                 >
@@ -332,24 +324,27 @@ export function RecipeEditPage() {
           <div className="section">
             <div className="section__title">
               <span className="section__number">5</span> 결과 메시지 템플릿
-              {/* 작성 도움말 툴팁: 라벨 옆 ⓘ, 기존 .tooltip 컴포넌트 재사용(작성 위치 근처). */}
-              <span
-                className="tooltip"
-                tabIndex={0}
-                aria-label="결과 메시지 템플릿 작성 도움말"
-                style={{ marginLeft: "var(--space-1)", cursor: "help", color: "var(--color-text-tertiary)" }}
+              {/* 작성 도움말 툴팁: 라벨 옆 ⓘ (AppTooltip → Base UI). */}
+              <AppTooltip
+                popupStyle={{ textAlign: "left", whiteSpace: "normal", width: 280 }}
+                trigger={
+                  <span
+                    tabIndex={0}
+                    aria-label="결과 메시지 템플릿 작성 도움말"
+                    style={{ marginLeft: "var(--space-1)", cursor: "help", color: "var(--color-text-tertiary)" }}
+                  >
+                    ⓘ
+                  </span>
+                }
               >
-                ⓘ
-                <span className="tooltip__content" style={{ textAlign: "left", whiteSpace: "normal", width: 280 }}>
-                  마크다운 + Handlebars 문법으로 작성해요.
-                  <br />• 값: <code>{"{{orderId}}"}</code>, <code>{"{{userInput.수량}}"}</code>
-                  <br />• 반복: <code>{"{{#each items}}- {{this.name}}{{/each}}"}</code>
-                  <br />• 조건: <code>{"{{#if balance}}...{{/if}}"}</code>
-                  <br />• 헬퍼: <code>{"{{formatNumber amount}}"}</code>(콤마), <code>{'{{default v "-"}}'}</code>
-                  <br />• 표: 마크다운 표 <code>| 열 |</code> 사용 가능
-                  <br />쓸 수 있는 값은 ④ 결과 정의 + ② 사용자 입력 변수예요.
-                </span>
-              </span>
+                마크다운 + Handlebars 문법으로 작성해요.
+                <br />• 값: <code>{"{{orderId}}"}</code>, <code>{"{{userInput.수량}}"}</code>
+                <br />• 반복: <code>{"{{#each items}}- {{this.name}}{{/each}}"}</code>
+                <br />• 조건: <code>{"{{#if balance}}...{{/if}}"}</code>
+                <br />• 헬퍼: <code>{"{{formatNumber amount}}"}</code>(콤마), <code>{'{{default v "-"}}'}</code>
+                <br />• 표: 마크다운 표 <code>| 열 |</code> 사용 가능
+                <br />쓸 수 있는 값은 ④ 결과 정의 + ② 사용자 입력 변수예요.
+              </AppTooltip>
             </div>
             <textarea
               className="textarea"
@@ -366,43 +361,17 @@ export function RecipeEditPage() {
         </fieldset>
       </div>
 
-      {/* 버전 기록 drawer (편집 모드) */}
-      {isEdit && drawerOpen && recipeId != null && (
+      {/* 버전 기록 drawer (편집 모드). open 제어형 — AppDrawer(Base UI)가 포커스/ESC/바깥클릭/top-most 처리 */}
+      {isEdit && recipeId != null && (
         <VersionDrawer
           recipeId={recipeId}
           currentVersion={currentVersion}
           canEdit={canEdit}
-          triggerRef={versionTriggerRef}
+          open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-          onPreview={(versionNo) => setPreviewVersionNo(versionNo)}
-          onRestore={(versionNo) => setRestoreVersionNo(versionNo)}
+          onRestore={(versionNo) => restoreMutation.mutate(versionNo)}
         />
       )}
-
-      {/* 버전 미리보기 모달 */}
-      {isEdit && previewVersionNo != null && recipeId != null && (
-        <VersionPreviewModal
-          recipeId={recipeId}
-          versionNo={previewVersionNo}
-          canRestore={canEdit}
-          onClose={() => setPreviewVersionNo(null)}
-          onRestore={(versionNo) => setRestoreVersionNo(versionNo)}
-        />
-      )}
-
-      {/* 복원 확인 모달 */}
-      <ConfirmModal
-        open={restoreVersionNo != null}
-        title={restoreVersionNo != null ? `v${restoreVersionNo}으로 복원` : "복원"}
-        description={
-          restoreVersionNo != null
-            ? `v${restoreVersionNo} 내용으로 새 버전(v${currentVersion + 1})을 만듭니다. 현재 내용(v${currentVersion})은 버전으로 보관되어 안전하며, 되돌리기도 이력에 남습니다. 선택한 버전 이후 스펙이 변경돼 복원 결과가 유효하지 않을(INVALID) 수 있으며, 이 경우에도 복원은 되고 실행 전 유효성 경고로 안내됩니다.`
-            : undefined
-        }
-        confirmLabel="이 버전으로 복원"
-        onConfirm={() => restoreVersionNo != null && restoreMutation.mutate(restoreVersionNo)}
-        onCancel={() => setRestoreVersionNo(null)}
-      />
     </PageShell>
   );
 }

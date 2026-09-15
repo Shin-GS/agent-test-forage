@@ -1,9 +1,10 @@
 // 재사용 확인 모달 (브라우저 confirm() 대체).
 // - 제목 + 설명 + [취소]/[확인] 버튼. 위험 액션은 danger(빨강) 강조.
-// - ESC / 배경 클릭으로 닫기, 열릴 때 확인 버튼에 포커스, focus trap(Tab 순환).
-// - role="dialog" + aria-modal + aria-labelledby/‑describedby 로 접근성 준수.
+// - 오버레이 동작(ESC/배경클릭/포커스 트랩·복귀/중첩 top-most)은 AppModal(Base UI Dialog)에 위임.
+// - 초기 포커스는 initialFocus("cancel"|"confirm")로 선택 → 해당 버튼 ref 를 AppModal 에 전달.
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
+import { AppModal } from "./AppModal";
 
 interface Props {
   open: boolean;
@@ -32,102 +33,39 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: Props) {
-  const modalRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const titleId = useId();
   const descId = useId();
-
-  // 열릴 때 최초 포커스 대상(initialFocus) 포커스 + ESC/Tab(focus trap) 키 처리 + 닫힐 때 포커스 복원
-  useEffect(() => {
-    if (!open) return;
-    // 열기 직전 포커스를 갖고 있던 요소를 저장 → 언마운트/닫힘 시 복원
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    // 다음 프레임에 포커스(애니메이션/마운트 후). initialFocus 에 따라 취소/확인 선택.
-    const raf = requestAnimationFrame(() => {
-      const target = initialFocus === "cancel" ? cancelRef.current : confirmRef.current;
-      target?.focus();
-    });
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-        return;
-      }
-      if (e.key === "Tab") {
-        const root = modalRef.current;
-        if (!root) return;
-        const focusables = root.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        const active = document.activeElement as HTMLElement | null;
-        if (e.shiftKey && active === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      cancelAnimationFrame(raf);
-      document.removeEventListener("keydown", handleKeyDown);
-      // 포커스 복원: 저장해둔 요소가 여전히 문서에 있으면 포커스를 되돌린다
-      if (previouslyFocused && document.contains(previouslyFocused)) {
-        previouslyFocused.focus();
-      }
-    };
-  }, [open, onCancel, initialFocus]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        // 배경(백드롭) 클릭 시에만 닫는다(모달 내부 클릭은 무시)
-        if (e.target === e.currentTarget) onCancel();
-      }}
+    <AppModal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      showCloseButton={false}
+      describedById={description ? descId : undefined}
+      initialFocusRef={initialFocus === "cancel" ? cancelRef : confirmRef}
     >
-      <div
-        ref={modalRef}
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={description ? descId : undefined}
-      >
-        <div className="modal__header">
-          <h2 id={titleId} className="modal__title">
-            {title}
-          </h2>
+      {description && (
+        <div id={descId} className="modal__body" style={{ whiteSpace: "pre-line" }}>
+          {description}
         </div>
-        {description && (
-          <div id={descId} className="modal__body" style={{ whiteSpace: "pre-line" }}>
-            {description}
-          </div>
-        )}
-        <div className="modal__footer">
-          <button ref={cancelRef} type="button" className="btn btn--secondary" onClick={onCancel}>
-            {cancelLabel}
-          </button>
-          <button
-            ref={confirmRef}
-            type="button"
-            className={`btn ${danger ? "btn--danger" : "btn--primary"}`}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </button>
-        </div>
+      )}
+      <div className="modal__footer">
+        <button ref={cancelRef} type="button" className="btn btn--secondary" onClick={onCancel}>
+          {cancelLabel}
+        </button>
+        <button
+          ref={confirmRef}
+          type="button"
+          className={`btn ${danger ? "btn--danger" : "btn--primary"}`}
+          onClick={onConfirm}
+        >
+          {confirmLabel}
+        </button>
       </div>
-    </div>
+    </AppModal>
   );
 }

@@ -1164,8 +1164,10 @@ select.input {
   white-space: nowrap;
 }
 
-.panel-service__option:hover {
+.panel-service__option:hover,
+.panel-service__option[data-highlighted] {
   background: var(--color-bg-hover);
+  outline: none;
 }
 
 .panel-service__option.is-active {
@@ -2586,11 +2588,15 @@ select.input {
   font-weight: var(--font-weight-medium);
 }
 
-/* 더보기(⋮) 버튼 — hover/focus 시 노출 */
-.sidebar-item__more {
+/* 더보기(⋮) 버튼 래퍼 — 절대 배치는 래퍼가 담당(트리거 버튼은 래퍼를 채움) */
+.sidebar-item__more-wrap {
   position: absolute;
   top: var(--space-2);
   right: var(--space-2);
+}
+
+/* 더보기(⋮) 버튼 — hover/focus 시 노출 */
+.sidebar-item__more {
   width: 24px;
   height: 24px;
   display: flex;
@@ -2607,7 +2613,7 @@ select.input {
 
 .sidebar-item:hover .sidebar-item__more,
 .sidebar-item:focus-within .sidebar-item__more,
-.sidebar-item__more.is-open {
+.sidebar-item__more[data-popup-open] {
   opacity: 1;
 }
 
@@ -2691,6 +2697,29 @@ select.input {
 
 .dropdown-item--danger {
   color: var(--color-error);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AppMenu (Base UI Menu) 배치 보정
+   - Positioner 는 Base UI 가 position:fixed 로 트리거에 앵커링(top/left 인라인 지정)한다.
+     따라서 z-index 만 얹는다.
+   - Popup 에는 기존 메뉴 시각 클래스(.dropdown-menu/.sidebar-user__menu/.filter-dropdown__menu/
+     .panel-service__menu)를 그대로 입히되, 그 클래스들의 position:absolute + top/bottom/left/right
+     는 Positioner 앵커링과 충돌하므로 static 으로 되돌린다(시각 속성만 남김).
+   ═══════════════════════════════════════════════════════════ */
+.app-menu-positioner {
+  z-index: var(--z-dropdown);
+}
+.app-menu-positioner .dropdown-menu,
+.app-menu-positioner .sidebar-user__menu,
+.app-menu-positioner .filter-dropdown__menu,
+.app-menu-positioner .panel-service__menu {
+  position: static;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  z-index: auto;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2810,6 +2839,26 @@ select.input {
   z-index: var(--z-modal);
   box-shadow: var(--shadow-xl);
   animation: scaleIn 0.2s ease;
+}
+
+/* ── Base UI(AppModal) 위치 보정 ──
+   기존 .modal-backdrop 는 flex 컨테이너로 자식(.modal)을 가운데 배치하는 전제였다.
+   Base UI 는 Backdrop/Popup 이 형제이므로, backdrop 은 순수 덮개로 두고 popup 을 직접
+   fixed 중앙에 배치한다. (backdrop 이 popup 위를 덮어 클릭이 막히는 문제 방지) */
+.app-modal-backdrop {
+  display: block; /* flex 중앙정렬 해제 — 순수 덮개 */
+}
+/* 중앙 배치를 transform(translate) 대신 inset+margin:auto 로 한다.
+   .modal 의 open 애니메이션(scaleIn = transform:scale)이 translate 를 덮어써서
+   "우측 하단에서 떴다가 중앙으로 튀는" 현상이 생겼기 때문. margin:auto 중앙정렬은
+   transform 을 쓰지 않으므로 scaleIn(scale)과 충돌하지 않는다. */
+.app-modal-popup {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  /* .modal 의 max-height:80vh + overflow-y:auto 와 함께 세로 중앙. height:fit-content 로
+     내용 높이에 맞춰 margin:auto 가 상하 여백을 균등 분배한다. */
+  height: fit-content;
 }
 
 .modal__header {
@@ -2940,8 +2989,29 @@ select.input {
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.filter-check:hover {
+.filter-check:hover,
+.filter-check[data-highlighted] {
   background: var(--color-bg-hover);
+  outline: none;
+}
+/* 체크박스 모양(Base UI CheckboxItem 은 native input 을 렌더하지 않으므로 시각 박스를 그린다) */
+.filter-check__box {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 1;
+  color: #fff;
+  background: var(--color-bg-primary);
+}
+.filter-check[data-checked] .filter-check__box {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 /* 필터 칩 요약 줄 */
@@ -3045,16 +3115,15 @@ select.input {
   opacity: 1;
 }
 
-/* --- 툴팁 (유효성 경고 등) --- */
-.tooltip {
-  position: relative;
-  display: inline-flex;
+/* --- 툴팁 (유효성 경고, 작성 도움말 등) — 모두 AppTooltip(Base UI)로 이관됨.
+   자체 CSS-only .tooltip/.tooltip__content 는 제거하고 아래 AppTooltip 시각으로 통일. --- */
+
+/* AppTooltip (Base UI Tooltip) — Positioner 는 Base UI 가 fixed 앵커링, Popup 에 시각 입힘.
+   기존 .tooltip__content 시각을 이식(포탈이라 절대배치/opacity 트랜지션은 Base UI 가 처리). */
+.app-tooltip-positioner {
+  z-index: var(--z-dropdown);
 }
-.tooltip__content {
-  position: absolute;
-  bottom: calc(100% + var(--space-1));
-  left: 50%;
-  transform: translateX(-50%);
+.app-tooltip-popup {
   white-space: nowrap;
   padding: var(--space-1) var(--space-2);
   background: var(--color-bg-primary);
@@ -3063,15 +3132,6 @@ select.input {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   box-shadow: var(--shadow-md);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--transition-fast);
-  z-index: var(--z-dropdown);
-}
-.tooltip:hover .tooltip__content,
-.tooltip:focus-visible .tooltip__content,
-.tooltip:focus-within .tooltip__content {
-  opacity: 1;
 }
 
 /* --- 카드 폴백 (반응형, JS 로 <1024px 에서만 렌더) --- */

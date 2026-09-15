@@ -415,7 +415,7 @@ export function ChatPage() {
             right: 0,
             top: "50%",
             transform: "translateY(-50%)",
-            zIndex: 90,
+            zIndex: "var(--z-panel-overlay)",
           }}
           aria-label="패널 펼치기"
           onClick={() => setPanelOpen(true)}
@@ -428,7 +428,7 @@ export function ChatPage() {
       {rightIsOverlay && panelOpen && (
         <div
           className="modal-backdrop"
-          style={{ zIndex: 90 }}
+          style={{ zIndex: "var(--z-panel-overlay)" }}
           aria-hidden
           onClick={() => setPanelOpen(false)}
         />

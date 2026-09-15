@@ -15,6 +15,13 @@ html, body, #root {
   height: 100%;
 }
 
+/* Base UI 오버레이(Dialog/Menu/Popover 등)는 portal 로 body 로 렌더된다.
+   앱 콘텐츠 루트(#root)에 별도 스택 컨텍스트를 만들어, portal 팝업이 항상 앱 콘텐츠
+   위에 오고 앱 내부 z-index 와 충돌하지 않게 한다. (base-ui quick-start 권장) */
+#root {
+  isolation: isolate;
+}
+
 body {
   font-family: var(--font-family);
   font-size: var(--font-size-base);
@@ -22,6 +29,9 @@ body {
   color: var(--color-text-primary);
   background: var(--color-bg-primary);
   -webkit-font-smoothing: antialiased;
+  /* iOS 26+ Safari: 스크롤 후에도 dialog 백드롭이 전체 visual viewport 를 덮도록
+     position: relative 기준을 제공한다. (base-ui quick-start 권장) */
+  position: relative;
 }
 
 /* ===========================

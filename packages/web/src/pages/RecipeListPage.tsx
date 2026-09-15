@@ -19,6 +19,7 @@ import type { RecipeSummary, SpecListItem } from "../api/types";
 import type { RecipeSort, SortDirection } from "../api/recipes";
 import { FilterDropdown, type FilterOption } from "../components/recipe/FilterDropdown";
 import { ConfirmModal } from "../components/common/ConfirmModal";
+import { AppTooltip } from "../components/common/AppTooltip";
 import { PageShell } from "../components/layout/PageShell";
 import { PageToolbar } from "../components/layout/PageToolbar";
 import { useListNavigation } from "../hooks/useListNavigation";
@@ -387,14 +388,19 @@ export function RecipeListPage() {
                     <div className="recipe-cell__name">
                       {recipe.name}
                       {isInvalid(recipe) && (
-                        <span
-                          className="recipe-cell__warn tooltip"
-                          tabIndex={0}
-                          aria-label="유효성 경고"
+                        <AppTooltip
+                          trigger={
+                            <span
+                              className="recipe-cell__warn"
+                              tabIndex={0}
+                              aria-label="유효성 경고"
+                            >
+                              ⚠️
+                            </span>
+                          }
                         >
-                          ⚠️
-                          <span className="tooltip__content">스펙 변경으로 필수 필드가 무효화됨</span>
-                        </span>
+                          스펙 변경으로 필수 필드가 무효화됨
+                        </AppTooltip>
                       )}
                     </div>
                     <div

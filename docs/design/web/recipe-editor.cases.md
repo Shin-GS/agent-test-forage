@@ -191,4 +191,4 @@ ref: docs/specs/pages/recipe-editor.md, docs/specs/recipe/authoring.md, docs/spe
 - form 필드에 label 연결
 - 드래그앤드롭에 키보드 대안 (위/아래 버튼으로 스텝 순서 변경)
 - 유효성 에러 시 aria-invalid + 에러 메시지 연결
-- 오버레이형 UI(버전 기록 drawer, 필터 드롭다운) 공통 규칙: ESC로 닫기, 바깥 클릭 시 닫기, 열릴 때 내부 첫 포커스 요소로 포커스 이동, 닫으면 트리거로 포커스 복귀. 필터 드롭다운 트리거의 `aria-expanded`는 표시 상태와 항상 동기화 (JS는 FE 구현 범위, HTML 명세에 주석으로 표기)
+- 오버레이형 UI(버전 기록 drawer, 버전 미리보기 모달, 복원 확인 모달, 작성 도움말 툴팁) 공통 규칙: ESC/바깥 클릭 닫기, 열릴 때 내부 첫 포커스 요소로 이동, 닫으면 트리거로 포커스 복귀, 트리거 `aria-expanded` 동기화. 이 동작은 FE가 직접 구현하지 않고 **앱 공통 래퍼(`AppDrawer`/`AppModal`/`ConfirmModal`/`AppTooltip`, 모두 Base UI 기반)가 담당**한다([ui-patterns.md 오버레이 구현 규칙](../../specs/common/ui-patterns.md#오버레이-구현-규칙-base-ui-래퍼로만)). 중첩 오버레이(드로어 안 미리보기/복원 확인)는 부모 트리 안에 렌더해 Base UI가 top-most를 인식하게 한다.

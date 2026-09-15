@@ -2,12 +2,16 @@
 // - 최신순 목록, 현재 버전(currentVersion)은 "현재" 배지 + 강조(미리보기/복원 버튼 없음).
 // - 각 과거 버전: [미리보기] [복원] (복원은 canEdit 일 때만).
 // - [더 보기] 커서 페이징(useInfiniteQuery). 빈 상태(현재 버전만 존재 = 이력 없음).
-// - ESC/바깥 클릭 닫기 + 포커스 관리는 useOverlayDismiss.
+// - 오버레이 동작(ESC/바깥클릭/포커스 트랩·복귀/중첩 top-most)은 AppDrawer(Base UI Dialog)에 위임.
+//   미리보기 모달이 위에 겹쳐도 Base UI 가 최상단만 dismiss 하므로 드로어가 오판으로 닫히지 않는다.
 
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { recipesApi } from "../../api";
 import type { RecipeVersionSummary } from "../../api/types";
+import { AppDrawer } from "../common/AppDrawer";
+import { ConfirmModal } from "../common/ConfirmModal";
+import { VersionPreviewModal } from "./VersionPreviewModal";
 
 interface VersionDrawerProps {
   recipeId: number;
@@ -15,10 +19,13 @@ interface VersionDrawerProps {
   currentVersion: number;
   /** 복원 버튼 노출 여부 (읽기 전용이면 false) */
   canEdit: boolean;
+  /** 열림 상태(제어형). 부모가 소유 */
+  open: boolean;
   onClose: () => void;
-  /** 트리거 버튼(닫힐 때 포커스 복귀). 상위에서 넘겨준다 */
-  triggerRef: React.RefObject<HTMLButtonElement | null>;
-  onPreview: (versionNo: number) => void;
+  /**
+   * 복원 확정 콜백. 드로어 내부에서 복원 확인 모달까지 처리한 뒤, 사용자가 확정하면 호출된다.
+   * 실제 복원 실행(mutation/토스트/폼 반영)은 부모가 담당한다.
+   */
   onRestore: (versionNo: number) => void;
 }
 
@@ -43,39 +50,15 @@ export function VersionDrawer({
   recipeId,
   currentVersion,
   canEdit,
+  open,
   onClose,
-  triggerRef,
-  onPreview,
   onRestore,
 }: VersionDrawerProps) {
-  const containerRef = useRef<HTMLElement>(null);
-
-  // ESC + 바깥 클릭 닫기 (트리거는 상위에 있어 판정 제외) + 열릴 때 닫기 버튼 포커스 + 닫힐 때 트리거 복귀
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      containerRef.current?.querySelector<HTMLElement>("button")?.focus();
-    });
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    const handlePointerDown = (e: PointerEvent) => {
-      const target = e.target as Node;
-      const inContainer = containerRef.current?.contains(target);
-      const inTrigger = triggerRef.current?.contains(target);
-      if (!inContainer && !inTrigger) onClose();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => {
-      cancelAnimationFrame(raf);
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-      if (triggerRef.current && document.contains(triggerRef.current)) triggerRef.current.focus();
-    };
-  }, [onClose, triggerRef]);
+  // 미리보기/복원확인 모달 상태를 드로어 내부에서 소유한다. 이렇게 하면 두 모달(Dialog)이 드로어(Dialog)의
+  // React 트리 안에 중첩 렌더되어 Base UI 가 nested dialog 로 인식한다 → 모달 내부 클릭/포커스가
+  // 드로어의 바깥 클릭(outside-press)으로 오판되지 않고, aria-hidden/포커스 충돌도 없다(겹침 시 드로어 유지, R2).
+  const [previewVersionNo, setPreviewVersionNo] = useState<number | null>(null);
+  const [restoreVersionNo, setRestoreVersionNo] = useState<number | null>(null);
 
   const {
     data,
@@ -91,6 +74,7 @@ export function VersionDrawer({
       recipesApi.listVersions(recipeId, pageParam ?? undefined, PAGE_SIZE),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasNext ? (lastPage.nextCursor ?? undefined) : undefined),
+    enabled: open,
   });
 
   const versions: RecipeVersionSummary[] = data?.pages.flatMap((p) => p.items) ?? [];
@@ -98,18 +82,15 @@ export function VersionDrawer({
   const hasHistory = versions.some((v) => v.versionNo !== currentVersion);
 
   return (
-    <aside ref={containerRef} className="version-drawer" aria-label="버전 기록">
+    <AppDrawer open={open} onClose={onClose} ariaLabel="버전 기록">
       <div className="version-drawer__header">
         <span className="version-drawer__title">버전 기록</span>
+        {/* 닫기: 제어형 onClose 호출(부모가 open=false). AppDrawer(Base UI)가 상태 전이를 반영한다. */}
         <button
           type="button"
           className="version-drawer__close"
           aria-label="닫기"
-          onClick={() => {
-            onClose();
-            // 트리거로 포커스 복귀
-            triggerRef.current?.focus();
-          }}
+          onClick={onClose}
         >
           ✕
         </button>
@@ -160,7 +141,7 @@ export function VersionDrawer({
                       <button
                         type="button"
                         className="btn btn--ghost btn--sm"
-                        onClick={() => onPreview(v.versionNo)}
+                        onClick={() => setPreviewVersionNo(v.versionNo)}
                       >
                         미리보기
                       </button>
@@ -168,7 +149,7 @@ export function VersionDrawer({
                         <button
                           type="button"
                           className="btn btn--secondary btn--sm"
-                          onClick={() => onRestore(v.versionNo)}
+                          onClick={() => setRestoreVersionNo(v.versionNo)}
                         >
                           복원
                         </button>
@@ -193,6 +174,38 @@ export function VersionDrawer({
           </div>
         )}
       </div>
-    </aside>
+
+      {/* 미리보기 모달을 드로어 트리 안에서 렌더 → Base UI nested dialog 로 인식되어
+          미리보기 내부 클릭이 드로어의 바깥 클릭으로 오판되지 않는다(겹쳐도 드로어 유지). */}
+      {previewVersionNo != null && (
+        <VersionPreviewModal
+          recipeId={recipeId}
+          versionNo={previewVersionNo}
+          canRestore={canEdit}
+          onClose={() => setPreviewVersionNo(null)}
+          onRestore={(versionNo) => {
+            setPreviewVersionNo(null);
+            setRestoreVersionNo(versionNo);
+          }}
+        />
+      )}
+
+      {/* 복원 확인 모달 — 드로어 트리 안에서 렌더(nested). 확정 시 실제 복원은 부모(onRestore)가 실행. */}
+      <ConfirmModal
+        open={restoreVersionNo != null}
+        title={restoreVersionNo != null ? `v${restoreVersionNo}으로 복원` : "복원"}
+        description={
+          restoreVersionNo != null
+            ? `v${restoreVersionNo} 내용으로 새 버전(v${currentVersion + 1})을 만듭니다. 현재 내용(v${currentVersion})은 버전으로 보관되어 안전하며, 되돌리기도 이력에 남습니다. 선택한 버전 이후 스펙이 변경돼 복원 결과가 유효하지 않을(INVALID) 수 있으며, 이 경우에도 복원은 되고 실행 전 유효성 경고로 안내됩니다.`
+            : undefined
+        }
+        confirmLabel="이 버전으로 복원"
+        onConfirm={() => {
+          if (restoreVersionNo != null) onRestore(restoreVersionNo);
+          setRestoreVersionNo(null);
+        }}
+        onCancel={() => setRestoreVersionNo(null)}
+      />
+    </AppDrawer>
   );
 }

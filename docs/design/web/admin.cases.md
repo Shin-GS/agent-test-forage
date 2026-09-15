@@ -198,6 +198,6 @@ ref: docs/specs/pages/admin.md
 
 디자인 HTML로는 재현하기 어려워 명세로만 남긴다. FE 구현 시 반드시 처리한다.
 
-- **ConfirmModal 포커스 관리**: 열릴 때 모달 내부(취소/확인 버튼)로 초기 포커스 이동, 닫힐 때 트리거 버튼으로 포커스 복귀, `ESC`로 닫기, 열린 동안 **포커스 트랩**(모달 밖으로 Tab 이동 금지).
+- **ConfirmModal / 폼 모달 포커스 관리**: 초기 포커스 이동(폼은 첫 입력, 확인은 취소 버튼), 닫힐 때 트리거로 포커스 복귀, `ESC`/바깥 클릭 닫기, 열린 동안 **포커스 트랩**. 이 동작은 FE가 직접 구현하지 않고 **`AppModal`/`ConfirmModal`(Base UI Dialog) 래퍼가 담당**한다([ui-patterns.md 오버레이 구현 규칙](../../specs/common/ui-patterns.md#오버레이-구현-규칙-base-ui-래퍼로만)). 사용자 생성/비밀번호 변경 모달도 동일.
 - **행 상세 이동 키보드 경로**: 서비스명 링크 버튼 외에, 행 자체에도 키보드 접근이 필요하면 `tabindex`/`role` + Enter 핸들러로 보강한다(디자인 HTML은 서비스명 버튼까지만 제공).
 - **`aria-disabled` 버튼 no-op**: 위험 액션 게이팅으로 `aria-disabled="true"`가 걸린 버튼(본인/마지막 ACTIVE ADMIN의 강등·비활성)은 클릭·Enter 시 **동작을 억제(no-op)**하되 포커스는 유지한다. `disabled` 대신 `aria-disabled`를 쓰는 이유는 스크린리더가 버튼과 사유 툴팁을 읽을 수 있게 하기 위함이므로, 포커스 가능 상태는 그대로 두고 핸들러에서만 조기 반환한다.

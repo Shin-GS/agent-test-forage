@@ -123,7 +123,7 @@ ref: docs/specs/pages/history-full.md
 - 필터 변경 시 결과 개수를 `aria-live="polite"`로 알림
 - 무한 스크롤 하단 로딩 표시는 `role="status"` + `aria-live="polite"`
 - 날짜 input은 `<label for>`로 연결
-- 필터 드롭다운: `aria-haspopup`/`aria-expanded` 동기화, ESC/바깥 클릭 닫기, 첫 체크박스 포커스, 닫으면 트리거 복귀
+- 필터 드롭다운: `aria-haspopup`/`aria-expanded` 동기화, ESC/바깥 클릭 닫기, roving 포커스, 닫으면 트리거 복귀. 이 동작은 **`AppMenu`(Base UI Menu) 래퍼가 담당**하며 FE가 직접 구현하지 않는다([ui-patterns.md](../../specs/common/ui-patterns.md#오버레이-구현-규칙-base-ui-래퍼로만)). 다중 선택은 `Menu.CheckboxItem`(선택 중 메뉴 유지).
 - **반응형 카드 폴백(`exec-cards`)**: 데스크톱 테이블과 동일 데이터의 반응형 대체 표현이라 기본 `aria-hidden="true"`. 단, <1024px 미디어쿼리로 카드가 노출될 때는 `aria-hidden="false"`로 토글해야 스크린리더에서 낭독됨(FE 구현 범위).
 
 ## 백로그 (구현 안 함, 기록만)
