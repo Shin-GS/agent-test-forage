@@ -68,7 +68,227 @@
       border-color: var(--color-accent);
     }
 
-    /* 레시피 아이템 */
+    /* ─── 레시피 카드 (side-panel__recipe): 인라인 펼침 ─── */
+    .side-panel__recipe {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: var(--space-3);
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      transition: border-color var(--transition-fast);
+    }
+
+    .side-panel__recipe:hover {
+      border-color: var(--color-border-light);
+    }
+
+    /* 1행: 이름 + (⚠️) + [▾] + [▶] */
+    .side-panel__recipe-top {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .side-panel__recipe-name {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-text-primary);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* 유효성 경고 아이콘 (INVALID일 때만) — 툴팁 동반 */
+    .side-panel__recipe-warn {
+      position: relative;
+      color: var(--color-warning);
+      font-size: var(--font-size-xs);
+      cursor: help;
+      flex-shrink: 0;
+    }
+
+    .side-panel__recipe-warn__tip {
+      position: absolute;
+      top: calc(100% + var(--space-1));
+      right: 0;
+      z-index: var(--z-dropdown);
+      width: max-content;
+      max-width: 200px;
+      padding: var(--space-1) var(--space-2);
+      background: var(--color-bg-overlay);
+      color: var(--color-text-on-accent);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-normal);
+      line-height: var(--line-height-normal);
+      border-radius: var(--radius-sm);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity var(--transition-fast);
+      pointer-events: none;
+    }
+
+    .side-panel__recipe-warn:hover .side-panel__recipe-warn__tip,
+    .side-panel__recipe-warn:focus-visible .side-panel__recipe-warn__tip {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* [▾ 펼치기] 토글 */
+    .side-panel__recipe-toggle {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: var(--color-text-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-sm);
+      line-height: 1;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
+    }
+
+    .side-panel__recipe-toggle:hover {
+      color: var(--color-text-primary);
+      border-color: var(--color-border-light);
+      background: var(--color-bg-hover);
+    }
+
+    /* [▶ 실행] */
+    .side-panel__recipe-run {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-accent-subtle);
+      color: var(--color-accent);
+      border: none;
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
+    }
+
+    .side-panel__recipe-run:hover {
+      background: var(--color-accent);
+      color: var(--color-text-on-accent);
+    }
+
+    /* 2행: 설명 1줄 말줄임 */
+    .side-panel__recipe-desc {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* 3행: 사용 정보 (🕒 최근 사용 · N회) */
+    .side-panel__recipe-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+    }
+
+    /* ─── 펼침 상세 (인라인) ─── */
+    .side-panel__recipe-detail {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin-top: var(--space-1);
+      padding-top: var(--space-2);
+      border-top: 1px solid var(--color-border);
+    }
+
+    /* 즉시 표시: 공개범위 배지 + 서비스명 + 태그 칩 */
+    .side-panel__recipe-scope {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-1) var(--space-2);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+    }
+
+    .side-panel__recipe-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1);
+    }
+
+    .side-panel__recipe-tag {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+      background: var(--color-bg-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-full);
+      padding: 1px var(--space-2);
+    }
+
+    /* 스텝 흐름 */
+    .side-panel__recipe-steps {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .side-panel__recipe-steps-label,
+    .side-panel__recipe-vars {
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .side-panel__recipe-step {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-primary);
+    }
+
+    .side-panel__recipe-step__type {
+      margin-left: auto;
+      font-size: var(--font-size-xs);
+      padding: 1px var(--space-2);
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-tertiary);
+    }
+
+    .side-panel__recipe-vars-value {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-normal);
+    }
+
+    /* 스텝 영역 지연 로딩 / 에러 */
+    .side-panel__recipe-loading {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+    }
+
+    .side-panel__recipe-error {
+      font-size: var(--font-size-xs);
+      color: var(--color-error);
+    }
+
+    /* 레시피 아이템 (Case 6/7 모달 데모에서 사용) */
     .recipe-item {
       display: flex;
       flex-direction: column;
@@ -317,8 +537,11 @@
 
   <!-- Case Switcher -->
   <div class="case-switcher">
-    <button class="case-switcher__btn active" onclick="showCase('recipe-list')">1. 레시피 목록</button>
-    <button class="case-switcher__btn" onclick="showCase('recipe-detail')">2. 레시피 상세</button>
+    <button class="case-switcher__btn active" onclick="showCase('recipe-list')">1. 레시피 목록(접힘)</button>
+    <button class="case-switcher__btn" onclick="showCase('recipe-expanded')">2. 카드 펼침</button>
+    <button class="case-switcher__btn" onclick="showCase('recipe-loading')">2a. 스텝 로딩</button>
+    <button class="case-switcher__btn" onclick="showCase('recipe-error')">2b. 스텝 실패</button>
+    <button class="case-switcher__btn" onclick="showCase('recipe-invalid')">2c. 유효성 경고</button>
     <button class="case-switcher__btn" onclick="showCase('history-list')">3. 히스토리</button>
     <button class="case-switcher__btn" onclick="showCase('result-detail')">4. 결과 상세</button>
     <button class="case-switcher__btn" onclick="showCase('empty')">5. 빈 상태</button>
@@ -334,152 +557,257 @@
         <button class="panel-tab">히스토리</button>
       </div>
       <div class="panel-body">
+        <!-- 대상 서비스 (탐색 전용 드롭다운) -->
+        <select class="input" aria-label="대상 서비스 선택">
+          <option>전체 서비스</option>
+          <option selected>사람인</option>
+          <option>잡코리아</option>
+          <option>쇼핑몰</option>
+        </select>
         <!-- 검색 -->
         <input class="input" type="text" placeholder="🔍 레시피 검색...">
-        <!-- 필터 -->
+        <!-- 필터: [전체][내 레시피][공통] (즐겨찾기 없음) -->
         <div class="sub-filters">
           <button class="sub-filter active">전체</button>
-          <button class="sub-filter">⭐ 즐겨찾기</button>
           <button class="sub-filter">내 레시피</button>
           <button class="sub-filter">공통</button>
         </div>
-        <!-- 레시피 목록 -->
-        <div class="recipe-item">
-          <div class="recipe-item__header">
-            <span class="recipe-item__name">회원가입</span>
-            <span class="badge badge--neutral">사람인</span>
-            <span class="recipe-item__star">⭐</span>
-            <button class="recipe-item__play" title="바로 실행">▶</button>
+        <!-- 레시피 목록 (접힘 카드) -->
+        <div role="list" style="display: flex; flex-direction: column; gap: var(--space-2);">
+          <!-- 카드: 1행(이름 + [▾] + [▶]) / 2행(설명) / 3행(사용 정보) -->
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">회원가입</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="false" aria-controls="detail-signup" aria-label="회원가입 펼치기">▾</button>
+              <button class="side-panel__recipe-run" aria-label="회원가입 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">사람인 서비스에 테스트 회원을 등록합니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 10분 전 · 24회</span>
+            </div>
           </div>
-          <div class="recipe-item__meta">
-            <span>마지막 실행: 10분 전</span>
-            <span class="badge badge--success" style="font-size: 10px;">성공</span>
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">공고 등록</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="false" aria-controls="detail-post" aria-label="공고 등록 펼치기">▾</button>
+              <button class="side-panel__recipe-run" aria-label="공고 등록 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">채용 공고를 생성하고 게시 상태로 전환합니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 2시간 전 · 8회</span>
+            </div>
+          </div>
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">입사지원</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="false" aria-controls="detail-apply" aria-label="입사지원 펼치기">▾</button>
+              <button class="side-panel__recipe-run" aria-label="입사지원 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">채용 공고에 이력서를 제출하는 플로우입니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 어제 · 3회</span>
+            </div>
+          </div>
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">결제 플로우</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="false" aria-controls="detail-pay" aria-label="결제 플로우 펼치기">▾</button>
+              <button class="side-panel__recipe-run" aria-label="결제 플로우 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">장바구니부터 결제 승인까지 실행합니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 실행한 적 없음</span>
+            </div>
           </div>
         </div>
-        <div class="recipe-item">
-          <div class="recipe-item__header">
-            <span class="recipe-item__name">공고 등록</span>
-            <span class="badge badge--neutral">사람인</span>
-            <span class="recipe-item__star" style="opacity: 0.3;">☆</span>
-            <button class="recipe-item__play" title="바로 실행">▶</button>
-          </div>
-          <div class="recipe-item__meta">
-            <span>마지막 실행: 2시간 전</span>
-            <span class="badge badge--success" style="font-size: 10px;">성공</span>
-          </div>
-        </div>
-        <div class="recipe-item">
-          <div class="recipe-item__header">
-            <span class="recipe-item__name">입사지원</span>
-            <span class="badge badge--neutral">잡코리아</span>
-            <span class="recipe-item__star" style="opacity: 0.3;">☆</span>
-            <button class="recipe-item__play" title="바로 실행">▶</button>
-          </div>
-          <div class="recipe-item__meta">
-            <span>마지막 실행: 어제</span>
-            <span class="badge badge--error" style="font-size: 10px;">실패</span>
-          </div>
-        </div>
-        <div class="recipe-item">
-          <div class="recipe-item__header">
-            <span class="recipe-item__name">결제 플로우</span>
-            <span class="badge badge--neutral">쇼핑몰</span>
-            <span class="recipe-item__star">⭐</span>
-            <button class="recipe-item__play" title="바로 실행">▶</button>
-          </div>
-          <div class="recipe-item__meta">
-            <span>실행한 적 없음</span>
-          </div>
-        </div>
-        <!-- 최근 실행 섹션 -->
-        <div class="section-header">
-          <span>최근 실행</span>
-          <span class="section-header__link">전체 히스토리 →</span>
-        </div>
-        <div class="history-item">
-          <div class="history-item__header">
-            <span class="history-item__name">회원가입 × 5</span>
-            <span class="badge badge--warning" style="font-size: 10px;">부분실패</span>
-          </div>
-          <div class="history-item__summary">09:15 · 3/5 성공</div>
-        </div>
-        <div class="history-item">
-          <div class="history-item__header">
-            <span class="history-item__name">공고 등록</span>
-            <span class="badge badge--success" style="font-size: 10px;">성공</span>
-          </div>
-          <div class="history-item__summary">08:42 · 전체 성공</div>
-        </div>
-      </div>
-      <div class="panel-footer">
-        <button class="btn btn--secondary btn--full btn--sm">+ 레시피 만들기</button>
       </div>
     </div>
   </div>
 
-  <!-- ═══ Case 2: 레시피 상세 ═══ -->
-  <div id="case-recipe-detail" class="screen">
+  <!-- ═══ Case 2: 레시피 카드 펼침 (인라인 상세) ═══
+       [▾]→[▴] 토글. 구분선 아래 = 공개범위 배지 + 서비스명 + 태그 칩(즉시 표시),
+       그 아래 스텝 흐름 + 입력 변수(지연 조회). 별도 상세 뷰가 아니라 카드 안에서 펼침. -->
+  <div id="case-recipe-expanded" class="screen">
     <div class="panel-demo">
-      <div class="panel-header">
-        <button class="panel-header__back" aria-label="뒤로가기">←</button>
-        <span class="panel-header__title">회원가입</span>
-        <span class="badge badge--neutral" style="margin-left: auto;">사람인</span>
+      <div class="panel-tabs">
+        <button class="panel-tab active">레시피</button>
+        <button class="panel-tab">히스토리</button>
       </div>
       <div class="panel-body">
-        <!-- 레시피 정보 -->
-        <div style="display: flex; flex-direction: column; gap: var(--space-2);">
-          <div style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">
-            작성자: admin · 최종 수정: 2026-08-25
+        <div role="list" style="display: flex; flex-direction: column; gap: var(--space-2);">
+          <!-- 펼쳐진 카드 -->
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">회원가입</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="true" aria-controls="detail-signup" aria-label="회원가입 접기">▴</button>
+              <button class="side-panel__recipe-run" aria-label="회원가입 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">사람인 서비스에 테스트 회원을 등록합니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 10분 전 · 24회</span>
+            </div>
+            <!-- 인라인 상세 -->
+            <div class="side-panel__recipe-detail" id="detail-signup">
+              <!-- 즉시 표시: 공개범위 + 서비스명 + 태그 -->
+              <div class="side-panel__recipe-scope">
+                <span class="badge badge--neutral">🌐 공통</span>
+                <span>사람인</span>
+              </div>
+              <div class="side-panel__recipe-tags">
+                <span class="side-panel__recipe-tag">#주문</span>
+                <span class="side-panel__recipe-tag">#결제</span>
+              </div>
+              <!-- 지연 조회: 스텝 흐름 -->
+              <div class="side-panel__recipe-steps">
+                <span class="side-panel__recipe-steps-label">스텝 흐름</span>
+                <div class="side-panel__recipe-step">
+                  <span>1. 이메일 생성</span>
+                  <span class="side-panel__recipe-step__type">스크립트</span>
+                </div>
+                <div class="side-panel__recipe-step">
+                  <span>2. 비밀번호 생성</span>
+                  <span class="side-panel__recipe-step__type">스크립트</span>
+                </div>
+                <div class="side-panel__recipe-step">
+                  <span>3. 회원가입 API</span>
+                  <span class="side-panel__recipe-step__type">API</span>
+                </div>
+                <div class="side-panel__recipe-step">
+                  <span>4. 프로필 설정</span>
+                  <span class="side-panel__recipe-step__type">API</span>
+                </div>
+              </div>
+              <!-- 지연 조회: 입력 변수 -->
+              <div class="side-panel__recipe-vars-value">
+                <span class="side-panel__recipe-vars">입력 변수</span> 이메일, 비밀번호, 닉네임
+              </div>
+            </div>
           </div>
-          <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); line-height: var(--line-height-relaxed);">
-            사람인 서비스에 테스트 회원을 등록하는 레시피입니다. 이메일 생성부터 프로필 설정까지 전체 플로우를 실행합니다.
-          </p>
-        </div>
-        <!-- 스텝 목록 -->
-        <div class="section-header" style="margin-bottom: var(--space-2);">
-          <span>스텝 구성 (5단계)</span>
-        </div>
-        <div class="step-list">
-          <div class="step-item">
-            <span class="step-item__number">1</span>
-            <span class="step-item__name">이메일 생성</span>
-            <span class="step-item__type">스크립트</span>
+          <!-- 접힌 카드 (동시 펼침 가능함을 보여주기 위한 이웃 카드) -->
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">공고 등록</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="false" aria-controls="detail-post" aria-label="공고 등록 펼치기">▾</button>
+              <button class="side-panel__recipe-run" aria-label="공고 등록 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">채용 공고를 생성하고 게시 상태로 전환합니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 2시간 전 · 8회</span>
+            </div>
           </div>
-          <div class="step-item">
-            <span class="step-item__number">2</span>
-            <span class="step-item__name">비밀번호 생성</span>
-            <span class="step-item__type">스크립트</span>
-          </div>
-          <div class="step-item">
-            <span class="step-item__number">3</span>
-            <span class="step-item__name">회원가입 API</span>
-            <span class="step-item__type">API</span>
-          </div>
-          <div class="step-item">
-            <span class="step-item__number">4</span>
-            <span class="step-item__name">이메일 인증</span>
-            <span class="step-item__type">API</span>
-          </div>
-          <div class="step-item">
-            <span class="step-item__number">5</span>
-            <span class="step-item__name">프로필 설정</span>
-            <span class="step-item__type">API</span>
-          </div>
-        </div>
-        <!-- 최근 실행 이력 -->
-        <div class="section-header" style="margin-bottom: var(--space-2);">
-          <span>최근 실행</span>
-        </div>
-        <div class="history-item">
-          <div class="history-item__header">
-            <span class="history-item__name">× 5 실행</span>
-            <span class="history-item__time">09:15</span>
-          </div>
-          <div class="history-item__summary">3/5 성공 · 프로필 설정 2건 실패</div>
         </div>
       </div>
-      <div class="panel-footer">
-        <button class="btn btn--primary btn--full">실행하기</button>
+    </div>
+  </div>
+
+  <!-- ═══ Case 2a: 카드 펼침 — 스텝 지연 로딩 ═══
+       즉시 표시(범위/서비스/태그)는 보이고, 스텝/변수 영역만 로딩 스피너. -->
+  <div id="case-recipe-loading" class="screen">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab active">레시피</button>
+        <button class="panel-tab">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <div role="list" style="display: flex; flex-direction: column; gap: var(--space-2);">
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">회원가입</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="true" aria-controls="detail-signup-loading" aria-label="회원가입 접기">▴</button>
+              <button class="side-panel__recipe-run" aria-label="회원가입 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">사람인 서비스에 테스트 회원을 등록합니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 10분 전 · 24회</span>
+            </div>
+            <div class="side-panel__recipe-detail" id="detail-signup-loading">
+              <!-- 즉시 표시 영역은 이미 보임 -->
+              <div class="side-panel__recipe-scope">
+                <span class="badge badge--neutral">🌐 공통</span>
+                <span>사람인</span>
+              </div>
+              <div class="side-panel__recipe-tags">
+                <span class="side-panel__recipe-tag">#주문</span>
+                <span class="side-panel__recipe-tag">#결제</span>
+              </div>
+              <!-- 스텝 영역만 로딩 -->
+              <div class="side-panel__recipe-loading" role="status" aria-live="polite">
+                <span>⟳</span>
+                <span>스텝 정보를 불러오는 중…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 2b: 카드 펼침 — 상세 조회 실패 ═══
+       즉시 표시 영역은 정상, 스텝/변수 영역에만 인라인 에러. -->
+  <div id="case-recipe-error" class="screen">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab active">레시피</button>
+        <button class="panel-tab">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <div role="list" style="display: flex; flex-direction: column; gap: var(--space-2);">
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">회원가입</span>
+              <button class="side-panel__recipe-toggle" aria-expanded="true" aria-controls="detail-signup-error" aria-label="회원가입 접기">▴</button>
+              <button class="side-panel__recipe-run" aria-label="회원가입 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">사람인 서비스에 테스트 회원을 등록합니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 10분 전 · 24회</span>
+            </div>
+            <div class="side-panel__recipe-detail" id="detail-signup-error">
+              <div class="side-panel__recipe-scope">
+                <span class="badge badge--neutral">🌐 공통</span>
+                <span>사람인</span>
+              </div>
+              <div class="side-panel__recipe-tags">
+                <span class="side-panel__recipe-tag">#주문</span>
+                <span class="side-panel__recipe-tag">#결제</span>
+              </div>
+              <!-- 스텝 영역 에러 -->
+              <div class="side-panel__recipe-error" role="alert">
+                ⚠️ 스텝 정보를 불러오지 못했어요.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Case 2c: 카드 — 유효성 경고 (INVALID) ═══
+       이름 옆 ⚠️ + hover/focus 툴팁. 실행은 차단하지 않음(Case 6 모달에서 경고). -->
+  <div id="case-recipe-invalid" class="screen">
+    <div class="panel-demo">
+      <div class="panel-tabs">
+        <button class="panel-tab active">레시피</button>
+        <button class="panel-tab">히스토리</button>
+      </div>
+      <div class="panel-body">
+        <div role="list" style="display: flex; flex-direction: column; gap: var(--space-2);">
+          <div class="side-panel__recipe" role="listitem">
+            <div class="side-panel__recipe-top">
+              <span class="side-panel__recipe-name">입사지원</span>
+              <span class="side-panel__recipe-warn" tabindex="0" role="img" aria-label="스펙 변경으로 필수 필드가 무효화됨">
+                ⚠️
+                <span class="side-panel__recipe-warn__tip" role="tooltip">스펙 변경으로 필수 필드가 무효화됨</span>
+              </span>
+              <button class="side-panel__recipe-toggle" aria-expanded="false" aria-controls="detail-apply-invalid" aria-label="입사지원 펼치기">▾</button>
+              <button class="side-panel__recipe-run" aria-label="입사지원 실행">▶</button>
+            </div>
+            <div class="side-panel__recipe-desc">채용 공고에 이력서를 제출하는 플로우입니다.</div>
+            <div class="side-panel__recipe-meta">
+              <span>🕒 어제 · 3회</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -604,7 +932,6 @@ statusCode: 201</div>
         <input class="input" type="text" placeholder="🔍 레시피 검색...">
         <div class="sub-filters">
           <button class="sub-filter active">전체</button>
-          <button class="sub-filter">⭐ 즐겨찾기</button>
           <button class="sub-filter">내 레시피</button>
           <button class="sub-filter">공통</button>
         </div>
@@ -661,6 +988,11 @@ statusCode: 201</div>
           </div>
           <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); line-height: var(--line-height-relaxed);">
             사람인 채용공고에 이력서를 제출합니다.
+          </p>
+          <!-- INVALID 경고: 대상 레시피가 INVALID일 때만 추가 (실행 차단 아님) -->
+          <p role="alert" style="display: flex; gap: var(--space-2); margin-top: var(--space-2); padding: var(--space-2); font-size: var(--font-size-xs); color: var(--color-warning); background: var(--color-warning-subtle); border: 1px solid var(--color-warning-border); border-radius: var(--radius-sm); line-height: var(--line-height-normal);">
+            <span aria-hidden="true">⚠️</span>
+            <span>스펙 변경으로 유효하지 않을 수 있어요. 실행은 되지만 일부 스텝이 실패할 수 있어요.</span>
           </p>
         </div>
         <div class="modal__footer">

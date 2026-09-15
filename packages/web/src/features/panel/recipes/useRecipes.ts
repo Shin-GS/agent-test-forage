@@ -8,7 +8,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { recipesApi, specsApi } from "../../../api";
-import type { RecipeSummary, SpecListItem } from "../../../api/types";
+import type { RecipeDetail, RecipeSummary, SpecListItem } from "../../../api/types";
 
 export type RecipeFilter = "all" | "private" | "common";
 
@@ -48,5 +48,19 @@ export function useRecipes({ apiSpecId, keyword, filter }: RecipesParams) {
         visibility: visibility ? [visibility] : undefined,
       });
     },
+  });
+}
+
+/**
+ * 레시피 상세 조회 (카드 인라인 펼침용 지연 로딩).
+ * enabled=false 면 펼치기 전까지 조회하지 않고, 한 번 펼치면 캐시되어 재펼침 시 즉시 표시된다.
+ * (스텝 흐름/입력 변수는 목록 응답에 없으므로 detail 로 1회 조회.)
+ */
+export function useRecipeDetail(recipeId: number, enabled: boolean) {
+  return useQuery<RecipeDetail>({
+    queryKey: ["recipe", "detail", recipeId],
+    queryFn: () => recipesApi.detail(recipeId),
+    enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }

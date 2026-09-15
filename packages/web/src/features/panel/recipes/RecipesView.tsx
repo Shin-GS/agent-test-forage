@@ -6,9 +6,8 @@
 // - [▶] 클릭 → onRunRecipe(recipeId, name). 대화방 처리중이면 비활성.
 
 import { useEffect, useMemo, useState } from "react";
-import { ConfirmModal } from "../../../components/common/ConfirmModal";
-import { formatRelative } from "../shared/format";
 import type { PanelContext } from "../types";
+import { RecipeCard } from "./RecipeCard";
 import { useRecipes, useServices, type RecipeFilter } from "./useRecipes";
 
 const FILTERS: { key: RecipeFilter; label: string }[] = [
@@ -16,14 +15,6 @@ const FILTERS: { key: RecipeFilter; label: string }[] = [
   { key: "private", label: "내 레시피" },
   { key: "common", label: "공통" },
 ];
-
-/** 실행 확인 모달 대상 (레시피 ▶ 클릭 시 즉시 실행하지 않고 확인) */
-interface RunTarget {
-  id: number;
-  name: string;
-  serviceName: string | null;
-  description: string | null;
-}
 
 export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
   const busy = conversationStatus !== "idle";
@@ -33,9 +24,6 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
   const [filter, setFilter] = useState<RecipeFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [keyword, setKeyword] = useState("");
-
-  // 실행 확인 모달 대상 (▶ 클릭 시 설정, [실행]/취소로 해제)
-  const [runTarget, setRunTarget] = useState<RunTarget | null>(null);
 
   // 검색어 디바운스 300ms
   useEffect(() => {
@@ -132,76 +120,21 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
         ) : recipes.length === 0 ? (
           <div className="side-panel__empty">{emptyMessage}</div>
         ) : (
-          recipes.map((recipe) => {
-            const relative = formatRelative(recipe.lastUsedAt);
-            const serviceBadge =
-              recipe.apiSpecId != null ? serviceNameById.get(recipe.apiSpecId) : undefined;
-            const usageParts = [
-              relative && `🕒 ${relative}`,
-              recipe.usageCount > 0 && `${recipe.usageCount}회`,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <div key={recipe.id} className="side-panel__recipe">
-                <div className="side-panel__recipe-top">
-                  <span className="side-panel__recipe-name">{recipe.name}</span>
-                  {serviceBadge && (
-                    <span className="badge badge--neutral">{serviceBadge}</span>
-                  )}
-                  <button
-                    type="button"
-                    className="btn btn--secondary btn--sm side-panel__recipe-run"
-                    disabled={busy}
-                    title={busy ? "실행 중에는 사용할 수 없어요" : "실행"}
-                    onClick={() =>
-                      setRunTarget({
-                        id: recipe.id,
-                        name: recipe.name,
-                        serviceName: serviceBadge ?? null,
-                        description: recipe.description ?? null,
-                      })
-                    }
-                  >
-                    ▶
-                  </button>
-                </div>
-                {recipe.description && (
-                  <span className="side-panel__recipe-desc">{recipe.description}</span>
-                )}
-                {usageParts && (
-                  <span className="side-panel__recipe-meta">{usageParts}</span>
-                )}
-              </div>
-            );
-          })
+          recipes.map((recipe) => (
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              serviceName={
+                recipe.apiSpecId != null
+                  ? (serviceNameById.get(recipe.apiSpecId) ?? null)
+                  : null
+              }
+              busy={busy}
+              onRunRecipe={onRunRecipe}
+            />
+          ))
         )}
       </div>
-
-      {/* 레시피 실행 확인 모달 (▶ → 확인 → onRunRecipe). 취소 기본 포커스, ESC/배경클릭 취소. */}
-      <ConfirmModal
-        open={runTarget != null}
-        title="실행할까요?"
-        description={
-          runTarget
-            ? [
-                [runTarget.name, runTarget.serviceName].filter(Boolean).join(" · "),
-                runTarget.description,
-              ]
-                .filter(Boolean)
-                .join("\n")
-            : undefined
-        }
-        confirmLabel="실행"
-        cancelLabel="취소"
-        initialFocus="cancel"
-        onCancel={() => setRunTarget(null)}
-        onConfirm={() => {
-          const target = runTarget;
-          setRunTarget(null);
-          if (target) onRunRecipe(target.id, target.name);
-        }}
-      />
     </div>
   );
 }
