@@ -1,8 +1,10 @@
 ---
 status: draft
-last-updated: 2026-09-20
+last-updated: 2026-09-16
 ref: docs/specs/recipe/versioning.md, docs/specs/common/auth.md, docs/specs/recipe/authoring.md
 ---
+
+<!-- 2026-09-16: 2단계 반영 — API 스텝 편집에 요청 필드 자동 나열/레시피별 기본값/요청 헤더 매핑/폴백 반영 -->
 
 # 레시피 편집 페이지
 
@@ -93,6 +95,15 @@ ref: docs/specs/recipe/versioning.md, docs/specs/common/auth.md, docs/specs/reci
 ```
 
 상세 form 구조는 [레시피 작성 UI/UX](../recipe/authoring.md) 참조.
+
+### API 스텝 편집 (2단계 반영)
+
+API 스텝 편집 시 다음이 동작한다(정본: [authoring.md ③ 스텝 편집](../recipe/authoring.md#-스텝-편집)).
+
+- **요청 필드 자동 나열**: 엔드포인트 선택 시 스키마(`operationJson`, `$ref` 인라인됨)에서 경로/쿼리·바디 필드가 매핑 행으로 자동 생성된다. non-admin도 스키마 조회가 허용되어 일반 사용자 편집에서도 동작한다([명세 조회 권한](../recipe/authoring.md#명세-조회-권한)).
+- **레시피별 기본값**: 각 매핑 필드/헤더에 이 레시피에서의 기본값 지정. 실행 시 `사용자 실행 입력 > 레시피별 기본값`.
+- **요청 헤더 매핑**: 요청 필드와 같은 패턴으로 헤더 매핑. 실행 시 실제 요청 헤더로 주입([execution.md 요청 헤더 주입](../recipe/execution.md#요청-헤더-주입-2단계)).
+- **폴백/호환**: 스키마가 없거나 파싱 실패 시 빈 매핑 + 수동 추가로 폴백하며, 기존 매핑 값은 자동 나열이 덮어쓰지 않는다(매핑에 없는 필드만 추가).
 
 ### 대상 서비스 선택 (비활성 스펙 참조 보존)
 

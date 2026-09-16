@@ -74,6 +74,34 @@ const SPEC_TESTS = {
       ],
       expected: "사라진 것은 LIBRARY만 DEPRECATED, MANUAL은 보존 — source에 따라 처리 분기"
     },
+    // === 2단계 선행: operationJson $ref 인라인화 (엔드포인트 자기완결) ===
+    // 정본: registration.md "operationJson $ref 인라인화". 라이브러리는 components 포함 전체 문서를 보내고,
+    // 서버 파서가 저장 시 $ref를 실제 스키마로 펼쳐 엔드포인트 operationJson을 자기완결로 만든다(라이브러리 무수정).
+    {
+      id: "SPEC-014",
+      title: "재등록 시 operationJson의 $ref가 인라인되어 저장",
+      precondition: "요청 바디 스키마를 $ref(#/components/schemas/...)로 참조하는 API를 가진 서버(예: demo-booking POST /bookings)",
+      steps: [
+        "서버가 라이브러리로 등록/재등록되어 스펙이 저장됨",
+        "해당 엔드포인트의 저장된 operationJson을 확인",
+        "requestBody의 스키마가 $ref 참조가 아니라 실제 properties(필드 목록)로 펼쳐져 있는지 확인",
+        "관리자 API 편집 화면 + 레시피 편집 자동 나열에서 바디 필드가 실제로 표시되는지 확인",
+        "$ref 인라인 결과에 example은 포함되지 않는지 확인(예시값 미포함 규칙 유지)"
+      ],
+      expected: "operationJson은 $ref를 인라인해 자기완결로 저장 — 필드 목록이 편집/자동나열에 표시됨(components 별도 없이)"
+    },
+    {
+      id: "SPEC-015",
+      title: "$ref 인라인화 — 순환/중첩 스키마 안전 처리",
+      precondition: "중첩 객체(객체 안 객체/배열) 또는 자기참조 가능성이 있는 스키마를 가진 서버",
+      steps: [
+        "중첩 스키마를 가진 엔드포인트가 등록됨",
+        "중첩 객체/배열 필드가 operationJson에 펼쳐지되 무한 팽창 없이 저장되는지 확인",
+        "순환 참조(스키마가 자기 자신 참조)가 있어도 등록이 실패하거나 무한 루프에 빠지지 않는지 확인",
+        "인라인 결과 operationJson이 유효 JSON으로 파싱되는지 확인"
+      ],
+      expected: "중첩은 펼쳐지고 순환은 안전 중단 — 등록이 깨지지 않고 유효한 operationJson으로 저장됨"
+    },
     // === 관리자 수동 관리 ===
     {
       id: "SPEC-003",

@@ -70,6 +70,11 @@
     .mapping-table__field { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-primary); }
     .mapping-table__required { color: var(--color-error); margin-left: 2px; }
     .mapping-source { font-size: var(--font-size-xs); padding: var(--space-1) var(--space-2); background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-secondary); cursor: pointer; }
+    .mapping-table__head { text-align: left; font-size: var(--font-size-2xs); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--color-border); }
+    .mapping-table__default { max-width: 160px; padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs); }
+    .mapping-note { font-size: var(--font-size-xs); color: var(--color-text-secondary); background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
+    .mapping-note--warn { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-subtle); }
+    .empty-state--compact { padding: var(--space-4); }
 
     /* 태그 입력 */
     .tag-input { display: flex; flex-wrap: wrap; gap: var(--space-1); padding: var(--space-2) var(--space-3); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); min-height: 36px; align-items: center; }
@@ -385,26 +390,72 @@
                     <span class="form-hint">비개발자 화면 표기에 사용됩니다. 미입력 시 폴백: API summary → method + path</span>
                   </div>
 
-                  <!-- 요청 필드 매핑 -->
+                  <!-- 요청 필드 매핑 (API 명세에서 자동 나열: 경로/쿼리 파라미터 + 요청 바디 필드) -->
                   <div>
                     <label class="form-label" style="margin-bottom: var(--space-2);">요청 필드 매핑</label>
+                    <span class="form-hint" style="margin-bottom: var(--space-2);">API 명세에서 자동 나열됩니다. 필드명은 고정이며 <span class="mapping-table__required">*<span class="sr-only">(필수)</span></span>는 필수입니다. <strong>매핑 값</strong> = 실행 시 넣는 값 / <strong>레시피 기본값</strong> = 매핑 값이 비었을 때만 쓰는 폴백값.</span>
                     <table class="mapping-table">
-                      <tr>
-                        <td><span class="mapping-table__field">email<span class="mapping-table__required">*</span></span></td>
-                        <td><span class="mapping-source">이전 스텝 결과 ▾</span></td>
-                        <td><span class="mapping-source">스텝1 > email ▾</span></td>
-                      </tr>
-                      <tr>
-                        <td><span class="mapping-table__field">password<span class="mapping-table__required">*</span></span></td>
-                        <td><span class="mapping-source">이전 스텝 결과 ▾</span></td>
-                        <td><span class="mapping-source">스텝1 > password ▾</span></td>
-                      </tr>
-                      <tr>
-                        <td><span class="mapping-table__field">nickname</span></td>
-                        <td><span class="mapping-source">AI 생성 ▾</span></td>
-                        <td><span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">(자동)</span></td>
-                      </tr>
+                      <thead>
+                        <tr>
+                          <th class="mapping-table__head">필드</th>
+                          <th class="mapping-table__head">값 소스</th>
+                          <th class="mapping-table__head">매핑 값</th>
+                          <th class="mapping-table__head">레시피 기본값</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="mapping-table__field">email<span class="mapping-table__required">*<span class="sr-only">(필수)</span></span></span></td>
+                          <td><select class="input mapping-source" aria-label="email 값 소스"><option>이전 스텝 결과</option><option>사용자 입력</option><option>직접 입력</option><option>AI 생성</option></select></td>
+                          <td><span class="mapping-source">스텝1 > email ▾</span></td>
+                          <td><input class="input mapping-table__default" type="text" placeholder="없음" aria-label="email 레시피 기본값"></td>
+                        </tr>
+                        <tr>
+                          <td><span class="mapping-table__field">password<span class="mapping-table__required">*<span class="sr-only">(필수)</span></span></span></td>
+                          <td><span class="mapping-source">이전 스텝 결과 ▾</span></td>
+                          <td><span class="mapping-source">스텝1 > password ▾</span></td>
+                          <td><input class="input mapping-table__default" type="text" placeholder="없음" aria-label="password 레시피 기본값"></td>
+                        </tr>
+                        <tr>
+                          <td><span class="mapping-table__field">nickname</span></td>
+                          <td><span class="mapping-source">사용자 입력 ▾</span></td>
+                          <td><span class="mapping-source">userInput.nickname ▾</span></td>
+                          <td><input class="input mapping-table__default" type="text" value="게스트" aria-label="nickname 레시피 기본값"></td>
+                        </tr>
+                      </tbody>
                     </table>
+                    <span class="form-hint" style="margin-top: var(--space-1);">실행 시 값 우선순위: 사용자 실행 입력 &gt; 레시피 기본값. 기본값을 비우면 채우지 않습니다.</span>
+                  </div>
+
+                  <!-- 요청 헤더 매핑 (요청 필드와 동일 패턴. 엔드포인트에 헤더 정의가 있으면 헤더 이름 자동 제시) -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">요청 헤더 매핑</label>
+                    <div class="mapping-note">🔐 인증 key 등 민감 헤더는 값 소스를 <strong>"사용자 입력"</strong>으로 두는 것을 권장합니다. 직접 입력한 고정값은 레시피 정의에 그대로 저장됩니다. 인증/식별 헤더에는 <strong>'AI 생성'</strong> 값 소스를 권장하지 않습니다.</div>
+                    <table class="mapping-table">
+                      <thead>
+                        <tr>
+                          <th class="mapping-table__head">헤더</th>
+                          <th class="mapping-table__head">값 소스</th>
+                          <th class="mapping-table__head">매핑 값</th>
+                          <th class="mapping-table__head">레시피 기본값</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="mapping-table__field">X-Auth-Key<span class="mapping-table__required">*<span class="sr-only">(필수)</span></span></span></td>
+                          <td><span class="mapping-source">사용자 입력 ▾</span></td>
+                          <td><span class="mapping-source">userInput.authKey ▾</span></td>
+                          <td><input class="input mapping-table__default" type="text" placeholder="없음" aria-label="X-Auth-Key 레시피 기본값"></td>
+                        </tr>
+                        <tr>
+                          <td><span class="mapping-table__field">X-Client-Id</span></td>
+                          <td><span class="mapping-source">사용자 입력 ▾</span></td>
+                          <td><span class="mapping-source">userInput.clientId ▾</span></td>
+                          <td><input class="input mapping-table__default" type="text" value="demo-client" aria-label="X-Client-Id 레시피 기본값"></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-2);">+ 헤더 매핑 추가</button>
                   </div>
 
                   <!-- Extract -->
@@ -420,6 +471,20 @@
                     <button class="btn btn--ghost btn--sm" style="margin-top: var(--space-2);">+ 추출 추가</button>
                   </div>
 
+                  <!-- 명세 없음 폴백: operationJson이 없거나 파싱 실패한 엔드포인트(구 데이터/수동 최소 등록) -->
+                  <div>
+                    <label class="form-label" style="margin-bottom: var(--space-2);">명세 없는 API — 수동 매핑 (폴백 예시)</label>
+                    <div class="mapping-note mapping-note--warn">⚠️ 이 API는 상세 스키마(operationJson)가 없어 필드를 자동으로 나열할 수 없습니다. 아래에서 매핑을 직접 추가하세요. 수동 추가한 필드/헤더는 스키마 원천이 없어 필수(*) 표시·필수 검증 대상이 아닙니다(작성자 책임).</div>
+                    <div class="empty-state empty-state--compact">
+                      <div class="empty-state__icon">🧩</div>
+                      <div class="empty-state__desc">자동 나열된 필드가 없습니다. 요청 필드/헤더를 수동으로 추가해 매핑하세요.</div>
+                    </div>
+                    <div style="display: flex; gap: var(--space-2); margin-top: var(--space-2);">
+                      <button class="btn btn--ghost btn--sm">+ 필드 매핑 추가</button>
+                      <button class="btn btn--ghost btn--sm">+ 헤더 매핑 추가</button>
+                    </div>
+                  </div>
+
                   <!-- 조건 -->
                   <div>
                     <label class="form-label" style="margin-bottom: var(--space-2);">조건 (선택)</label>
@@ -431,8 +496,9 @@
                 <div class="data-explorer">
                   <div class="data-explorer__group">
                     <div class="data-explorer__title">📂 사용자 입력</div>
-                    <div class="data-explorer__item">userInput.productId</div>
-                    <div class="data-explorer__item">userInput.quantity</div>
+                    <div class="data-explorer__item">userInput.nickname</div>
+                    <div class="data-explorer__item">userInput.authKey</div>
+                    <div class="data-explorer__item">userInput.clientId</div>
                   </div>
                   <div class="data-explorer__group">
                     <div class="data-explorer__title">📂 스텝 1: 이메일 생성</div>
@@ -440,10 +506,15 @@
                     <div class="data-explorer__item">password</div>
                   </div>
                   <div class="data-explorer__group" style="border-top: 1px solid var(--color-border); padding-top: var(--space-2);">
-                    <div class="data-explorer__title">📋 현재 API 스키마</div>
+                    <div class="data-explorer__title">📋 현재 API 스키마 — 요청 필드</div>
                     <div class="data-explorer__item" style="color: var(--color-text-tertiary);">email (string, 필수)</div>
                     <div class="data-explorer__item" style="color: var(--color-text-tertiary);">password (string, 필수)</div>
                     <div class="data-explorer__item" style="color: var(--color-text-tertiary);">nickname (string)</div>
+                  </div>
+                  <div class="data-explorer__group">
+                    <div class="data-explorer__title">📋 현재 API 스키마 — 요청 헤더</div>
+                    <div class="data-explorer__item" style="color: var(--color-text-tertiary);">X-Auth-Key (string, 필수)</div>
+                    <div class="data-explorer__item" style="color: var(--color-text-tertiary);">X-Client-Id (string)</div>
                   </div>
                 </div>
               </div>

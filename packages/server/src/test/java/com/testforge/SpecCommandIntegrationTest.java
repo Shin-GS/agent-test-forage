@@ -391,14 +391,15 @@ class SpecCommandIntegrationTest {
         assertThat(secondCopy.getPath()).isEqualTo("/api/v1/dup-copy-2");
     }
 
-    // ── 엔드포인트 단건 조회: operationJson + source 포함, 비-admin 403 ──
+    // ── 엔드포인트 단건 조회: 조회는 공용(로그인 필수). admin/non-admin 모두 200, 비로그인만 401 ──
     @Test
-    void getEndpoint_returnsDetail_nonAdminForbidden() throws Exception {
+    void getEndpoint_returnsDetail_forAdminAndNonAdmin() throws Exception {
         Long specId = saveSpec("https://one.example.com");
         ApiEndpoint ep = newEndpoint(specId, "POST", "/api/v1/one", EndpointSource.MANUAL);
         ep.setOperationJson("{\"summary\":\"one\"}");
         ep = endpointRepository.save(ep);
 
+        // admin 조회: 200 + operationJson 포함
         mockMvc.perform(get("/api/v1/specs/{id}/endpoints/{eid}", specId, ep.getId())
                         .with(testAuth.as(ADMIN_ID, UserRole.ADMIN)))
                 .andExpect(status().isOk())
@@ -406,7 +407,41 @@ class SpecCommandIntegrationTest {
                 .andExpect(jsonPath("$.source.code").value("MANUAL"))
                 .andExpect(jsonPath("$.operationJson").value("{\"summary\":\"one\"}"));
 
+        // non-admin(USER) 조회: 200 + operationJson 포함 (403 아님)
         mockMvc.perform(get("/api/v1/specs/{id}/endpoints/{eid}", specId, ep.getId())
+                        .with(testAuth.as(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.method").value("POST"))
+                .andExpect(jsonPath("$.operationJson").value("{\"summary\":\"one\"}"));
+
+        // 비로그인 조회: 401 (인증 필요)
+        mockMvc.perform(get("/api/v1/specs/{id}/endpoints/{eid}", specId, ep.getId()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── 회귀 확인: non-admin은 쓰기 계열(생성/수정/삭제)에 여전히 403 ──
+    @Test
+    void endpointWrites_nonAdmin_stillForbidden() throws Exception {
+        Long specId = saveSpec("https://write.example.com");
+        ApiEndpoint ep = endpointRepository.save(
+                newEndpoint(specId, "GET", "/api/v1/write", EndpointSource.MANUAL));
+
+        // 생성 (POST)
+        mockMvc.perform(post("/api/v1/specs/{id}/endpoints", specId)
+                        .with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"method\": \"GET\", \"path\": \"/api/v1/new\"}"))
+                .andExpect(status().isForbidden());
+
+        // 수정 (PATCH)
+        mockMvc.perform(patch("/api/v1/specs/{id}/endpoints/{eid}", specId, ep.getId())
+                        .with(testAuth.as(USER_ID))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"excluded\": true}"))
+                .andExpect(status().isForbidden());
+
+        // 삭제 (DELETE)
+        mockMvc.perform(delete("/api/v1/specs/{id}/endpoints/{eid}", specId, ep.getId())
                         .with(testAuth.as(USER_ID)))
                 .andExpect(status().isForbidden());
     }

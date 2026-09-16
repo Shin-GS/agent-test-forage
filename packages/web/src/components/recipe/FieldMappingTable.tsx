@@ -23,6 +23,8 @@ interface FieldMappingTableProps {
   allowAdd?: boolean;
   /** 값 입력 필드가 포커스될 때 (데이터 탐색기 클릭 삽입 대상 추적) */
   onValueFocus?: (index: number) => void;
+  /** "레시피 기본값" 열 표시 (요청 필드/경로 파라미터/헤더 매핑). 서브레시피 입력 매핑에서는 미사용 */
+  showDefault?: boolean;
 }
 
 export function FieldMappingTable({
@@ -32,6 +34,7 @@ export function FieldMappingTable({
   errorIndexes = [],
   allowAdd = false,
   onValueFocus,
+  showDefault = false,
 }: FieldMappingTableProps) {
   function update(index: number, patch: Partial<FieldMapping>) {
     onChange(mappings.map((m, i) => (i === index ? { ...m, ...patch } : m)));
@@ -68,7 +71,12 @@ export function FieldMappingTable({
                   ) : (
                     <span className="mapping-table__field">
                       {m.field}
-                      {m.required && <span className="mapping-table__required">*</span>}
+                      {m.required && (
+                        <span className="mapping-table__required" aria-hidden="true">
+                          *
+                        </span>
+                      )}
+                      {m.required && <span className="sr-only">(필수)</span>}
                     </span>
                   )}
                 </td>
@@ -109,6 +117,20 @@ export function FieldMappingTable({
                     />
                   )}
                 </td>
+                {showDefault && (
+                  <td>
+                    <input
+                      className="input input--sm mapping-table__default"
+                      type="text"
+                      aria-label={`${m.field || index + 1} 레시피 기본값`}
+                      placeholder="없음"
+                      // AI 생성은 실행 시 자동 생성이라 기본값 폴백이 무의미 → 비활성
+                      disabled={m.source === "ai_generate"}
+                      value={m.defaultValue ?? ""}
+                      onChange={(e) => update(index, { defaultValue: e.target.value })}
+                    />
+                  </td>
+                )}
                 <td className="data-table__actions">
                   <button
                     type="button"

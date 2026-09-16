@@ -729,6 +729,12 @@ export interface FieldMapping {
    * - ai_generate: 사용 안 함(자동)
    */
   value?: string;
+  /**
+   * 레시피별 기본값 (authoring.md ③ 레시피별 기본값). 매핑 값이 실행 시점에 비어 있을 때만 쓰는 폴백값.
+   * 실행 시 값 우선순위: 사용자 실행 입력 > 레시피별 기본값. 비우면 폴백 없음.
+   * source==="ai_generate" 이면 무의미(자동 생성).
+   */
+  defaultValue?: string;
 }
 
 /** Extract 추출 방식 (API 스텝 응답값 추출) — authoring.md ③ */
@@ -776,6 +782,8 @@ export interface ApiRecipeStep extends RecipeStepBase {
   pathParamMappings: FieldMapping[];
   /** 요청 필드 매핑 목록 */
   requestMappings: FieldMapping[];
+  /** 요청 헤더 매핑 목록 (execution.md 요청 헤더 주입). 서버 headers 객체 맵과 왕복. 기본 빈 배열 */
+  headerMappings: FieldMapping[];
   /** 응답 추출 목록 */
   extracts: ExtractDef[];
 }

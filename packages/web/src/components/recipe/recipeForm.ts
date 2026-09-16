@@ -154,6 +154,7 @@ export function newStep(type: StepType, index: number): RecipeStep {
       endpointId: null,
       pathParamMappings: [],
       requestMappings: [],
+      headerMappings: [],
       extracts: [],
       condition: "",
     };
@@ -270,34 +271,50 @@ function encodeMappingValue(m: FieldMapping): string {
   }
 }
 
-/** 배열 형태 매핑 항목 정규화: source 필드가 있으면 그대로, 없으면 값에서 복원 */
-function normalizeArrayMapping(rec: UnknownRecord): FieldMapping {
+/** 빈 문자열이 아닌 defaultValue 만 남긴다 (서버 기본값 맵에 저장할 값 판정) */
+function nonEmptyDefault(m: FieldMapping): string | null {
+  const v = (m.defaultValue ?? "").trim();
+  return v.length > 0 ? v : null;
+}
+
+/**
+ * 배열 형태 매핑 항목 정규화: source 필드가 있으면 그대로, 없으면 값에서 복원.
+ * defaultValue 는 defaults 맵(필드→기본값)에서 병합한다(배열 항목에 직접 들어있으면 그것을 우선).
+ */
+function normalizeArrayMapping(rec: UnknownRecord, defaults?: UnknownRecord): FieldMapping {
   const field = asString(rec.field);
   const hasSource = typeof rec.source === "string" && rec.source !== "";
-  if (hasSource) {
-    return {
-      _uid: newUid(),
-      field,
-      source: rec.source as MappingSourceType,
-      value: asString(rec.value),
-      ...(rec.required === true ? { required: true } : {}),
-    };
-  }
-  const { source, value } = decodeMappingValue(rec.value);
+  const defaultFromMap = defaults ? asString(defaults[field]) : "";
+  const defaultValue =
+    rec.defaultValue != null ? asString(rec.defaultValue) : defaultFromMap;
+  const base: FieldMapping = hasSource
+    ? { _uid: newUid(), field, source: rec.source as MappingSourceType, value: asString(rec.value) }
+    : (() => {
+        const { source, value } = decodeMappingValue(rec.value);
+        return { _uid: newUid(), field, source, value };
+      })();
   return {
-    _uid: newUid(),
-    field,
-    source,
-    value,
+    ...base,
     ...(rec.required === true ? { required: true } : {}),
+    ...(defaultValue ? { defaultValue } : {}),
   };
 }
 
-/** 서버 객체 맵({필드:값}) → FE FieldMapping[] (source 복원) */
-function objectMapToMappings(map: UnknownRecord): FieldMapping[] {
+/**
+ * 서버 객체 맵({필드:값}) → FE FieldMapping[] (source 복원).
+ * defaults(별도 기본값 맵, {필드:기본값})가 있으면 각 필드의 defaultValue 로 병합한다.
+ */
+function objectMapToMappings(map: UnknownRecord, defaults?: UnknownRecord): FieldMapping[] {
   return Object.entries(map).map(([field, rawValue]) => {
     const { source, value } = decodeMappingValue(rawValue);
-    return { _uid: newUid(), field, source, value };
+    const defaultValue = defaults ? asString(defaults[field]) : "";
+    return {
+      _uid: newUid(),
+      field,
+      source,
+      value,
+      ...(defaultValue ? { defaultValue } : {}),
+    };
   });
 }
 
@@ -307,6 +324,20 @@ function mappingsToObjectMap(mappings: FieldMapping[]): UnknownRecord {
   for (const m of mappings) {
     if (!m.field) continue;
     out[m.field] = encodeMappingValue(m);
+  }
+  return out;
+}
+
+/**
+ * FE FieldMapping[] → 서버 기본값 맵({필드:기본값}). defaultValue 가 있는 필드만 담는다.
+ * 기본값이 하나도 없으면 빈 객체를 반환한다(호출부가 비었으면 생략 → 기존 저장 형태와 동일).
+ */
+function mappingsToDefaultsMap(mappings: FieldMapping[]): UnknownRecord {
+  const out: UnknownRecord = {};
+  for (const m of mappings) {
+    if (!m.field) continue;
+    const dv = nonEmptyDefault(m);
+    if (dv != null) out[m.field] = dv;
   }
   return out;
 }
@@ -381,15 +412,26 @@ export function serverStepToForm(raw: unknown, recipeApiSpecId: number | null): 
   }
 
   // 기본: API 스텝 (type 이 "api" 이거나 알 수 없는 경우)
+  // 기본값은 별도 맵(pathParamDefaults/bodyDefaults/headerDefaults)에 저장된다(없으면 기존 형태 그대로).
+  const pathParamDefaults = asRecord(step.pathParamDefaults);
+  const bodyDefaults = asRecord(step.bodyDefaults);
+  const headerDefaults = asRecord(step.headerDefaults);
+
   const pathParamsRaw = step.pathParams ?? step.pathParamMappings;
   const pathParamMappings = Array.isArray(pathParamsRaw)
-    ? pathParamsRaw.map((m) => normalizeArrayMapping(asRecord(m)))
-    : objectMapToMappings(asRecord(pathParamsRaw));
+    ? pathParamsRaw.map((m) => normalizeArrayMapping(asRecord(m), pathParamDefaults))
+    : objectMapToMappings(asRecord(pathParamsRaw), pathParamDefaults);
 
   const bodyRaw = step.body ?? step.requestMappings;
   const requestMappings = Array.isArray(bodyRaw)
-    ? bodyRaw.map((m) => normalizeArrayMapping(asRecord(m)))
-    : objectMapToMappings(asRecord(bodyRaw));
+    ? bodyRaw.map((m) => normalizeArrayMapping(asRecord(m), bodyDefaults))
+    : objectMapToMappings(asRecord(bodyRaw), bodyDefaults);
+
+  // 요청 헤더 매핑 (body 와 동일한 방식: 객체 맵 + source 인코딩). 구 데이터엔 없으므로 기본 빈 배열
+  const headersRaw = step.headers ?? step.headerMappings;
+  const headerMappings = Array.isArray(headersRaw)
+    ? headersRaw.map((m) => normalizeArrayMapping(asRecord(m), headerDefaults))
+    : objectMapToMappings(asRecord(headersRaw), headerDefaults);
 
   const extractRaw = step.extract ?? step.extracts;
   const extracts = Array.isArray(extractRaw)
@@ -413,6 +455,7 @@ export function serverStepToForm(raw: unknown, recipeApiSpecId: number | null): 
     endpointId: asNumberOrNull(step.endpointId),
     pathParamMappings,
     requestMappings,
+    headerMappings,
     extracts,
     condition,
   };
@@ -445,15 +488,30 @@ export function formStepToServer(step: RecipeStep): UnknownRecord {
   }
 
   // API
-  const pathParams = mappingsToObjectMap(step.pathParamMappings ?? []);
+  // 기본값은 별도 맵에 저장한다(있을 때만 포함 → 기본값 없으면 기존 저장 형태와 동일, 하위 호환).
+  const pathParamMappings = step.pathParamMappings ?? [];
+  const requestMappings = step.requestMappings ?? [];
+  const headerMappings = step.headerMappings ?? [];
+
+  const pathParams = mappingsToObjectMap(pathParamMappings);
+  const headers = mappingsToObjectMap(headerMappings);
+  const pathParamDefaults = mappingsToDefaultsMap(pathParamMappings);
+  const bodyDefaults = mappingsToDefaultsMap(requestMappings);
+  const headerDefaults = mappingsToDefaultsMap(headerMappings);
+
   return {
     type: "api",
     name: step.name,
     ...(step.label ? { label: step.label } : {}),
     endpointId: step.endpointId ?? null,
     ...(Object.keys(pathParams).length > 0 ? { pathParams } : {}),
-    body: mappingsToObjectMap(step.requestMappings ?? []),
+    body: mappingsToObjectMap(requestMappings),
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
     extract: extractsToMap(step.extracts ?? []),
+    // 기본값 맵: 비어 있으면 생략(기존 레시피와 동일 출력 보장)
+    ...(Object.keys(pathParamDefaults).length > 0 ? { pathParamDefaults } : {}),
+    ...(Object.keys(bodyDefaults).length > 0 ? { bodyDefaults } : {}),
+    ...(Object.keys(headerDefaults).length > 0 ? { headerDefaults } : {}),
     ...(condition ? { condition } : {}),
   };
 }

@@ -1,7 +1,7 @@
 ---
 status: draft
-last-updated: 2026-09-08
-ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/recipe/versioning.md
+last-updated: 2026-09-16
+ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/recipe/execution.md, docs/specs/recipe/versioning.md
 ---
 
 # 레시피 도메인 DB 설계
@@ -37,7 +37,7 @@ ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/
 | `VISIBILITY` | VARCHAR(20) | COMMON(공통) / PRIVATE(개인) |
 | `TAGS` | JSON | 분류/검색 태그 배열 |
 | `VARIABLES_JSON` | JSON | 사용자 입력 변수 정의 (②) |
-| `STEPS_JSON` | LONGTEXT | 스텝 목록 (③) — 타입/매핑/조건/extract + 스텝 표시명(`label`, 선택) 포함 |
+| `STEPS_JSON` | LONGTEXT | 스텝 목록 (③) — 타입/매핑/조건/extract + 스텝 표시명(`label`, 선택) + 요청 헤더 매핑/레시피별 기본값 포함 |
 | `RESULT_DEFINITION_JSON` | JSON | 결과 정의 (④) — 각 항목 `{ key, label(선택), source }` |
 | `RESULT_TEMPLATE` | TEXT | 결과 메시지 템플릿 (⑤). 없으면 AI 요약 |
 | `CURRENT_VERSION` | INT | 현재 버전 번호 |
@@ -67,6 +67,19 @@ ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/
 - 물리 FK는 걸지 않음 (JSON 내부라 불가). **논리 참조**
 - 유효성 검증 시: STEPS_JSON 파싱 → endpointId가 존재/ACTIVE인지 체크 → DEPRECATED/삭제면 경고
 - 이것이 spec.md에서 "API_ENDPOINT.ID를 PK로 참조, upsert 시 PK 유지"가 필요한 이유
+
+### API 스텝 JSON: 요청 헤더 매핑 / 레시피별 기본값 (2단계)
+
+API 스텝(type=api)의 JSON은 요청 바디·경로 파라미터에 더해 **요청 헤더 매핑**과 **레시피별 기본값**을 담는다. 서버는 STEPS_JSON을 통짜로 저장하므로(파싱은 유효성 검증용 endpointId/recipeId만), FE가 직렬화한 아래 키가 그대로 보관된다. 정본: [execution.md 요청 헤더 주입](../specs/recipe/execution.md), [authoring.md 요청 필드/헤더 매핑](../specs/recipe/authoring.md).
+
+- **매핑 값 맵**(기존 구조 유지, 하위 호환): `body`(요청 필드), `pathParams`(경로 파라미터), `headers`(요청 헤더)는 각각 `{ 필드명: 값 }` 객체 맵. 값은 `source`가 인코딩된 문자열(리터럴/`userInput.x`/`stepN.x`/AI 생성 지시).
+- **기본값 맵**(2단계 신설, 선택): `bodyDefaults`/`pathParamDefaults`/`headerDefaults`는 각각 `{ 필드명: 기본값 }` 객체 맵. **기본값이 있는 필드만** 포함하며, 하나도 없으면 키 자체를 생략한다(구 레시피와 동일한 출력 → 하위 호환 보장).
+- **우선순위**: 실행 시 `사용자 실행 입력 > 레시피별 기본값`. (API별 기본값은 범위 밖 — 추후 최하층 확장 여지)
+- **민감 헤더**: 인증 key 등은 값 소스를 `userInput`으로 두는 것을 권장. 직접 입력한 고정값은 평문으로 STEPS_JSON에 저장된다(회사 내부용 전제).
+
+### 스냅샷 포함 (RECIPE_VERSION)
+
+- 위 매핑 값 맵(`headers` 등)과 기본값 맵(`headerDefaults` 등)은 STEPS_JSON의 일부이므로 **`RECIPE_VERSION.SNAPSHOT_JSON`에 그대로 포함**된다. 레시피 수정/복원 시 그 시점의 헤더 매핑·기본값이 스냅샷 기준으로 고정 재현된다(별도 컬럼/테이블 없음).
 
 ### 서브레시피 참조 / 순환 방지
 

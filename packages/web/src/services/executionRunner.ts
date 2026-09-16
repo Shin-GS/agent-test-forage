@@ -74,6 +74,14 @@ interface SnapshotStep {
   extract?: Record<string, string> | ExtractDef[];
   condition?: string;
   pathParams?: Record<string, string>;
+  /** 요청 헤더 매핑 (헤더명→값문자열, source 인코딩 포함). 실행 시 context 치환 후 주입 */
+  headers?: Record<string, string>;
+  /** 요청 헤더 레시피 기본값 (헤더명→기본값). 치환 결과가 비면 폴백 */
+  headerDefaults?: Record<string, string>;
+  /** 요청 바디 레시피 기본값 (필드명→기본값) */
+  bodyDefaults?: Record<string, string>;
+  /** 경로 파라미터 레시피 기본값 (파라미터명→기본값) */
+  pathParamDefaults?: Record<string, string>;
   code?: string;
   inputs?: InputVarDef[];
   [key: string]: any;
@@ -441,14 +449,35 @@ async function executeApiStep(
   // 우선순위: 스텝의 명시적 method/path > endpointId 로 스펙에서 해석.
   const resolved = resolveEndpoint(snapshot, exec.endpointMap);
   const method = resolved.method.toUpperCase();
-  // 경로 변수: 먼저 pathParams({{expr}} 치환) 를 경로 템플릿({id})에 적용, 그다음 context 치환.
-  const withPathParams = applyPathParams(resolved.path, snapshot.pathParams, context);
+  // 경로 변수: 먼저 pathParams({{expr}} 치환 → 비면 기본값 폴백) 를 경로 템플릿({id})에 적용, 그다음 context 치환.
+  const withPathParams = applyPathParams(
+    resolved.path,
+    snapshot.pathParams,
+    snapshot.pathParamDefaults,
+    context,
+  );
   const path = substitute(withPathParams, context);
   const url = joinUrl(exec.baseUrl, path);
 
+  // 헤더 주입 (execution.md 요청 헤더 주입): 런타임 기본 헤더 + 스냅샷 헤더 매핑 병합.
+  // 같은 헤더명이면 매핑 값이 우선(Content-Type 도 덮어쓸 수 있음). 빈 값 헤더는 주입하지 않는다.
   const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (snapshot.headers && typeof snapshot.headers === "object") {
+    for (const [name, rawValue] of Object.entries(snapshot.headers)) {
+      const resolved = resolveMappedValue(
+        String(rawValue),
+        snapshot.headerDefaults?.[name],
+        context,
+      );
+      if (resolved !== "") headers[name] = resolved;
+    }
+  }
   const hasBody = snapshot.body !== undefined && snapshot.body !== null && method !== "GET";
-  const body = hasBody ? substituteDeep(snapshot.body, context) : undefined;
+  // body 는 최상위 평면 맵({필드: 값문자열})이다. 중첩 객체/배열은 substituteDeep 가 그대로 처리한다.
+  // 최상위 각 필드에 한해 "치환 결과가 빈 문자열이면 bodyDefaults 로 폴백"(헤더/path 와 동일 규칙)을 적용한다.
+  const body = hasBody
+    ? applyBodyDefaults(substituteDeep(snapshot.body, context), snapshot.body, snapshot.bodyDefaults, context)
+    : undefined;
 
   const response = await fetch(url, {
     method,
@@ -561,6 +590,24 @@ function substitute(input: string, context: RunContext): string {
   });
 }
 
+/**
+ * 매핑 값 문자열을 실행 시점 값으로 해석한다(헤더 등). 값 우선순위: 사용자 실행 입력 > 레시피별 기본값.
+ * - rawValue 를 context 로 치환(요청 필드와 동일 규칙)한 결과가 비어 있으면 레시피별 기본값으로 폴백한다.
+ * - 리터럴 이스케이프({{=...}})는 앞의 "=" 를 벗겨 원문 그대로 사용한다(recipeForm 인코딩 대칭).
+ * - 둘 다 비면 빈 문자열(호출부에서 헤더 미주입 처리).
+ */
+function resolveMappedValue(
+  rawValue: string,
+  defaultValue: string | undefined,
+  context: RunContext,
+): string {
+  // 리터럴 이스케이프 {{=...}} → 원문
+  const escaped = rawValue.trim().match(/^\{\{\s*=([\s\S]*?)\s*\}\}$/);
+  const substituted = escaped ? escaped[1] : substitute(rawValue, context);
+  if (substituted !== "") return substituted;
+  return defaultValue != null ? String(defaultValue) : "";
+}
+
 /** 객체/배열/문자열을 재귀적으로 치환. 문자열 전체가 단일 {{path}} 면 원시 타입 보존 */
 function substituteDeep(value: any, context: RunContext): any {
   if (typeof value === "string") {
@@ -581,6 +628,39 @@ function substituteDeep(value: any, context: RunContext): any {
     return out;
   }
   return value;
+}
+
+/**
+ * body 최상위 필드에 레시피 기본값 폴백을 적용한다(헤더/path 와 동일 규칙: 매핑 값 치환 → 비면 기본값).
+ * - substituted: substituteDeep 로 이미 치환된 body(중첩/배열/원시타입 보존은 그대로 유지).
+ * - rawBody: 치환 전 원본 body(각 필드의 원본 매핑 문자열을 resolveMappedValue 에 넘기기 위함).
+ * - 최상위 필드의 치환 결과가 빈 문자열이고 bodyDefaults 에 값이 있으면 기본값으로 대체한다.
+ * - body 가 객체가 아니거나 defaults 가 없으면 substituted 를 그대로 반환(회귀 없음).
+ */
+function applyBodyDefaults(
+  substituted: any,
+  rawBody: any,
+  defaults: SnapshotStep["bodyDefaults"],
+  context: RunContext
+): any {
+  if (!defaults || Object.keys(defaults).length === 0) return substituted;
+  if (!substituted || typeof substituted !== "object" || Array.isArray(substituted)) return substituted;
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) return substituted;
+
+  const out: Record<string, any> = { ...substituted };
+  for (const [field, defaultValue] of Object.entries(defaults)) {
+    // 원본 필드 값이 문자열일 때만 "치환 → 비면 기본값" 규칙을 적용한다(중첩 객체/배열은 대상 아님).
+    const rawValue = (rawBody as Record<string, any>)[field];
+    if (typeof rawValue !== "string") continue;
+    // 헤더와 동일 규칙: 원본 매핑 문자열을 resolveMappedValue 로 해석(치환 결과가 비면 기본값 폴백).
+    // substituteDeep 의 whole-match 는 미해석 시 undefined 를 내므로, 비었는지 판정은 원본 기준으로 한다.
+    const resolved = resolveMappedValue(rawValue, defaultValue, context);
+    const current = out[field];
+    if (current === "" || current == null) {
+      out[field] = resolved;
+    }
+  }
+  return out;
 }
 
 /** "a.b.c" 경로로 중첩 값 조회 */
@@ -748,16 +828,21 @@ function resolveEndpoint(
   throw new Error(`endpointId=${snapshot.endpointId} 에 대한 경로를 스펙에서 찾을 수 없습니다`);
 }
 
-/** 경로 템플릿의 {name} 을 pathParams(값은 {{expr}} 치환) 로 채운다. 예: /orders/{id} + {id:"{{orderId}}"} */
+/**
+ * 경로 템플릿의 {name} 을 pathParams(값은 {{expr}} 치환) 로 채운다. 예: /orders/{id} + {id:"{{orderId}}"}
+ * 헤더/필드와 동일하게 "매핑 값 치환 → 비면 레시피 기본값(pathParamDefaults)" 폴백을 적용한다.
+ * 최종 값이 비면 기존과 동일하게 빈 문자열로 치환한다.
+ */
 function applyPathParams(
   pathTemplate: string,
   pathParams: SnapshotStep["pathParams"],
+  defaults: SnapshotStep["pathParamDefaults"],
   context: RunContext
 ): string {
   if (!pathParams) return pathTemplate;
   let out = pathTemplate;
   for (const [key, rawValue] of Object.entries(pathParams)) {
-    const value = substitute(String(rawValue), context);
+    const value = resolveMappedValue(String(rawValue), defaults?.[key], context);
     out = out.replace(new RegExp(`\\{${key}\\}`, "g"), value);
   }
   return out;
@@ -825,3 +910,14 @@ async function safeReport(
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// 테스트 전용 내보내기 (런타임 동작에는 영향 없음)
+// body/path 레시피 기본값 폴백 헬퍼를 단위 테스트에서 직접 검증하기 위해 노출한다.
+// ---------------------------------------------------------------------------
+export const __test__ = {
+  applyPathParams,
+  applyBodyDefaults,
+  substituteDeep,
+  resolveMappedValue,
+};

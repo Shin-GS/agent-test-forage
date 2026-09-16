@@ -2284,6 +2284,38 @@ select.input {
   margin-left: 2px;
 }
 
+/* 매핑 테이블 헤더 셀 (요청 필드 / 헤더 매핑에서 열 제목 표기) */
+.mapping-table__head {
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* 레시피 기본값 입력 (매핑 값이 비었을 때만 쓰는 폴백값) */
+.mapping-table__default {
+  font-size: var(--font-size-xs);
+}
+
+/* 요청 헤더 매핑 안내(민감 헤더 값 소스 권장) */
+.mapping-note {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* 경고 톤 변형 (API 교체로 매핑 초기화 등 주의 안내) */
+.mapping-note--warn {
+  color: var(--color-text-primary);
+  background: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  margin-top: var(--space-2);
+}
+
 /* --- 태그 입력 (칩) --- */
 .tag-input {
   display: flex;

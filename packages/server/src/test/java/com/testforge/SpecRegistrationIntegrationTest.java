@@ -309,6 +309,101 @@ class SpecRegistrationIntegrationTest {
         assertThat(admin.isExcluded()).isTrue();
     }
 
+    // ── $ref inline: requestBody schema가 실제 properties로 펼쳐지는지 ──
+    @Test
+    void register_inlinesRefSchema() throws Exception {
+        // POST /bookings: requestBody schema가 $ref(#/components/schemas/Booking)
+        Map<String, Object> bookingSchema = Map.of(
+                "type", "object",
+                "required", List.of("customerName"),
+                "properties", Map.of(
+                        "customerName", Map.of("type", "string"),
+                        "seats", Map.of("type", "integer")));
+        String specJson = specWithComponents(
+                Map.of("Booking", bookingSchema),
+                bodyRef("/bookings", "post", "#/components/schemas/Booking"));
+
+        register(registerBody(specJson));
+
+        String op = operationJsonFor("POST", "/bookings");
+        // $ref가 아니라 실제 properties로 인라인되어야 한다.
+        assertThat(op).doesNotContain("$ref");
+        assertThat(op).contains("customerName");
+        assertThat(op).contains("seats");
+        assertThat(op).contains("\"required\"");
+    }
+
+    // ── $ref inline: 중첩 객체($ref 안에 또 $ref)까지 펼쳐지는지 ──
+    @Test
+    void register_inlinesNestedRefSchema() throws Exception {
+        // Order.customer → $ref(Customer). 중첩까지 인라인되어야 한다.
+        Map<String, Object> customerSchema = Map.of(
+                "type", "object",
+                "properties", Map.of("email", Map.of("type", "string")));
+        Map<String, Object> orderSchema = Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "customer", Map.of("$ref", "#/components/schemas/Customer"),
+                        "amount", Map.of("type", "number")));
+        Map<String, Object> components = new LinkedHashMap<>();
+        components.put("Order", orderSchema);
+        components.put("Customer", customerSchema);
+        String specJson = specWithComponents(
+                components, bodyRef("/orders", "post", "#/components/schemas/Order"));
+
+        register(registerBody(specJson));
+
+        String op = operationJsonFor("POST", "/orders");
+        assertThat(op).doesNotContain("$ref");
+        assertThat(op).contains("customer");
+        assertThat(op).contains("amount");
+        // 중첩 Customer의 필드까지 펼쳐졌는지.
+        assertThat(op).contains("email");
+    }
+
+    // ── $ref inline: 순환 참조 스키마 → 예외 없이 등록 완료 (무한 루프 방지) ──
+    @Test
+    void register_circularRefSchema_completesWithoutHang() throws Exception {
+        // Node.next → $ref(Node) 자기참조. 순환 지점은 $ref로 축약되어도 등록은 성공해야 한다.
+        Map<String, Object> nodeSchema = Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "value", Map.of("type", "string"),
+                        "next", Map.of("$ref", "#/components/schemas/Node")));
+        String specJson = specWithComponents(
+                Map.of("Node", nodeSchema),
+                bodyRef("/nodes", "post", "#/components/schemas/Node"));
+
+        register(registerBody(specJson));
+
+        // 등록이 완료되고 엔드포인트가 저장되었으면 성공. (무한 루프/스택오버플로우 미발생)
+        String op = operationJsonFor("POST", "/nodes");
+        assertThat(op).contains("value");
+    }
+
+    // ── $ref inline: example 값은 operationJson에 포함되지 않는지 ──
+    @Test
+    void register_stripsExamplesFromSchema() throws Exception {
+        Map<String, Object> schema = Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "code", Map.of(
+                                "type", "string",
+                                "example", "TOP-SECRET-EXAMPLE-VALUE")),
+                "example", Map.of("code", "ANOTHER-EXAMPLE"));
+        String specJson = specWithComponents(
+                Map.of("Coupon", schema),
+                bodyRef("/coupons", "post", "#/components/schemas/Coupon"));
+
+        register(registerBody(specJson));
+
+        String op = operationJsonFor("POST", "/coupons");
+        // 구조는 유지되지만 example 값은 제거되어야 한다.
+        assertThat(op).contains("code");
+        assertThat(op).doesNotContain("TOP-SECRET-EXAMPLE-VALUE");
+        assertThat(op).doesNotContain("ANOTHER-EXAMPLE");
+    }
+
     // ── token: invalid → 401 ──
     @Test
     void register_invalidToken_returns401() throws Exception {
@@ -359,6 +454,44 @@ class SpecRegistrationIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk());
+    }
+
+    /** 저장된 스펙에서 주어진 method+path 엔드포인트의 operationJson을 읽어온다. */
+    private String operationJsonFor(String method, String path) {
+        ApiSpec spec = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
+        return endpointRepository.findByApiSpecId(spec.getId()).stream()
+                .filter(e -> method.equals(e.getHttpMethod()) && path.equals(e.getPath()))
+                .findFirst().orElseThrow().getOperationJson();
+    }
+
+    /** 단일 경로에 JSON 요청 바디($ref 참조)를 갖는 pathItem 맵을 만든다. */
+    private Map<String, Object> bodyRef(String path, String method, String schemaRef) {
+        Map<String, Object> operation = Map.of(
+                "summary", method + " " + path,
+                "requestBody", Map.of(
+                        "content", Map.of(
+                                "application/json", Map.of(
+                                        "schema", Map.of("$ref", schemaRef)))),
+                "responses", Map.of("200", Map.of("description", "ok")));
+        Map<String, Object> pathItem = new LinkedHashMap<>();
+        pathItem.put(method, operation);
+        Map<String, Object> paths = new LinkedHashMap<>();
+        paths.put(path, pathItem);
+        return paths;
+    }
+
+    /** components.schemas + paths를 갖는 OpenAPI 3.0 스펙 JSON을 만든다. */
+    private String specWithComponents(Map<String, Object> schemas, Map<String, Object> paths) {
+        Map<String, Object> openapi = new LinkedHashMap<>();
+        openapi.put("openapi", "3.0.1");
+        openapi.put("info", Map.of("title", "demo", "version", "1.0.0"));
+        openapi.put("paths", paths);
+        openapi.put("components", Map.of("schemas", schemas));
+        try {
+            return objectMapper.writeValueAsString(openapi);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private Map<String, Object> registerBody(String specJson) {

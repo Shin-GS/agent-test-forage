@@ -119,11 +119,14 @@ public class SpecQueryController {
         return ResponseEntity.noContent().build();
     }
 
-    /** 편집용 엔드포인트 단건 조회 (operationJson + source 포함). ADMIN만 가능. */
+    /**
+     * 엔드포인트 단건 조회 (operationJson + source 포함). 조회는 공용(로그인 필수)이며 non-admin도 허용한다.
+     * 레시피 편집(일반 사용자)에서 요청 필드/헤더 자동 나열을 위해 스키마(operationJson)를 읽어야 하기 때문이다.
+     * 비로그인은 SecurityConfig의 /api/v1/** authenticated 규칙으로 401 처리된다. 관리 쓰기만 ADMIN 전용이다.
+     */
     @GetMapping("/{id}/endpoints/{endpointId}")
     public EndpointDetailResponse getEndpoint(@PathVariable Long id,
                                               @PathVariable Long endpointId) {
-        requireAdmin();
         return commandService.getEndpoint(id, endpointId);
     }
 
