@@ -84,6 +84,43 @@
     .radio-group { display: flex; flex-direction: column; gap: var(--space-2); }
     .radio-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); color: var(--color-text-primary); cursor: pointer; }
     .radio-option input { accent-color: var(--color-accent); }
+
+    /* ─── C: API 출처 배지 + 행 액션 (Case 2 확장) ─── */
+    .api-item__tail { display: flex; align-items: center; gap: var(--space-2); }
+    .api-source { font-size: var(--font-size-2xs); font-weight: var(--font-weight-medium); padding: 2px var(--space-2); border-radius: var(--radius-sm); white-space: nowrap; }
+    .api-source--manual { color: var(--color-accent); background: var(--color-bg-secondary); border: 1px solid var(--color-border); }
+    .api-source--library { color: var(--color-text-tertiary); background: var(--color-bg-secondary); border: 1px solid var(--color-border); }
+    .api-actions { display: flex; gap: var(--space-1); }
+
+    /* ─── C: 폼 페이지 (Case 8 서버 등록, Case 9 API 편집) ─── */
+    .form-page { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); margin-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-5); }
+    .form-row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+    .form-row > .form-group { flex: 1; min-width: 220px; }
+    .required-mark { color: var(--color-error); margin-left: 2px; }
+    .field-error { font-size: var(--font-size-xs); color: var(--color-error); margin-top: var(--space-1); }
+    .field-warning { font-size: var(--font-size-xs); color: var(--color-warning); margin-top: var(--space-1); }
+
+    /* 다중 행 편집 테이블 (인증 프로필 / 파라미터 / 필드 / 헤더 — FieldMappingTable 톤) */
+    .repeat-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+    .repeat-table th { text-align: left; padding: var(--space-2); color: var(--color-text-tertiary); font-weight: var(--font-weight-medium); border-bottom: 1px solid var(--color-border); font-size: var(--font-size-xs); }
+    .repeat-table td { padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+    .repeat-table .input { width: 100%; }
+    .repeat-table__actions { width: 44px; text-align: center; }
+    .repeat-table__add { margin-top: var(--space-2); }
+
+    /* accordion (요청 헤더 / 응답 — details/summary 기반) */
+    .accordion { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-tertiary); }
+    .accordion__summary { list-style: none; cursor: pointer; padding: var(--space-3); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); display: flex; align-items: center; gap: var(--space-2); }
+    .accordion__summary::-webkit-details-marker { display: none; }
+    .accordion__summary::before { content: '▸'; color: var(--color-text-tertiary); transition: transform var(--transition-fast); }
+    .accordion[open] .accordion__summary::before { transform: rotate(90deg); }
+    .accordion__body { padding: 0 var(--space-3) var(--space-3); }
+
+    /* 폼 섹션 (펼침 영역 그룹) */
+    .form-section { display: flex; flex-direction: column; gap: var(--space-3); }
+    .form-section__title { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+    .check-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); color: var(--color-text-primary); cursor: pointer; }
+    .check-option input { accent-color: var(--color-accent); }
   </style>
 </head>
 <body>
@@ -99,6 +136,8 @@
     <button class="case-switcher__btn" onclick="openRoleConfirm('demote','admin2')">5b. 역할 변경-강등 [B]</button>
     <button class="case-switcher__btn" onclick="openPasswordModal('user1')">6. 비밀번호 변경 [B]</button>
     <button class="case-switcher__btn" onclick="openStatusConfirm('deactivate','user1')">7. 상태 변경 [B]</button>
+    <button class="case-switcher__btn" onclick="showCase('spec-new')">8. 서버 등록 [C]</button>
+    <button class="case-switcher__btn" onclick="showCase('endpoint-edit')">9. API 편집 [C]</button>
   </div>
 
   <!-- ═══════════════════════════════════════════════
@@ -107,6 +146,12 @@
   <div id="case-specs" class="screen active">
     <div class="page">
       <h1 class="sr-only">스펙 관리</h1>
+      <!-- 목록형 툴바: 카운트 + 우측 [+ 서버 등록] (레시피 목록 [+ 만들기] 패턴, C) -->
+      <div class="page-toolbar">
+        <span class="users-count" aria-live="polite">총 3개</span>
+        <span class="page-toolbar__spacer"></span>
+        <button class="btn btn--primary btn--sm" onclick="showCase('spec-new')">+ 서버 등록</button>
+      </div>
       <div class="page-body">
         <table class="data-table">
           <thead>
@@ -214,13 +259,13 @@
             </div>
           </div>
 
-          <!-- 서비스 설명 (읽기 전용, 편집은 별도 작업) -->
+          <!-- 서비스 설명 (C: [✎ 편집]로 메타 편집 페이지(Case 8) 진입) -->
           <div class="spec-section">
             <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);">
               <h4 class="spec-section__title" style="margin: 0;">서비스 설명</h4>
               <span class="badge badge--info" style="font-size: var(--font-size-2xs);">✎ 관리자 수정본</span>
-              <!-- 편집은 별도 작업(B 이후). 이번 A는 읽기 전용 → 편집 버튼 비활성 -->
-              <button class="btn btn--ghost btn--sm" disabled title="편집은 별도 작업에서 제공됩니다" style="margin-left: auto;">편집 (별도 작업)</button>
+              <!-- C: 서버 메타 편집 페이지(Case 8) 진입. 수정 모드이므로 baseUrl 읽기 전용 -->
+              <button class="btn btn--ghost btn--sm" title="서비스 메타 편집" style="margin-left: auto;" onclick="showCase('spec-edit')">✎ 편집</button>
             </div>
             <div class="card" style="padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);">
               <div style="font-size: var(--font-size-sm);"><span style="color: var(--color-text-tertiary);">설명:</span> 채용 공고 등록 및 지원자 관리 서비스</div>
@@ -253,27 +298,93 @@
             </div>
           </div>
 
-          <!-- API 엔드포인트 목록 -->
+          <!-- API 엔드포인트 목록 (C: 출처 배지 + 행 액션 + [+ API 추가]) -->
           <div class="spec-section" style="margin-bottom: 0;">
-            <h4 class="spec-section__title">API 엔드포인트 (42개)</h4>
+            <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);">
+              <h4 class="spec-section__title" style="margin: 0;">API 엔드포인트 (42개)</h4>
+              <button class="btn btn--secondary btn--sm" style="margin-left: auto;" onclick="showCase('endpoint-edit')">+ API 추가</button>
+            </div>
             <div class="api-list">
-              <div class="api-item"><span class="api-item__method api-item__method--post">POST</span><span class="api-item__path">/api/v1/users</span><span class="api-item__summary">회원가입</span></div>
-              <div class="api-item"><span class="api-item__method api-item__method--get">GET</span><span class="api-item__path">/api/v1/users/{id}</span><span class="api-item__summary">회원 조회</span></div>
-              <div class="api-item"><span class="api-item__method api-item__method--post">POST</span><span class="api-item__path">/api/v1/job-postings</span><span class="api-item__summary">공고 등록</span></div>
-              <div class="api-item"><span class="api-item__method api-item__method--get">GET</span><span class="api-item__path">/api/v1/job-postings</span><span class="api-item__summary">공고 목록</span></div>
-              <div class="api-item"><span class="api-item__method api-item__method--post">POST</span><span class="api-item__path">/api/v1/applications</span><span class="api-item__summary">입사 지원</span></div>
-              <div class="api-item"><span class="api-item__method api-item__method--put">PUT</span><span class="api-item__path">/api/v1/users/{id}/profile</span><span class="api-item__summary">프로필 수정</span></div>
-              <div class="api-item"><span class="api-item__method api-item__method--delete">DELETE</span><span class="api-item__path">/api/v1/users/{id}</span><span class="api-item__summary">회원 탈퇴</span></div>
+              <!-- 수동(MANUAL) API: 출처 배지 🖉 수동 + 편집/복제/삭제 -->
+              <div class="api-item">
+                <span class="api-item__method api-item__method--post">POST</span>
+                <span class="api-item__path">/api/v1/users</span>
+                <span class="api-item__summary">회원가입</span>
+                <span class="api-item__tail">
+                  <span class="api-source api-source--manual" title="관리자 수동 등록">🖉 수동</span>
+                  <span class="api-actions">
+                    <button class="btn btn--ghost btn--sm" aria-label="POST /api/v1/users 편집" title="편집" onclick="showCase('endpoint-edit')">✎</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="POST /api/v1/users 복제" title="복제 (수동 사본 생성)" onclick="showCase('endpoint-edit')">⧉</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="POST /api/v1/users 삭제" title="삭제" style="color: var(--color-error);" onclick="openConfirm('endpoint-delete','POST /api/v1/users')">🗑</button>
+                  </span>
+                </span>
+              </div>
+              <div class="api-item">
+                <span class="api-item__method api-item__method--get">GET</span>
+                <span class="api-item__path">/api/v1/users/{id}</span>
+                <span class="api-item__summary">회원 조회</span>
+                <span class="api-item__tail">
+                  <span class="api-source api-source--manual" title="관리자 수동 등록">🖉 수동</span>
+                  <span class="api-actions">
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/users/{id} 편집" title="편집" onclick="showCase('endpoint-edit')">✎</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/users/{id} 복제" title="복제 (수동 사본 생성)" onclick="showCase('endpoint-edit')">⧉</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/users/{id} 삭제" title="삭제" style="color: var(--color-error);" onclick="openConfirm('endpoint-delete','GET /api/v1/users/{id}')">🗑</button>
+                  </span>
+                </span>
+              </div>
+              <!-- 자동(LIBRARY) API: 출처 배지 LIBRARY. 스키마 읽기전용이나 편집(메타) 진입은 가능 -->
+              <div class="api-item">
+                <span class="api-item__method api-item__method--post">POST</span>
+                <span class="api-item__path">/api/v1/job-postings</span>
+                <span class="api-item__summary">공고 등록</span>
+                <span class="api-item__tail">
+                  <span class="api-source api-source--library" title="라이브러리 자동 등록">LIBRARY</span>
+                  <span class="api-actions">
+                    <button class="btn btn--ghost btn--sm" aria-label="POST /api/v1/job-postings 편집" title="편집 (메타만 수정 가능)" onclick="showCase('endpoint-edit')">✎</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="POST /api/v1/job-postings 복제" title="복제 (수동 사본 생성)" onclick="showCase('endpoint-edit')">⧉</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="POST /api/v1/job-postings 삭제" title="삭제" style="color: var(--color-error);" onclick="openConfirm('endpoint-delete','POST /api/v1/job-postings')">🗑</button>
+                  </span>
+                </span>
+              </div>
+              <div class="api-item">
+                <span class="api-item__method api-item__method--get">GET</span>
+                <span class="api-item__path">/api/v1/job-postings</span>
+                <span class="api-item__summary">공고 목록</span>
+                <span class="api-item__tail">
+                  <span class="api-source api-source--library" title="라이브러리 자동 등록">LIBRARY</span>
+                  <span class="api-actions">
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/job-postings 편집" title="편집 (메타만 수정 가능)" onclick="showCase('endpoint-edit')">✎</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/job-postings 복제" title="복제 (수동 사본 생성)" onclick="showCase('endpoint-edit')">⧉</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/job-postings 삭제" title="삭제" style="color: var(--color-error);" onclick="openConfirm('endpoint-delete','GET /api/v1/job-postings')">🗑</button>
+                  </span>
+                </span>
+              </div>
+              <!-- DEPRECATED: 재등록 시 스펙에서 사라진 LIBRARY API. 스키마 읽기전용 + 메타만 -->
               <div class="api-item api-item--deprecated">
                 <span class="api-item__method api-item__method--get">GET</span>
                 <span class="api-item__path">/api/v1/legacy/users</span>
                 <span class="api-item__summary">구 회원 목록</span>
-                <span class="api-item__tail"><span class="badge badge--warning" style="font-size: var(--font-size-2xs);">DEPRECATED</span></span>
+                <span class="api-item__tail">
+                  <span class="badge badge--warning" style="font-size: var(--font-size-2xs);">DEPRECATED</span>
+                  <span class="api-actions">
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/legacy/users 편집" title="편집 (지원 종료 API, 메타만)" onclick="showCase('endpoint-edit')">✎</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/legacy/users 복제" title="복제 (수동 사본 생성)" onclick="showCase('endpoint-edit')">⧉</button>
+                    <button class="btn btn--ghost btn--sm" aria-label="GET /api/v1/legacy/users 삭제" title="삭제" style="color: var(--color-error);" onclick="openConfirm('endpoint-delete','GET /api/v1/legacy/users')">🗑</button>
+                  </span>
+                </span>
               </div>
             </div>
             <p style="font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: var(--space-2);">
-              … 외 35개 · DEPRECATED는 재등록 시 스펙에서 사라진 API입니다. 이를 참조하는 레시피는 실행 전 유효성 검증에서 경고합니다.
+              … 외 35개 · 출처(🖉 수동 / LIBRARY)로 등록 경로를 구분합니다. DEPRECATED는 재등록 시 스펙에서 사라진 API로, 이를 참조하는 레시피는 실행 전 유효성 검증에서 경고합니다.
             </p>
+            <!-- 엔드포인트 0개 빈 상태(R3.8): 아래 CTA를 대신 노출. (데모는 목록이 채워진 상태)
+            <div class="empty-state">
+              <div class="empty-state__icon">🧩</div>
+              <div class="empty-state__title">아직 API가 없어요</div>
+              <div class="empty-state__desc">이 서버의 첫 API를 추가해 레시피에서 사용할 수 있게 하세요.</div>
+              <button class="btn btn--primary btn--sm" onclick="showCase('endpoint-edit')">+ API 추가</button>
+            </div>
+            -->
           </div>
         </div>
       </div>
@@ -403,6 +514,368 @@
             "zzz"와 일치하는 아이디가 없습니다. 검색어를 지우면 전체 사용자 목록이 표시됩니다.
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       Case 8: 서버 수동 등록 (C, 별도 페이지 /admin/specs/new)
+       ═══════════════════════════════════════════════ -->
+  <div id="case-spec-new" class="screen">
+    <div class="page">
+      <h1 class="sr-only">서버 등록</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('specs')" aria-label="목록으로 돌아가기">← 목록으로</button>
+        <span class="page-action-bar__title">서버 등록</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary btn--sm" onclick="showCase('specs')">취소</button>
+        <button class="btn btn--primary btn--sm" onclick="showCase('spec-detail')">등록</button>
+      </div>
+      <div class="page-body">
+        <form class="form-page" onsubmit="return false;">
+          <div class="form-section">
+            <div class="form-group">
+              <label class="form-label" for="spec-name">서비스명<span class="required-mark" aria-hidden="true">*</span></label>
+              <input class="input" type="text" id="spec-name" placeholder="예: 국세청 공개 API" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="spec-baseurl">baseUrl<span class="required-mark" aria-hidden="true">*</span></label>
+              <input class="input" type="url" id="spec-baseurl" placeholder="https://api.example.go.kr" autocomplete="off">
+              <span class="form-hint">https:// 등 스킴을 포함한 형식으로 입력하세요.</span>
+              <!-- baseUrl 중복 시 인라인 경고 자리 (같은 서버에 병합됨을 안내) -->
+              <span class="field-warning" hidden>⚠ 이미 등록된 baseUrl입니다. 진행하면 기존 스펙에 병합됩니다.</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="spec-desc">설명</label>
+              <input class="input" type="text" id="spec-desc" placeholder="서비스에 대한 간단한 설명" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="spec-domain">도메인</label>
+              <input class="input" type="text" id="spec-domain" placeholder="예: 공공, 채용, 커머스" autocomplete="off">
+            </div>
+          </div>
+
+          <!-- 인증 프로필 (다중, 선택 — 0개 허용) -->
+          <div class="form-section">
+            <div class="form-section__title">인증 프로필 <span style="color: var(--color-text-tertiary); font-weight: var(--font-weight-normal); font-size: var(--font-size-xs);">(선택 · 0개 허용)</span></div>
+            <table class="repeat-table">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Login Page URL</th>
+                  <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input class="input" type="text" aria-label="인증 프로필 이름" placeholder="예: default-auth"></td>
+                  <td><input class="input" type="url" aria-label="로그인 페이지 URL" placeholder="https://example.go.kr/login"></td>
+                  <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 인증 프로필 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 인증 프로필 추가</button>
+            <span class="form-hint">loginPageUrl은 URL 형식으로 검증합니다. 비우면 이름만 저장됩니다.</span>
+          </div>
+
+          <p style="font-size: var(--font-size-2xs); color: var(--color-text-tertiary);">
+            수동 등록 메타는 관리자 수정본(adminEdited)으로 저장되어 라이브러리 재등록이 덮어쓰지 않습니다. ADMIN 세션(RBAC)으로 보호됩니다.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       Case 8 (수정 모드): 서버 메타 편집 (C, 상세의 [✎ 편집]에서 진입)
+       — 등록 폼과 동일하나 baseUrl 읽기 전용(식별 키)
+       ═══════════════════════════════════════════════ -->
+  <div id="case-spec-edit" class="screen">
+    <div class="page">
+      <h1 class="sr-only">서버 메타 편집 — 사람인</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('spec-detail')" aria-label="스펙 상세로 돌아가기">← 스펙으로</button>
+        <span class="page-action-bar__title">서버 메타 편집</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary btn--sm" onclick="showCase('spec-detail')">취소</button>
+        <button class="btn btn--primary btn--sm" onclick="showCase('spec-detail')">저장</button>
+      </div>
+      <div class="page-body">
+        <form class="form-page" onsubmit="return false;">
+          <div class="form-section">
+            <div class="form-group">
+              <label class="form-label" for="spec-edit-name">서비스명<span class="required-mark" aria-hidden="true">*</span></label>
+              <input class="input" type="text" id="spec-edit-name" value="사람인" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="spec-edit-baseurl">baseUrl<span class="required-mark" aria-hidden="true">*</span></label>
+              <!-- 수정 모드: baseUrl은 식별 키이므로 읽기 전용(바꾸면 다른 서버가 됨) -->
+              <input class="input" type="url" id="spec-edit-baseurl" value="saramin-api.example.com" readonly aria-readonly="true">
+              <span class="form-hint">baseUrl은 서버 식별 키라 수정할 수 없습니다.</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="spec-edit-desc">설명</label>
+              <input class="input" type="text" id="spec-edit-desc" value="채용 공고 등록 및 지원자 관리 서비스" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="spec-edit-domain">도메인</label>
+              <input class="input" type="text" id="spec-edit-domain" value="채용" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section__title">인증 프로필 <span style="color: var(--color-text-tertiary); font-weight: var(--font-weight-normal); font-size: var(--font-size-xs);">(선택 · 0개 허용)</span></div>
+            <table class="repeat-table">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Login Page URL</th>
+                  <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input class="input" type="text" aria-label="인증 프로필 이름" value="saramin-auth"></td>
+                  <td><input class="input" type="url" aria-label="로그인 페이지 URL" value="https://saramin.co.kr/login"></td>
+                  <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 인증 프로필 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 인증 프로필 추가</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       Case 9: API 편집 페이지 (C, /admin/specs/:id/endpoints/new|:id/edit)
+       ═══════════════════════════════════════════════ -->
+  <div id="case-endpoint-edit" class="screen">
+    <div class="page">
+      <h1 class="sr-only">API 추가</h1>
+      <div class="page-action-bar">
+        <button class="page-action-bar__back" onclick="showCase('spec-detail')" aria-label="스펙 상세로 돌아가기">← 스펙으로</button>
+        <span class="page-action-bar__title">API 추가</span>
+        <span class="page-action-bar__spacer"></span>
+        <button class="btn btn--secondary btn--sm" onclick="showCase('spec-detail')">취소</button>
+        <button class="btn btn--primary btn--sm" onclick="showCase('spec-detail')">저장</button>
+      </div>
+      <div class="page-body">
+        <form class="form-page" onsubmit="return false;">
+          <!-- ① 기본 정보 (펼침) -->
+          <div class="form-section">
+            <div class="form-section__title">① 기본 정보</div>
+            <div class="form-row">
+              <div class="form-group" style="flex: 0 0 160px; min-width: 140px;">
+                <label class="form-label" for="ep-method">메서드<span class="required-mark" aria-hidden="true">*</span></label>
+                <select class="input" id="ep-method" onchange="toggleBodySection()">
+                  <option value="GET">GET</option>
+                  <option value="POST" selected>POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="DELETE">DELETE</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="ep-path">경로<span class="required-mark" aria-hidden="true">*</span></label>
+                <input class="input" type="text" id="ep-path" placeholder="예: /orders 또는 /users/{id}" autocomplete="off">
+                <!-- (method, path) 중복(같은 스펙 내)은 저장 전 인라인 경고 자리 -->
+                <span class="field-error" hidden>이미 같은 메서드+경로의 API가 있습니다.</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ep-summary">설명</label>
+              <input class="input" type="text" id="ep-summary" placeholder="이 API가 하는 일" autocomplete="off">
+            </div>
+            <div style="display: flex; align-items: center; gap: var(--space-2);">
+              <span style="font-size: var(--font-size-sm); color: var(--color-text-tertiary);">출처</span>
+              <span class="api-source api-source--manual">🖉 수동</span>
+            </div>
+            <label class="check-option" for="ep-confirm">
+              <input type="checkbox" id="ep-confirm" onchange="document.getElementById('ep-confirm-msg-group').hidden = !this.checked;">
+              실행 전 확인 (isConfirmRequired)
+            </label>
+            <div class="form-group" id="ep-confirm-msg-group" hidden>
+              <label class="form-label" for="ep-confirm-msg">확인 메시지 (confirmMessage)</label>
+              <input class="input" type="text" id="ep-confirm-msg" placeholder="예: 실 결제가 발생합니다. 계속할까요?" autocomplete="off">
+            </div>
+            <label class="check-option" for="ep-excluded">
+              <input type="checkbox" id="ep-excluded">
+              AI 목록에서 제외 (isExcluded)
+            </label>
+          </div>
+
+          <!-- ② 경로 파라미터 (펼침) -->
+          <div class="form-section">
+            <div class="form-section__title">② 경로 파라미터</div>
+            <table class="repeat-table">
+              <thead>
+                <tr>
+                  <th scope="col">이름</th>
+                  <th scope="col">타입</th>
+                  <th scope="col">필수</th>
+                  <th scope="col">설명</th>
+                  <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input class="input" type="text" aria-label="경로 파라미터 이름" value="id"></td>
+                  <td><input class="input" type="text" aria-label="경로 파라미터 타입" value="string"></td>
+                  <td style="text-align: center;"><input type="checkbox" aria-label="경로 파라미터 필수" checked></td>
+                  <td><input class="input" type="text" aria-label="경로 파라미터 설명" placeholder="예: 사용자 ID"></td>
+                  <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 경로 파라미터 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 파라미터 추가</button>
+            <span class="form-hint">경로에 <code>{변수}</code>가 있으면 해당 행이 자동 제안됩니다.</span>
+          </div>
+
+          <!-- ③ 쿼리 파라미터 (펼침) -->
+          <div class="form-section">
+            <div class="form-section__title">③ 쿼리 파라미터</div>
+            <table class="repeat-table">
+              <thead>
+                <tr>
+                  <th scope="col">이름</th>
+                  <th scope="col">타입</th>
+                  <th scope="col">필수</th>
+                  <th scope="col">설명</th>
+                  <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input class="input" type="text" aria-label="쿼리 파라미터 이름" placeholder="예: page"></td>
+                  <td><input class="input" type="text" aria-label="쿼리 파라미터 타입" placeholder="integer"></td>
+                  <td style="text-align: center;"><input type="checkbox" aria-label="쿼리 파라미터 필수"></td>
+                  <td><input class="input" type="text" aria-label="쿼리 파라미터 설명" placeholder="설명"></td>
+                  <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 쿼리 파라미터 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 파라미터 추가</button>
+          </div>
+
+          <!-- ④ 요청 바디 (펼침 · GET/DELETE면 비활성/숨김) -->
+          <div class="form-section" id="ep-body-section">
+            <div class="form-section__title">④ 요청 바디</div>
+            <div class="form-group" style="max-width: 320px;">
+              <label class="form-label" for="ep-content-type">Content-Type</label>
+              <input class="input" type="text" id="ep-content-type" value="application/json">
+            </div>
+            <table class="repeat-table">
+              <thead>
+                <tr>
+                  <th scope="col">필드</th>
+                  <th scope="col">타입</th>
+                  <th scope="col">필수</th>
+                  <th scope="col">설명</th>
+                  <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input class="input" type="text" aria-label="바디 필드 이름" placeholder="예: email"></td>
+                  <td><input class="input" type="text" aria-label="바디 필드 타입" placeholder="string"></td>
+                  <td style="text-align: center;"><input type="checkbox" aria-label="바디 필드 필수" checked></td>
+                  <td><input class="input" type="text" aria-label="바디 필드 설명" placeholder="설명"></td>
+                  <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 바디 필드 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 필드 추가</button>
+            <!-- method가 GET/DELETE면 이 섹션은 비활성/숨김 처리. 입력값은 보존하되 저장 시 미포함. -->
+          </div>
+
+          <!-- ⑤ 요청 헤더 (접힘 accordion) -->
+          <details class="accordion">
+            <summary class="accordion__summary" aria-controls="ep-headers-body">⑤ 요청 헤더</summary>
+            <div class="accordion__body" id="ep-headers-body">
+              <div class="alert alert--info" style="margin-bottom: var(--space-3);">
+                <span>🔒</span>
+                <span>정의만 저장됩니다. 실제 요청 주입은 추후 지원됩니다.</span>
+              </div>
+              <table class="repeat-table">
+                <thead>
+                  <tr>
+                    <th scope="col">이름</th>
+                    <th scope="col">필수</th>
+                    <th scope="col">설명</th>
+                    <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input class="input" type="text" aria-label="요청 헤더 이름" placeholder="예: X-Api-Key"></td>
+                    <td style="text-align: center;"><input type="checkbox" aria-label="요청 헤더 필수"></td>
+                    <td><input class="input" type="text" aria-label="요청 헤더 설명" placeholder="설명"></td>
+                    <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 요청 헤더 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                  </tr>
+                </tbody>
+              </table>
+              <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 헤더 추가</button>
+            </div>
+          </details>
+
+          <!-- ⑥ 응답 (접힘 accordion) -->
+          <details class="accordion">
+            <summary class="accordion__summary" aria-controls="ep-response-body">⑥ 응답</summary>
+            <div class="accordion__body" id="ep-response-body">
+              <div class="form-group">
+                <label class="form-label" for="ep-response-status">상태 코드별 설명</label>
+                <input class="input" type="text" id="ep-response-status" placeholder="예: 200 성공 / 400 잘못된 요청">
+              </div>
+              <div class="form-section__title" style="margin-top: var(--space-2);">응답 필드</div>
+              <table class="repeat-table">
+                <thead>
+                  <tr>
+                    <th scope="col">필드</th>
+                    <th scope="col">타입</th>
+                    <th scope="col">설명</th>
+                    <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input class="input" type="text" aria-label="응답 필드 이름" placeholder="예: id"></td>
+                    <td><input class="input" type="text" aria-label="응답 필드 타입" placeholder="string"></td>
+                    <td><input class="input" type="text" aria-label="응답 필드 설명" placeholder="설명"></td>
+                    <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 응답 필드 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                  </tr>
+                </tbody>
+              </table>
+              <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 응답 필드 추가</button>
+              <div class="form-section__title" style="margin-top: var(--space-3);">응답 헤더</div>
+              <table class="repeat-table">
+                <thead>
+                  <tr>
+                    <th scope="col">이름</th>
+                    <th scope="col">설명</th>
+                    <th scope="col" class="repeat-table__actions"><span class="sr-only">삭제</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input class="input" type="text" aria-label="응답 헤더 이름" placeholder="예: Location"></td>
+                    <td><input class="input" type="text" aria-label="응답 헤더 설명" placeholder="설명"></td>
+                    <td class="repeat-table__actions"><button type="button" class="btn btn--ghost btn--sm" aria-label="이 응답 헤더 삭제" title="삭제" style="color: var(--color-error);">🗑</button></td>
+                  </tr>
+                </tbody>
+              </table>
+              <button type="button" class="btn btn--secondary btn--sm repeat-table__add">+ 응답 헤더 추가</button>
+            </div>
+          </details>
+
+          <!-- 수동 API 안내. (자동 LIBRARY API 편집은 스키마 읽기전용 + 메타만 → 별도 케이스로 주석 처리)
+               자동 API: ①~⑥ 스키마 입력을 readonly/disabled 처리하고 상단에
+               "스키마는 라이브러리 관리, 메타만 수정 가능" alert 노출. 실행 전 확인/AI 제외 체크만 활성. -->
+          <p style="font-size: var(--font-size-2xs); color: var(--color-text-tertiary);">
+            수동(MANUAL) API입니다. 라이브러리가 같은 method+path로 등록하면 자동 등록으로 갱신될 수 있습니다.
+          </p>
+        </form>
       </div>
     </div>
   </div>
@@ -621,6 +1094,10 @@
         title.textContent = '스펙 삭제';
         desc.innerHTML = '<strong>' + name + '</strong> 스펙을 삭제할까요? 소프트 삭제되며, 이 스펙을 참조하는 레시피는 실행 전 경고됩니다.';
         ok.textContent = '삭제';
+      } else if (type === 'endpoint-delete') {
+        title.textContent = 'API 삭제';
+        desc.innerHTML = '<strong>' + name + '</strong> API를 삭제할까요? 이 API를 참조하는 레시피는 실행 전 유효성 검증에서 경고됩니다.';
+        ok.textContent = '삭제';
       } else {
         title.textContent = '스펙 비활성화';
         desc.innerHTML = '<strong>' + name + '</strong> 스펙을 비활성화할까요? AI 매칭/실행 대상에서 제외됩니다. (활성화로 되돌릴 수 있습니다)';
@@ -638,6 +1115,15 @@
     function reactivate(name) {
       // 디자인 명세: 즉시 처리 (실제 구현에서 API 호출)
       console.log('reactivate:', name);
+    }
+
+    // ─── C: API 편집 — method 변경 시 요청 바디 섹션 비활성/숨김 (GET/DELETE) ───
+    // 입력값은 보존하되 GET/DELETE면 숨김. 다시 POST/PUT/PATCH로 바꾸면 복원.
+    function toggleBodySection() {
+      const method = document.getElementById('ep-method').value;
+      const bodySection = document.getElementById('ep-body-section');
+      const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
+      bodySection.hidden = !hasBody;
     }
   </script>
 </body>

@@ -17,7 +17,7 @@ import type { SpecDetail, SpecEndpointItem } from "../../api/types";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { PageShell } from "../../components/layout/PageShell";
 import { PageActionBar } from "../../components/layout/PageActionBar";
-import { useBackToList } from "../../hooks/useListNavigation";
+import { useBackToList, useListNavigation } from "../../hooks/useListNavigation";
 import { useToastStore } from "../../store/toastStore";
 
 /** StatusView → 대문자 코드 */
@@ -32,6 +32,11 @@ function isSpecActive(spec: SpecDetail): boolean {
 /** 엔드포인트가 스펙에서 사라진(DEPRECATED) 상태인지 */
 function isDeprecated(ep: SpecEndpointItem): boolean {
   return (ep.status?.code ?? "").toUpperCase() === "DEPRECATED";
+}
+
+/** 출처 코드(MANUAL | LIBRARY). source 는 optional 이라 없으면 LIBRARY 취급(라이브러리 자동 등록이 기본) */
+function sourceCodeOf(ep: SpecEndpointItem): string {
+  return (ep.source?.code ?? "LIBRARY").toUpperCase();
 }
 
 /** HTTP 메서드 → 색상 클래스 (디자인 api-item__method--*) */
@@ -56,6 +61,8 @@ type ConfirmAction = "deactivate" | "delete";
 export function AdminSpecDetailPage() {
   // [← 목록으로] / 삭제 후 이동: 직전 스펙 목록 URL로 복귀(없으면 /admin/specs 폴백).
   const backToList = useBackToList("/admin/specs");
+  // [✎ 편집] → 메타 편집 페이지(현재 상세 URL을 fromList로 전달 → 편집 폼 [← 목록으로]가 상세로 복귀).
+  const navigateToEdit = useListNavigation();
   const queryClient = useQueryClient();
   const showToast = useToastStore((s) => s.show);
   const { id } = useParams<{ id: string }>();
@@ -116,6 +123,35 @@ export function AdminSpecDetailPage() {
   });
 
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
+
+  // 엔드포인트 삭제 확인 (스펙 삭제/비활성 모달과 별개 상태). 대상 endpointId/path 표시.
+  const [endpointConfirm, setEndpointConfirm] = useState<SpecEndpointItem | null>(null);
+
+  // 엔드포인트 복제: 성공 시 반환된 신규(MANUAL) endpointId 의 편집 페이지로 이동해 path 를 유일하게 바꾸도록 유도.
+  const duplicateEndpointMutation = useMutation({
+    mutationFn: (endpointId: number) => specsApi.duplicateEndpoint(specId, endpointId),
+    onSuccess: (created) => {
+      invalidateSpecs();
+      showToast("API를 복제했습니다", "success");
+      if (created?.id != null) {
+        navigateToEdit(`/admin/specs/${specId}/endpoints/${created.id}/edit`);
+      }
+    },
+    onError: (err) => showToast(errorMessage(err, "API 복제에 실패했습니다"), "error"),
+  });
+
+  const deleteEndpointMutation = useMutation({
+    mutationFn: (endpointId: number) => specsApi.deleteEndpoint(specId, endpointId),
+    onSuccess: () => {
+      invalidateSpecs();
+      showToast("API를 삭제했습니다", "success");
+      setEndpointConfirm(null);
+    },
+    onError: (err) => {
+      setEndpointConfirm(null);
+      showToast(errorMessage(err, "API 삭제에 실패했습니다"), "error");
+    },
+  });
 
   const notFound = isError && error instanceof ApiError && error.status === 404;
 
@@ -241,10 +277,10 @@ export function AdminSpecDetailPage() {
                 <button
                   type="button"
                   className="btn btn--ghost btn--sm spec-section__edit"
-                  disabled
-                  title="편집은 별도 작업에서 제공됩니다"
+                  title="서비스 메타 편집"
+                  onClick={() => navigateToEdit(`/admin/specs/${specId}/edit`)}
                 >
-                  편집 (별도 작업)
+                  ✎ 편집
                 </button>
               </div>
               <div className="card spec-info-card">
@@ -275,8 +311,8 @@ export function AdminSpecDetailPage() {
                 )}
               </div>
               <p className="spec-section__hint">
-                읽기 전용 — 관리자 수정본이 있으면 그것을, 없으면 yml 원본을 표시합니다. 편집 기능은 별도
-                작업에서 제공됩니다.
+                관리자 수정본이 있으면 그것을, 없으면 yml 원본을 표시합니다. [✎ 편집]으로 서비스 메타를
+                수정하면 관리자 수정본으로 저장되어 라이브러리 재등록이 덮어쓰지 않습니다.
               </p>
             </div>
 
@@ -303,13 +339,37 @@ export function AdminSpecDetailPage() {
 
             {/* API 엔드포인트 목록 */}
             <div className="spec-section spec-section--last">
-              <h4 className="spec-section__title">API 엔드포인트 ({spec.endpoints.length}개)</h4>
+              <div className="spec-section__head">
+                <h4 className="spec-section__title">API 엔드포인트 ({spec.endpoints.length}개)</h4>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm spec-section__edit"
+                  onClick={() => navigateToEdit(`/admin/specs/${specId}/endpoints/new`)}
+                >
+                  + API 추가
+                </button>
+              </div>
               {spec.endpoints.length === 0 ? (
-                <p className="spec-section__hint">등록된 엔드포인트가 없습니다.</p>
+                // 빈 상태(디자인 "아직 API가 없어요") + CTA
+                <div className="empty-state">
+                  <div className="empty-state__icon">🔌</div>
+                  <div className="empty-state__title">아직 API가 없어요</div>
+                  <div className="empty-state__desc">
+                    라이브러리로 자동 등록되거나, 관리자가 직접 API를 추가할 수 있습니다.
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={() => navigateToEdit(`/admin/specs/${specId}/endpoints/new`)}
+                  >
+                    + API 추가
+                  </button>
+                </div>
               ) : (
                 <div className="api-list">
                   {spec.endpoints.map((ep) => {
                     const deprecated = isDeprecated(ep);
+                    const manual = sourceCodeOf(ep) === "MANUAL";
                     return (
                       <div
                         key={ep.id}
@@ -320,13 +380,59 @@ export function AdminSpecDetailPage() {
                         </span>
                         <span className="api-item__path">{ep.path}</span>
                         {ep.summary && <span className="api-item__summary">{ep.summary}</span>}
-                        {deprecated && (
-                          <span className="api-item__tail">
+                        <span className="api-item__tail">
+                          {/* 출처 배지: 수동(🖉) / 라이브러리 */}
+                          {manual ? (
+                            <span className="badge badge--info">🖉 수동</span>
+                          ) : (
+                            <span className="badge badge--neutral">라이브러리</span>
+                          )}
+                          {deprecated && (
                             <span className="badge badge--warning api-item__deprecated-badge">
                               DEPRECATED
                             </span>
+                          )}
+                          <span
+                            className="row-actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              aria-label={`${ep.method.toUpperCase()} ${ep.path} 편집`}
+                              title="편집"
+                              onClick={() =>
+                                navigateToEdit(`/admin/specs/${specId}/endpoints/${ep.id}/edit`)
+                              }
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              aria-label={`${ep.method.toUpperCase()} ${ep.path} 복제`}
+                              title="복제"
+                              disabled={
+                                duplicateEndpointMutation.isPending &&
+                                duplicateEndpointMutation.variables === ep.id
+                              }
+                              onClick={() => duplicateEndpointMutation.mutate(ep.id)}
+                            >
+                              ⧉
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              style={{ color: "var(--color-error)" }}
+                              aria-label={`${ep.method.toUpperCase()} ${ep.path} 삭제`}
+                              title="삭제"
+                              disabled={deleteEndpointMutation.isPending}
+                              onClick={() => setEndpointConfirm(ep)}
+                            >
+                              🗑️
+                            </button>
                           </span>
-                        )}
+                        </span>
                       </div>
                     );
                   })}
@@ -334,7 +440,7 @@ export function AdminSpecDetailPage() {
               )}
               <p className="spec-section__hint">
                 DEPRECATED는 재등록 시 스펙에서 사라진 API입니다. 이를 참조하는 레시피는 실행 전 유효성
-                검증에서 경고합니다.
+                검증에서 경고합니다. 복제본은 항상 수동(MANUAL)으로 생성됩니다.
               </p>
             </div>
           </div>
@@ -359,6 +465,23 @@ export function AdminSpecDetailPage() {
           else if (confirm === "deactivate") deactivateMutation.mutate();
         }}
         onCancel={() => setConfirm(null)}
+      />
+
+      {/* 엔드포인트 삭제 확인 모달 (스펙 삭제/비활성 모달과 별개) */}
+      <ConfirmModal
+        open={endpointConfirm != null}
+        title="API 삭제"
+        description={
+          endpointConfirm
+            ? `'${endpointConfirm.method.toUpperCase()} ${endpointConfirm.path}' API를 삭제할까요? 이 API를 참조하는 레시피는 실행 전 경고됩니다.`
+            : undefined
+        }
+        confirmLabel="삭제"
+        danger
+        onConfirm={() => {
+          if (endpointConfirm) deleteEndpointMutation.mutate(endpointConfirm.id);
+        }}
+        onCancel={() => setEndpointConfirm(null)}
       />
     </PageShell>
   );

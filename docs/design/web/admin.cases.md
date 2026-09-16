@@ -1,6 +1,6 @@
 ---
 status: done
-last-updated: 2026-09-14
+last-updated: 2026-09-15
 ref: docs/specs/pages/admin.md
 ---
 
@@ -18,7 +18,8 @@ ref: docs/specs/pages/admin.md
 ## 작업 범위
 
 - **A(완료)**: 스펙 관리 목록(Case 1) + 스펙 상세(Case 2). 스펙 상태 관리(비활성/활성/삭제) + RBAC(관리자 전용 화면).
-- **B(현재 작업)**: 사용자 관리 목록(Case 3) + 계정 생성 모달(Case 4) + 역할/상태 변경 ConfirmModal + 비밀번호 변경 모달. RBAC 뼈대 위에서 사용자 CRUD·역할/상태·비밀번호 지정을 구현한다.
+- **B(완료)**: 사용자 관리 목록(Case 3) + 계정 생성 모달(Case 4) + 역할/상태 변경 ConfirmModal + 비밀번호 변경 모달. RBAC 뼈대 위에서 사용자 CRUD·역할/상태·비밀번호 지정을 구현한다.
+- **C(현재 작업)**: 관리자 수동 서버/API 등록. 서버 수동 등록·메타 편집(Case 8), API 편집 페이지(Case 9), 스펙 상세의 API CRUD 액션(Case 2 확장). 라이브러리를 못 붙이는 외부 서버(정부 API 등)를 직접 등록·편집. 참조: [.kiro/specs/manual-spec-registration], [스펙 등록 - 관리자 수동 등록](../../specs/spec/registration.md#관리자-수동-등록).
 
 ## 케이스 목록
 
@@ -33,12 +34,16 @@ ref: docs/specs/pages/admin.md
 | 5 | 역할 변경 ConfirmModal | **B** | 승격/강등 확인 (다음 요청부터 반영 안내) |
 | 6 | 비밀번호 변경 모달 | **B** | 관리자가 새 비밀번호 직접 지정 (8자+, 임시발급 아님) |
 | 7 | 상태 변경 ConfirmModal | **B** | 비활성화 확인(로그인 차단 + 세션 만료 안내). 활성화는 즉시 |
+| 8 | 서버 수동 등록/메타 편집 | **C** | name/baseUrl/설명/도메인/인증프로필 폼 페이지. 수정 시 baseUrl 읽기 전용 |
+| 9 | API 편집 페이지 | **C** | method/path/설명 + 파라미터/바디/헤더 구조화 입력(operationJson). 자동 API는 스키마 읽기전용 |
+| 9d | API 복제 | **C** | 기존 API 복사 → MANUAL 신규 → 편집 유도 |
 
 ---
 
 ## 스펙 관리 목록 (Case 1) — A
 
 - 관리자 전용 화면(`/admin/specs`). 비-admin은 라우트 가드가 `"/"`로 리다이렉트하므로 화면 자체가 관리자에게만 노출된다.
+- 상단 툴바 우측에 **[+ 서버 등록]** 버튼(C) — 클릭 시 서버 수동 등록 페이지(Case 8, `/admin/specs/new`). (레시피 목록 [+ 만들기] 패턴)
 - 테이블: **서비스명 | baseUrl | 상태 | API 수 | 액션**.
 - 상태 배지는 **색상 + 텍스트**로 표기(색상만으로 구분 금지): 🟢 ACTIVE / ⚪ INACTIVE.
 - **INACTIVE 행은 흐리게(dimmed)** 표시(예: URL 변경으로 남은 좀비 스펙).
@@ -63,13 +68,16 @@ ref: docs/specs/pages/admin.md
 
 - 상단(상세형 액션 바, 페이지 최상단): **← 목록으로** + 서비스명 + 상태 배지 + [비활성화]/[활성화] + [삭제]. 콘텐츠 카드 안쪽에 파묻지 않고 페이지 최상단 `.page-action-bar`에 둔다([page-layout.md](../../specs/common/page-layout.md)).
 - 기본 정보: baseUrl / 상태(색상+텍스트 배지) / 등록 시각.
-- **서비스 설명(읽기 전용)**: description / domain / capabilities / notes 표시.
+- **서비스 설명**: description / domain / capabilities / notes.
   - 관리자 수정본이 있으면 그것을, 없으면 yml 원본을 표시(관리자 우선 규칙).
-  - **편집은 별도 작업** — 이번 A에서는 읽기 전용. 편집 버튼 없음(또는 비활성).
+  - **[✎ 편집]**(C): 서버 메타 편집 페이지(Case 8) 진입. (기존 A에서는 읽기 전용이었으나 C에서 편집 활성화)
   - yml 값 변경 감지 시 "변경 감지" 경고 + 변경 내용 보기(강제 덮어쓰기 없음).
-- **API 엔드포인트 목록**: method + path + summary. 스펙에서 사라진 API는 **DEPRECATED 뱃지**(참조 레시피는 실행 전 경고).
-- **인증 프로필**: name + loginPageUrl.
-- 참조: [스펙 등록 방식](../../specs/spec/registration.md)
+- **API 엔드포인트 목록**: method + path + summary + **출처 배지(🖉 수동 / 라이브러리)**(C). 스펙에서 사라진 API는 **DEPRECATED 뱃지**(참조 레시피는 실행 전 경고).
+  - 섹션 헤더 우측에 **[+ API 추가]**(C) → API 편집 페이지(Case 9, `/admin/specs/:id/endpoints/new`).
+  - 각 행에 **[✎ 편집] [⧉ 복제] [🗑 삭제]**(C). 편집→Case 9, 복제→Case 9d, 삭제→ConfirmModal. 삭제 처리: **MANUAL + 참조 레시피 없음이면 하드 삭제(행 제거, 같은 method+path 재추가 가능)**, MANUAL이라도 참조 레시피가 있거나 LIBRARY이면 **DEPRECATED 전이**(참조 보호).
+  - **엔드포인트 0개면** `empty-state` "아직 API가 없어요" + **[+ API 추가] CTA**(C, R3.8).
+- **인증 프로필**: name + loginPageUrl. (수동 등록 서버는 Case 8에서 입력/편집)
+- 참조: [스펙 등록 방식](../../specs/spec/registration.md), [.kiro/specs/manual-spec-registration]
 
 ---
 
@@ -163,6 +171,55 @@ ref: docs/specs/pages/admin.md
 - 비활성화: "**'user1'** 계정을 비활성화할까요? 로그인이 차단되며, 진행 중인 세션은 다음 요청에서 만료됩니다."
 - 활성화(INACTIVE→ACTIVE)는 복귀 성격이라 **즉시** 처리(확인 불필요).
 - `role="dialog"` `aria-modal="true"`.
+
+---
+
+## 서버 수동 등록 / 메타 편집 (Case 8) — C
+
+라이브러리를 못 붙이는 외부 서버를 관리자가 직접 등록. 별도 페이지(`/admin/specs/new` 등록, 상세의 [✎ 편집]에서 수정 진입). `PageShell` + `PageActionBar`(← 목록으로 / 제목 / [취소] [등록|저장]).
+
+- 입력: **서비스명 \*** / **baseUrl \*** / 설명 / 도메인 / **인증 프로필(name + loginPageUrl, 다중, 선택)**.
+- baseUrl 검증: `https://` 등 스킴 포함 형식. 이미 등록된 baseUrl이면 **인라인 경고**(같은 서버에 병합됨을 안내).
+- **수정 모드에서 baseUrl은 읽기 전용**(식별 키 — 바꾸면 다른 서버가 됨).
+- 등록/수정 시 서비스 메타는 관리자 수정본(`adminEdited`)으로 저장 → 라이브러리 재등록이 덮어쓰지 않음.
+- **인증 프로필(다중)**: 이름/loginPageUrl 행을 [+ 추가]/[🗑 삭제]. 0개 허용(선택). loginPageUrl은 URL 형식 검증(비우면 이름만).
+- 저장 안 한 변경 이탈 가드(뒤로가기/새로고침 경고).
+- 인증: 자동 등록의 `X-TestForge-Token`이 아니라 **ADMIN 세션(RBAC)** 으로 보호(비-admin 403).
+- **공통 상태**:
+  - 수정 모드 딥링크/새로고침 진입 → 로딩 표시. 대상 스펙 없음/삭제됨 → 전용 빈 상태 + [목록으로](Case 2 패턴).
+  - 저장중 → [등록|저장] 버튼 disabled + 스피너.
+  - 서버 검증 실패(400, baseUrl 형식·중복 등) → 필드 인라인 에러 + 요약. 네트워크/5xx → 토스트 + 재시도([error-handling.md](../../specs/common/error-handling.md) userMessage/traceId).
+  - 등록 성공 → 해당 스펙 상세로 이동. 메타 수정 성공 → 상세로 복귀.
+  - baseUrl 중복 감지 시: 인라인 경고 후 진행하면 **기존 스펙에 병합**(등록 대신 그 스펙 상세로 이동). 신규 폼에서 병합됨을 명확히 안내(혼란 방지).
+
+---
+
+## API 편집 페이지 (Case 9) — C
+
+스펙 상세의 [+ API 추가] 또는 행 [✎ 편집]에서 진입. 별도 페이지(`/admin/specs/:id/endpoints/new`, `.../:endpointId/edit`). `PageShell` + `PageActionBar`(← 스펙으로 / 제목 / [취소] [저장]). 폼이 크므로 섹션 구성:
+
+- **펼침(자주 씀)**
+  - ① 기본 정보: **메서드 \*** (select) / **경로 \*** (예 `/orders`, `/users/{id}`) / 설명(summary) / 출처 배지 / **[ ] 실행 전 확인**(→ `isConfirmRequired` + `confirmMessage`) / **[ ] AI 목록에서 제외**(→ `isExcluded`)
+  - ② 경로 파라미터: 이름/타입/필수/설명 테이블. 경로에 `{변수}` 있으면 **자동 행 제안**.
+  - ③ 쿼리 파라미터: 동일 테이블.
+  - ④ 요청 바디: Content-Type + 필드(이름/타입/필수/설명) 테이블. **GET/DELETE면 비활성/숨김**.
+- **접힘 accordion(덜 씀)**
+  - ⑤ 요청 헤더: 이름/필수/설명 테이블. 섹션 상단에 **"🔒 정의만 저장됩니다. 실제 요청 주입은 추후 지원"** 강조 안내.
+  - ⑥ 응답: 상태코드별 설명 + 응답 필드 + 응답 헤더.
+- 파라미터/필드/헤더는 **테이블 추가/삭제 UI**(레시피 편집 `FieldMappingTable` 톤). 관리자가 JSON 직접 입력 안 함. 저장 시 내부적으로 **operationJson(OpenAPI Operation)으로 직렬화**.
+- **자동(LIBRARY) API 편집**: 스키마 섹션(①경로·②③파라미터·④바디·⑤⑥헤더/응답)은 **읽기 전용**, 메타(실행 전 확인/AI 제외)만 수정 가능. 상단에 "스키마는 라이브러리 관리, 메타만 수정 가능" 안내.
+- **수동(MANUAL) API 편집**: 전체 수정 가능. 하단에 "라이브러리가 같은 method+path로 등록하면 자동 등록으로 갱신될 수 있음" 안내(R3.6).
+- (method, path) 중복(같은 스펙 내)은 **저장 전 인라인 경고**(유니크 키). 서버 400도 필드 인라인 에러로 노출.
+- **method 변경 시**(예 POST→GET): 요청 바디 섹션이 비활성되면 입력한 바디 필드는 보존하되 안내(다시 POST로 바꾸면 복원). 저장 시 GET이면 바디 미포함.
+- **DEPRECATED API 편집**: 사라진 LIBRARY API는 자동 API와 동일하게 스키마 읽기전용 + 메타만 수정(상단 "지원 종료된 API" 안내).
+- 저장 안 한 변경 이탈 가드.
+- **공통 상태**: 딥링크/새로고침 진입 로딩 · 대상 endpoint/spec 없음→빈 상태+[스펙으로] · 저장중 버튼 disabled+스피너 · 서버 검증실패(400) 인라인 에러 · 네트워크/5xx 토스트+재시도 · 저장 성공→스펙 상세로 복귀 · 비-admin 직접 진입→라우트 가드 리다이렉트.
+- 접근성: 각 섹션 테이블은 `label`/헤더 연결, accordion 토글 `aria-expanded`/`aria-controls`, 실행전확인·제외는 체크박스. **검증 에러가 있는 접힘 accordion(⑤⑥)은 자동 펼침 + 헤더에 에러 표시**(접힌 채 에러 놓침 방지).
+
+### API 복제 (Case 9d) — C
+
+- 스펙 상세 행의 [⧉ 복제] → 해당 API의 operationJson/메타를 복사한 **MANUAL 신규 엔드포인트** 생성 → 곧바로 편집 페이지(Case 9)로 이동해 path를 유일하게 바꾸도록 유도((method,path) 유니크 충돌 방지). 기존 레시피 복제 UX 참고.
+- **출처 무관 복제본은 항상 `source=MANUAL`**(자동 API를 복제해도 사본은 수동). 복제 실패(네트워크/5xx)는 토스트로 안내하고 목록 유지.
 
 ---
 

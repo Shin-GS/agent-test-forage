@@ -7,6 +7,7 @@ import com.testforge.entity.spec.ApiSpec;
 import com.testforge.entity.spec.ApiSpecDocument;
 import com.testforge.entity.spec.AuthProfile;
 import com.testforge.entity.spec.enums.AuthProfileStatus;
+import com.testforge.entity.spec.enums.EndpointSource;
 import com.testforge.entity.spec.enums.EndpointStatus;
 import com.testforge.entity.spec.enums.SpecStatus;
 import com.testforge.parser.NormalizedSpec;
@@ -143,8 +144,14 @@ public class SpecRegistrationService {
     }
 
     /**
-     * (specId, method, path) 키 기준 엔드포인트 upsert. 기존 행은 PK를 유지하고
-     * (레시피 참조 보존), 새 스펙에서 사라진 엔드포인트는 삭제하지 않고 DEPRECATED로 표시한다.
+     * (specId, method, path) 키 기준 엔드포인트 upsert. 라이브러리 재등록 경로이므로
+     * upsert되는 행(겹침/신규)은 모두 {@link EndpointSource#LIBRARY}로 정규화한다.
+     * 기존 행은 PK를 유지하여(레시피 참조 보존) 갱신하며, 수동으로 등록됐던 행이
+     * 라이브러리에 편입되면 source가 LIBRARY로 자동 승격된다.
+     *
+     * <p>새 스펙에서 사라진 엔드포인트는 삭제하지 않고 source에 따라 분기한다.
+     * LIBRARY 행은 DEPRECATED로 표시하고, 관리자가 수동 등록한 MANUAL 행은
+     * 라이브러리 재등록으로 죽으면 안 되므로 그대로 보존한다(강등 금지).
      */
     private void upsertEndpoints(Long specId, List<NormalizedSpec.EndpointData> endpoints) {
         List<ApiEndpoint> existing = endpointRepository.findByApiSpecId(specId);
@@ -158,6 +165,7 @@ public class SpecRegistrationService {
             String k = key(data.httpMethod(), data.path());
             ApiEndpoint endpoint = existingByKey.remove(k);
             if (endpoint == null) {
+                // 신규: 라이브러리 등록 경로이므로 명시적으로 LIBRARY로 세팅.
                 endpoint = new ApiEndpoint(specId, data.httpMethod(), data.path());
             }
             endpoint.setOperationJson(data.operationJson());
@@ -166,11 +174,18 @@ public class SpecRegistrationService {
             endpoint.setConfirmRequired(data.confirmRequired());
             endpoint.setConfirmMessage(data.confirmMessage());
             endpoint.setStatus(EndpointStatus.ACTIVE);
+            // 겹침/신규 모두 라이브러리 값으로 정규화(수동 행은 라이브러리로 승격).
+            endpoint.setSource(EndpointSource.LIBRARY);
             toSave.add(endpoint);
         }
 
-        // 맵에 남은 항목은 새 스펙에서 사라진 것 → DEPRECATED로 표시.
+        // 맵에 남은 항목은 새 스펙(라이브러리)에서 사라진 것.
         for (ApiEndpoint stale : existingByKey.values()) {
+            // 관리자가 수동 등록한 API는 라이브러리 재등록으로 강등하지 않고 보존한다.
+            if (stale.getSource() == EndpointSource.MANUAL) {
+                continue;
+            }
+            // 라이브러리 출처 행만 DEPRECATED로 표시.
             if (stale.getStatus() != EndpointStatus.DEPRECATED) {
                 stale.setStatus(EndpointStatus.DEPRECATED);
                 toSave.add(stale);

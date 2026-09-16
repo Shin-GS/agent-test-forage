@@ -1,6 +1,7 @@
 package com.testforge.entity.spec;
 
 import com.testforge.entity.common.BaseEntity;
+import com.testforge.entity.spec.enums.EndpointSource;
 import com.testforge.entity.spec.enums.EndpointStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -72,6 +73,15 @@ public class ApiEndpoint extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", length = 20, nullable = false)
     private EndpointStatus status = EndpointStatus.ACTIVE;
+
+    /**
+     * 등록 출처: LIBRARY(자동 수집) / MANUAL(관리자 수동).
+     * 자동 등록 경로가 대부분이므로 기본값은 LIBRARY.
+     * ddl-auto=update는 기존 행 백필을 못 하므로, 이 컬럼 추가 이전에 저장된 기존 행은 LIBRARY로 간주한다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "SOURCE", length = 20, nullable = false)
+    private EndpointSource source = EndpointSource.LIBRARY;
 
     protected ApiEndpoint() {
     }
@@ -156,5 +166,13 @@ public class ApiEndpoint extends BaseEntity {
 
     public void setStatus(EndpointStatus status) {
         this.status = status;
+    }
+
+    public EndpointSource getSource() {
+        return source;
+    }
+
+    public void setSource(EndpointSource source) {
+        this.source = source;
     }
 }

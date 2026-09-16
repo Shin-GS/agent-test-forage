@@ -55,6 +55,8 @@ public record SpecDetailResponse(
             String summary,
             // 생명주기 상태 (code + description)
             StatusView status,
+            // 등록 출처 (LIBRARY/MANUAL) — FE 출처 배지 표시용
+            StatusView source,
             // 목록 제외 여부 (@TestForgeExclude)
             boolean excluded,
             // 실행 전 확인 필요 여부 (@TestForgeConfirm)

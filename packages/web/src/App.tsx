@@ -21,6 +21,8 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { HistoryDetailPage } from "./pages/HistoryDetailPage";
 import { AdminSpecListPage } from "./pages/admin/AdminSpecListPage";
 import { AdminSpecDetailPage } from "./pages/admin/AdminSpecDetailPage";
+import { AdminSpecFormPage } from "./pages/admin/AdminSpecFormPage";
+import { AdminEndpointFormPage } from "./pages/admin/AdminEndpointFormPage";
 import { AdminUserListPage } from "./pages/admin/AdminUserListPage";
 
 function App() {
@@ -46,7 +48,13 @@ function App() {
           {/* 관리자 전용 (RBAC) — 비-admin 은 RequireAdmin 이 "/" 로 리다이렉트 */}
           <Route element={<RequireAdmin />}>
             <Route path="/admin/specs" element={<AdminSpecListPage />} />
+            {/* 정적 세그먼트(new)를 동적(:id)보다 먼저 둔다. react-router v6 는 정적 우선 랭킹이나 명시적으로 안전하게 배치. */}
+            <Route path="/admin/specs/new" element={<AdminSpecFormPage />} />
+            {/* API 편집(Case 9)은 정적 세그먼트(endpoints/new)를 동적(:id)보다 먼저/명시적으로 배치 */}
+            <Route path="/admin/specs/:id/endpoints/new" element={<AdminEndpointFormPage />} />
+            <Route path="/admin/specs/:id/endpoints/:endpointId/edit" element={<AdminEndpointFormPage />} />
             <Route path="/admin/specs/:id" element={<AdminSpecDetailPage />} />
+            <Route path="/admin/specs/:id/edit" element={<AdminSpecFormPage />} />
             <Route path="/admin/users" element={<AdminUserListPage />} />
           </Route>
 

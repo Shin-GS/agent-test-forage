@@ -5,9 +5,12 @@
  * 범위 구분:
  * - A (완료): RBAC(라우트 가드/nav 게이팅/관리 API 403), 스펙 목록/상세 표시,
  *   상태 관리(비활성/활성/삭제), 공용/관리자 목록 노출 분리, 빈 상태 — ADMIN-001~019.
- * - B (이번 작업): 사용자 관리(/admin/users) — 진입/목록/검색/생성/역할·상태·비밀번호 변경,
+ * - B (완료): 사용자 관리(/admin/users) — 진입/목록/검색/생성/역할·상태·비밀번호 변경,
  *   자기 보호 + 마지막 ACTIVE ADMIN 보호, 삭제 액션 없음 — ADMIN-030~053.
- * - 별도 작업: 서비스 설명 편집(yml보다 우선) — ADMIN-020 (skip 대상, 삭제 금지).
+ * - C (이번 작업): 관리자 수동 서버/API 등록 — 서버 수동 CRUD, API 편집 페이지(파라미터/바디/헤더 정의),
+ *   source(LIBRARY/MANUAL) 구분 + 재등록 upsert 보존/승격, 자동 API 읽기전용, 복제, 권한/이탈가드 — ADMIN-060~077.
+ *   (서비스 설명 편집은 C에서 활성화 — ADMIN-063. 헤더 실행 주입/레시피 편집 자동필드는 2단계 제외)
+ * - 별도 작업: (구)서비스 설명 편집 skip — ADMIN-020 (C에서 대체·활성화되나 위치 확보용으로 유지, 삭제 금지).
  *
  * 스펙 등록/재등록/상태 전이 자체의 원천 검증은 spec.js에서 커버.
  * 계정 생성/역할·상태 규칙의 원천 검증은 login.js와 연계. admin.js는 "관리자 화면에서의
@@ -532,6 +535,232 @@ const ADMIN_TESTS = {
         "(참고) 스펙 관리(A)는 소프트 삭제를 제공하지만 사용자 계정은 삭제하지 않음을 대조 확인"
       ],
       expected: "사용자 계정은 삭제 액션 없음 — 비활성화로만 정리(하드/소프트 삭제 모두 범위 밖)"
+    },
+
+    // ── C: 관리자 수동 서버/API 등록 (/admin/specs) — 이번 작업 ────────────
+    // 라이브러리를 못 붙이는 외부 서버(정부/서드파티 API)를 관리자가 직접 등록·편집.
+    // source(LIBRARY/MANUAL) 구분 + 재등록 upsert 보존. 헤더는 "정의만"(실행 주입은 2단계).
+    // 원천 규칙(upsert 병합/source 전환)의 BE 검증은 spec.js와 연계, admin.js는 화면 조작·표시 관심사.
+
+    // 서버 수동 등록 (Case 8)
+    {
+      id: "ADMIN-060",
+      title: "[C] 서버 수동 등록 진입 + 정상 등록",
+      precondition: "관리자 로그인, 미등록 baseUrl 준비",
+      steps: [
+        "/admin/specs 목록 상단 [+ 서버 등록] 클릭 → /admin/specs/new 폼 페이지 진입 확인",
+        "서비스명 + baseUrl(https://) + 설명 + 도메인 입력",
+        "[등록] 클릭 → 성공 후 해당 스펙 상세로 이동하는지 확인",
+        "생성된 스펙이 목록에 ACTIVE로 노출되는지 확인"
+      ],
+      expected: "[+ 서버 등록]으로 폼 진입, 정상 등록 후 상세 이동 + 목록 반영"
+    },
+    {
+      id: "ADMIN-061",
+      title: "[C] 서버 등록 baseUrl 검증 (형식 + 중복 병합)",
+      precondition: "관리자 로그인, 이미 등록된 baseUrl을 알고 있음",
+      steps: [
+        "baseUrl을 스킴 없이(예: example.go.kr) 입력하고 등록 시도 → 형식 검증 실패(인라인/400) 확인",
+        "이미 등록된 baseUrl을 입력 → '기존 서버에 병합됨' 인라인 경고 표시 확인",
+        "경고 상태로 진행 시 신규 스펙이 생기지 않고 기존 스펙 상세로 이동(병합)되는지 확인"
+      ],
+      expected: "baseUrl 형식 검증 + 중복 시 기존 스펙 병합(신규 미생성)"
+    },
+    {
+      id: "ADMIN-062",
+      title: "[C] 서버 인증 프로필 다중 입력 (0개 허용)",
+      precondition: "관리자 로그인, 서버 등록 폼",
+      steps: [
+        "인증 프로필 [+ 추가]로 name + loginPageUrl 행 2개 입력 후 등록 → 상세에 프로필 2개 표시 확인",
+        "행 [🗑 삭제]로 프로필 제거 가능 확인",
+        "인증 프로필 0개로도 등록 성공하는지 확인(선택 항목)",
+        "loginPageUrl에 잘못된 형식 입력 시 검증 안내 확인"
+      ],
+      expected: "인증 프로필은 다중 추가/삭제, 0개 허용, URL 형식 검증"
+    },
+    {
+      id: "ADMIN-063",
+      title: "[C] 서버 메타 편집 (baseUrl 읽기 전용)",
+      precondition: "관리자 로그인, 수동 등록 스펙 상세",
+      steps: [
+        "서비스 설명 섹션 [✎ 편집] 클릭 → 메타 편집 폼 진입",
+        "baseUrl 필드가 읽기 전용(readonly)인지 확인 (식별 키라 수정 불가)",
+        "서비스명/설명/도메인 수정 후 저장 → 상세 복귀 + 반영 확인",
+        "수정 후 adminEdited 상태가 되어 라이브러리 재등록이 메타를 덮어쓰지 않는지 확인(spec.js 연계)"
+      ],
+      expected: "메타 편집 가능, baseUrl 읽기 전용, 수정본은 라이브러리 재등록에 보존"
+    },
+
+    // API(엔드포인트) 수동 CRUD (Case 2 확장 / Case 9)
+    {
+      id: "ADMIN-064",
+      title: "[C] 스펙 상세 API 목록 출처 배지 + 행 액션 표시",
+      precondition: "관리자 로그인, 수동/자동 API가 섞인 스펙 상세",
+      steps: [
+        "API 엔드포인트 행에 출처 배지(🖉 수동 / LIBRARY) 표시 확인",
+        "각 행에 [✎ 편집] [⧉ 복제] [🗑 삭제] 액션 버튼 표시 확인",
+        "섹션 헤더에 [+ API 추가] 버튼 확인",
+        "DEPRECATED API에 DEPRECATED 뱃지가 함께 표시되는지 확인"
+      ],
+      expected: "API 행에 출처 배지 + 편집/복제/삭제 액션, 섹션에 추가 버튼"
+    },
+    {
+      id: "ADMIN-065",
+      title: "[C] 엔드포인트 0개 빈 상태 CTA",
+      precondition: "관리자 로그인, API가 하나도 없는(수동 등록 직후) 스펙 상세",
+      steps: [
+        "API 엔드포인트 섹션에 '아직 API가 없어요' 빈 상태 표시 확인",
+        "빈 상태에 [+ API 추가] CTA 버튼이 강조되는지 확인",
+        "CTA 클릭 시 API 편집 페이지로 진입하는지 확인"
+      ],
+      expected: "엔드포인트 0개면 빈 상태 + [+ API 추가] CTA"
+    },
+    {
+      id: "ADMIN-066",
+      title: "[C] API 추가 정상 (method/path/설명 + 파라미터/바디)",
+      precondition: "관리자 로그인, 스펙 상세에서 [+ API 추가]",
+      steps: [
+        "API 편집 페이지 진입 → 메서드(POST) + 경로(/orders) + 설명 입력",
+        "② 경로 파라미터 · ③ 쿼리 파라미터 · ④ 요청 바디 필드를 테이블로 추가",
+        "[저장] → 성공 후 스펙 상세로 복귀 + 목록에 MANUAL 배지로 신규 API 반영 확인",
+        "저장된 값이 operationJson(OpenAPI Operation) 형식으로 보존되는지 확인(spec.js 연계)"
+      ],
+      expected: "파라미터/바디 구조화 입력으로 API 추가, MANUAL로 저장 + operationJson 직렬화"
+    },
+    {
+      id: "ADMIN-067",
+      title: "[C] 경로 {변수} 자동 파라미터 제안 + GET 바디 비활성",
+      precondition: "관리자 로그인, API 편집 페이지",
+      steps: [
+        "경로에 /users/{id} 입력 → 경로 파라미터에 id 행이 자동 제안되는지 확인",
+        "메서드를 GET/DELETE로 선택 → ④ 요청 바디 섹션이 비활성/숨김되는지 확인",
+        "GET에서 입력했던 바디 필드는 보존되되(다시 POST로 바꾸면 복원) 저장 시 GET이면 바디 미포함인지 확인"
+      ],
+      expected: "경로 변수 자동 제안, GET/DELETE는 바디 비활성(입력값 보존/저장 제외)"
+    },
+    {
+      id: "ADMIN-068",
+      title: "[C] (method, path) 중복 저장 차단",
+      precondition: "관리자 로그인, 같은 스펙에 POST /orders가 이미 존재",
+      steps: [
+        "API 추가에서 동일 method+path(POST /orders) 입력 후 저장 시도",
+        "저장 전 인라인 경고 또는 서버 400으로 중복이 차단되는지 확인",
+        "path를 유일하게 바꾸면 저장 성공하는지 확인"
+      ],
+      expected: "같은 스펙 내 (method,path) 중복은 인라인 경고 + 서버 400으로 차단"
+    },
+    {
+      id: "ADMIN-069",
+      title: "[C] 요청 헤더 '정의만' accordion + 실행 미반영 안내",
+      precondition: "관리자 로그인, API 편집 페이지",
+      steps: [
+        "⑤ 요청 헤더 accordion을 펼침",
+        "'🔒 정의만 저장됩니다. 실제 요청 주입은 추후 지원' 안내가 강조 표시되는지 확인",
+        "헤더 이름/필수/설명 입력 후 저장 → operationJson parameters[in:header]로 저장되는지 확인",
+        "(참고) 실행 시 이 헤더 값이 실제 요청에 주입되지 않음은 2단계 — 이번 범위 밖"
+      ],
+      expected: "요청 헤더는 정의 저장까지만, '실행 주입 추후' 안내 명시"
+    },
+    {
+      id: "ADMIN-070",
+      title: "[C] 자동(LIBRARY) API는 스키마 읽기 전용, 메타만 수정",
+      precondition: "관리자 로그인, LIBRARY 출처 API 편집 진입",
+      steps: [
+        "①경로·②③파라미터·④바디·⑤⑥헤더/응답 스키마 섹션이 읽기 전용인지 확인",
+        "실행 전 확인(isConfirmRequired)·AI 목록 제외(isExcluded) 메타 토글만 수정 가능한지 확인",
+        "상단에 '스키마는 라이브러리 관리, 메타만 수정 가능' 안내 확인",
+        "DEPRECATED(사라진 LIBRARY) API 편집도 동일하게 읽기 전용 + 메타만인지 확인"
+      ],
+      expected: "자동/DEPRECATED API는 스키마 읽기전용, 메타(확인/제외)만 수정"
+    },
+    {
+      id: "ADMIN-071",
+      title: "[C] API 복제 (출처 무관 MANUAL 사본)",
+      precondition: "관리자 로그인, 스펙 상세의 API 행",
+      steps: [
+        "자동(LIBRARY) API 행 [⧉ 복제] → 사본이 생성되고 편집 페이지로 이동하는지 확인",
+        "사본의 출처가 항상 MANUAL인지 확인 (자동 API를 복제해도 사본은 수동)",
+        "(method,path) 유니크 충돌 방지를 위해 path 변경을 유도받는지 확인",
+        "복제 실패(네트워크/5xx) 시 토스트 안내 + 목록 유지 확인"
+      ],
+      expected: "복제본은 출처 무관 항상 MANUAL, 편집 유도, 실패 시 토스트"
+    },
+    {
+      id: "ADMIN-072",
+      title: "[C] API 삭제 — 출처·참조 여부로 분기 (하드 삭제 vs DEPRECATED)",
+      precondition: "관리자 로그인, (a)레시피가 참조하는 MANUAL API, (b)참조 없는 MANUAL API, (c)LIBRARY API가 각각 있는 스펙 상세",
+      steps: [
+        "참조 없는 MANUAL API 행 [🗑 삭제] → ConfirmModal 확인 → 목록에서 완전히 사라지는지 확인(하드 삭제)",
+        "방금 삭제한 것과 같은 method+path로 [+ API 추가] 시 재등록 성공하는지 확인(유니크 충돌 없음)",
+        "레시피가 참조하는 MANUAL API 삭제 → 하드 삭제가 아니라 DEPRECATED로 보존되어 endpointId(PK)가 유지되는지 확인",
+        "LIBRARY API 삭제 → DEPRECATED로 보존되는지 확인(재등록으로 부활 가능)",
+        "DEPRECATED로 보존된 API를 참조하던 레시피가 실행 전 유효성 검증에서 경고되는지 확인(즉시 깨지지 않음)"
+      ],
+      expected: "MANUAL+참조없음=하드삭제(재추가 가능), MANUAL+참조있음·LIBRARY=DEPRECATED 보존, 참조 레시피는 실행 전 경고"
+    },
+
+    // source 보존 (재등록 upsert — spec.js 연계, 화면 관점)
+    {
+      id: "ADMIN-073",
+      title: "[C] 수동 API는 라이브러리 재등록에도 보존",
+      precondition: "관리자 로그인, MANUAL API가 있는 스펙 + 라이브러리 재등록 발생",
+      steps: [
+        "스펙에 수동으로 추가한 API(라이브러리 스펙에는 없는 method+path)가 있는 상태",
+        "라이브러리가 같은 baseUrl로 재등록(그 수동 API는 미포함)",
+        "재등록 후에도 수동 API가 DEPRECATED로 강등되지 않고 ACTIVE로 보존되는지 확인",
+        "(대조) 라이브러리 소관 API 중 사라진 것은 DEPRECATED 되는지 확인"
+      ],
+      expected: "수동 전용 API는 재등록에도 보존, 라이브러리 사라진 API만 DEPRECATED (원천: SPEC-011/013)"
+    },
+    {
+      id: "ADMIN-074",
+      title: "[C] 수동 API와 겹치는 라이브러리 등록 시 자동 승격",
+      precondition: "관리자 로그인, 수동 등록한 API와 동일 method+path를 라이브러리가 등록",
+      steps: [
+        "수동으로 POST /orders를 등록(MANUAL)",
+        "라이브러리가 같은 baseUrl로 POST /orders 포함해 재등록",
+        "해당 API가 라이브러리 값으로 갱신되고 출처 배지가 LIBRARY로 전환되는지 확인",
+        "유니크 키(specId,method,path)상 두 행이 공존하지 않고 같은 행이 upsert되는지 확인"
+      ],
+      expected: "겹치는 API는 라이브러리 값으로 덮어쓰고 source가 LIBRARY로 승격(단일 행 upsert) (원천: SPEC-012)"
+    },
+
+    // 권한 / 이탈 가드
+    {
+      id: "ADMIN-075",
+      title: "[C] 수동 등록/편집 API는 비-admin 403 (세션 RBAC)",
+      precondition: "일반 사용자 세션 (devtools/콘솔 fetch)",
+      steps: [
+        "POST /api/v1/specs/manual 를 일반 사용자 세션으로 직접 호출 → 403 확인",
+        "POST /api/v1/specs/{id}/endpoints 직접 호출 → 403 확인",
+        "PATCH/DELETE 엔드포인트 API 직접 호출 → 403 확인",
+        "(자동 등록 POST /specs는 X-TestForge-Token, 수동은 ADMIN 세션으로 보호 — 인증 경로가 다름)"
+      ],
+      expected: "수동 등록/편집 API는 전부 ADMIN 세션 강제(비-admin 403)"
+    },
+    {
+      id: "ADMIN-076",
+      title: "[C] 편집 페이지 저장 안 한 변경 이탈 가드",
+      precondition: "관리자 로그인, API 편집 페이지에서 값 입력 중",
+      steps: [
+        "필드를 수정한 뒤 저장하지 않고 [← 스펙으로]/뒤로가기/새로고침 시도",
+        "'저장하지 않은 변경이 있습니다' 경고가 뜨는지 확인",
+        "취소하면 편집 상태 유지, 확인하면 이탈되는지 확인",
+        "서버 등록 폼(Case 8)에서도 동일하게 이탈 가드가 동작하는지 확인"
+      ],
+      expected: "저장 전 이탈 시 경고, 확인해야 이탈(서버 등록/ API 편집 공통)"
+    },
+    {
+      id: "ADMIN-077",
+      title: "[C] 딥링크/새로고침 진입 로딩 + 대상 없음 처리",
+      precondition: "관리자 로그인, 존재하지 않는 endpointId/specId 준비",
+      steps: [
+        "API 편집 URL(/admin/specs/:id/endpoints/:endpointId/edit)로 직접 진입 → 로딩 표시 후 폼 렌더 확인",
+        "존재하지 않는 endpointId로 진입 → 전용 빈 상태 + [스펙으로] 안내 확인 (토스트 아님)",
+        "삭제/없는 specId로 서버 편집 진입 → 빈 상태 + [목록으로] 확인",
+        "비-admin이 편집 URL 직접 진입 → 라우트 가드가 '/'로 리다이렉트 확인"
+      ],
+      expected: "딥링크 진입 로딩, 대상 없음은 전용 빈 상태, 비-admin은 리다이렉트"
     }
   ]
 };

@@ -1,13 +1,18 @@
 ---
 status: confirmed
-last-updated: 2026-09-18
+last-updated: 2026-09-15
 ---
 
 # 스펙 등록 방식
 
 ## 개요
 
-외부 서버가 자신의 API 스펙을 ai-test-forge에 자동 등록하는 구조.
+API 스펙(서버)과 개별 API(엔드포인트)를 ai-test-forge에 등록하는 구조. 두 가지 경로가 있다.
+
+- **자동 등록 (라이브러리)**: 외부 서버가 client-spring 라이브러리로 기동 시 OpenAPI를 push. 대부분의 서버가 이 경로.
+- **수동 등록 (관리자)**: 라이브러리를 붙일 수 없는 외부 서버(예: 정부/서드파티 공개 API)를 관리자가 직접 등록·편집. 아래 [관리자 수동 등록](#관리자-수동-등록) 참조.
+
+두 경로는 같은 테이블(`ApiSpec`/`ApiEndpoint`)을 공유하며, 출처는 `source`(LIBRARY/MANUAL)로 구분한다.
 
 ## 등록 흐름
 
@@ -119,6 +124,40 @@ public void deleteUser(...) { ... }
 ```
 
 > 추후 확장 후보: `@TestForgeHint`, `@TestForgeBlock`, `@TestForgeGroup`, `@TestForgeReadOnly`. 필요 시 추가 (어노테이션은 추가는 안전, 제거는 breaking이므로 최소로 시작).
+
+> **`excluded`/`confirmRequired`의 소스 오브 트루스는 `ApiEndpoint` 컬럼(isExcluded/isConfirmRequired/confirmMessage)이다.** 라이브러리 파서는 `x-test-forge-*` 확장을 읽어 이 컬럼에 채우고, 관리자 수동 편집도 이 컬럼에 쓴다. 판단·표시는 항상 컬럼만 본다(operationJson 내 확장은 원본 기록용). 두 경로가 같은 컬럼을 갱신하므로 충돌하지 않는다.
+
+## 관리자 수동 등록
+
+라이브러리를 붙일 수 없는 외부 서버(정부/서드파티 공개 API 등)를 **관리자가 직접 등록·편집·삭제**한다. 자동 등록과 같은 테이블을 쓰고 `source=MANUAL`로 구분한다. 모든 수동 쓰기 작업은 **ADMIN만** 가능하다.
+
+> 인증 차이: 자동 등록(`POST /specs`)은 `X-TestForge-Token` 공유 시크릿으로 보호하지만, **관리자 수동 등록/편집은 토큰이 아니라 ADMIN 세션(RBAC)** 으로 보호한다(비-admin 403).
+
+### 서버(스펙) 수동 등록
+
+- 관리자가 스펙 관리 목록의 **[+ 서버 등록]**으로 진입해 `name` / `baseUrl` / 서비스 설명·도메인 / 인증 프로필(name+loginPageUrl, 다중, 선택)을 입력한다.
+- `baseUrl`은 식별 키(UNIQUE)이며 **형식 검증**(스킴 포함)한다. 기존 스펙과 baseUrl이 같으면 **같은 스펙에 병합**된다(별도 서버 행을 만들지 않음 — 아래 baseUrl 병합).
+- 수동 등록/수정 시 서비스 메타는 **관리자 수정본**으로 취급(`adminEdited=true`)되어, 이후 라이브러리 재등록이 덮어쓰지 않는다(기존 관리자 우선 정책 재사용).
+- **수정 시 `baseUrl`은 읽기 전용**이다(식별 키를 바꾸면 다른 서버가 됨 — 필요하면 새로 등록).
+- 서버 삭제/비활성/활성은 기존 상태 관리 기능을 재사용한다.
+
+### API(엔드포인트) 수동 CRUD
+
+- 스펙 상세에서 **[+ API 추가]**로 개별 API를 등록한다. 별도 **API 편집 페이지**에서 method/path/설명 + 파라미터(경로/쿼리) + 요청 바디 필드 + 요청/응답 헤더 정의 + excluded/confirm을 구조화 입력한다(관리자가 JSON을 직접 쓰지 않음).
+- 입력은 **operationJson(OpenAPI Operation 형식, 라이브러리 생성물과 동일)**으로 직렬화되어 저장된다. **예시값(example)은 받지 않는다**(기존 자동 API도 사용하지 않음).
+- 같은 스펙 내 `(method, path)` 중복은 저장 전 차단(유니크 키 `(specId, method, path)`).
+- **수동(MANUAL) API는 전체 스키마 수정 가능**. **자동(LIBRARY) API는 스키마 읽기 전용, 메타(excluded/confirm)만 수정 가능**(라이브러리 operationJson은 폼보다 표현력이 커 왕복 손실 위험 + 재등록 시 덮어써지므로).
+- API **복제**를 지원한다(구조가 비슷한 API 빠른 추가 — 복제본은 항상 MANUAL, path 편집으로 유일화). 요청 path가 없으면 원본 path에 `-copy`(충돌 시 `-copy-2`, `-copy-3`…) suffix로 유니크 사본을 만든다.
+- API **삭제**는 출처와 레시피 참조 여부로 분기한다(레시피는 endpointId(PK)를 논리 참조):
+  - **MANUAL + 참조 레시피 없음** → **하드 삭제**(행 제거). 삭제한 (method, path)를 다시 추가할 수 있다.
+  - **MANUAL + 참조 레시피 있음** → **DEPRECATED 전이**(참조 무결성 보호, 행 보존).
+  - **LIBRARY** → **DEPRECATED 전이**(라이브러리 재등록으로 되살아날 수 있어 보존).
+  - 참조 판정은 같은 스펙의 미삭제 레시피 스텝(`type=api`)이 그 endpointId를 참조하는지로 한다(소프트 삭제된 레시피는 참조로 보지 않음).
+
+### 요청/응답 헤더 (정의만 — 실행 주입은 추후)
+
+- 편집 페이지에서 요청 헤더(예: 정부 API의 인증 key)와 응답 헤더를 **정의**할 수 있다. operationJson 표준 위치(요청=`parameters[in:header]`, 응답=`responses.headers`)에 저장된다.
+- **1단계는 정의 저장까지만이다.** 실행 시 실제 요청 헤더에 값을 주입(인증 key 삽입)하는 기능은 **추후(2단계)** 이며, 편집 화면에 "정의만 저장, 실행 주입은 추후 지원"을 명시한다.
 
 ## 인증 프로필
 
@@ -246,14 +285,20 @@ heartbeat(주기 감시)를 없앤 대신, "그 서버가 지금 되는가"는 *
 |------|------------|
 | 서비스 메타 (설명/Confluence) | 관리자 수정본 우선 보존, yml 변경은 감지만 |
 | API 엔드포인트 | `method + path` 키로 upsert |
-| └ 기존 API | 스키마 갱신 (**내부 ID 유지** → 레시피 참조 보존) |
-| └ 신규 API | 추가 |
-| └ 스펙에서 사라진 API | **비활성(DEPRECATED) 마킹** (삭제 X → 레시피 보호) |
+| └ 기존 API (겹침) | 라이브러리 값으로 스키마 갱신 + **`source=LIBRARY`로 전환**(자동 승격). **내부 ID 유지** → 레시피 참조 보존 |
+| └ 신규 API | 추가 (`source=LIBRARY`) |
+| └ 스펙에서 사라진 LIBRARY API | **비활성(DEPRECATED) 마킹** (삭제 X → 레시피 보호) |
+| └ 스펙에 없는 MANUAL API | **보존** (DEPRECATED 강등 안 함) — 수동 등록 데이터는 라이브러리 재등록으로 죽지 않는다 |
 | 인증 프로필 | 전체 재구성 |
 
+- **source 기반 보존 규칙**: 유니크 키가 `(specId, method, path)`라 같은 키에 두 행이 공존할 수 없다. 따라서 수동 API와 같은 method+path를 라이브러리가 등록하면 **같은 행을 라이브러리 값으로 덮어쓰고 source를 LIBRARY로 승격**한다(진짜 스키마 우선). 반면 라이브러리에 없는 수동 전용 API는 그대로 **보존**된다.
 - DEPRECATED API를 참조하는 레시피는 유효성 검증에서 경고 (즉시 실행 실패 방지)
 - 경로 변경(`/v1/users` → `/v2/users`)은 삭제+신규로 취급 (구 API는 DEPRECATED)
 - 상세 스키마: [db/spec.md](../../db/spec.md)
+
+### baseUrl 병합
+
+- `ApiSpec`은 `baseUrl` UNIQUE를 유지한다. 수동 등록 baseUrl이 기존(자동 포함) 스펙과 같으면 **같은 스펙에 병합**되며, 자동/수동 구분은 엔드포인트 `source`로만 한다. "다른 서버인데 baseUrl 동일"은 지원하지 않는다.
 
 ## 등록 보안
 

@@ -4427,3 +4427,152 @@ select.input {
 .page-action-bar__spacer {
   flex: 1;
 }
+
+/* ===========================
+   관리자 폼 페이지 (Case 8 서버 등록 / Case 9 API 편집)
+   docs/design/web/admin.html <style> 블록 이식
+   — AdminSpecFormPage / AdminEndpointFormPage 가 사용하는 폼 관련 클래스
+   =========================== */
+
+/* API 출처 배지 + 행 액션 (상세 목록 / 폼 출처 배지) */
+.api-source {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.api-source--manual {
+  color: var(--color-accent);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+}
+.api-source--library {
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+}
+.api-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* 폼 페이지 카드 */
+.form-page {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.form-row {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.form-row > .form-group {
+  flex: 1;
+  min-width: 220px;
+}
+.required-mark {
+  color: var(--color-error);
+  margin-left: 2px;
+}
+.field-error {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  margin-top: var(--space-1);
+}
+.field-warning {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+  margin-top: var(--space-1);
+}
+
+/* 다중 행 편집 테이블 (인증 프로필 / 파라미터 / 필드 / 헤더) */
+.repeat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.repeat-table th {
+  text-align: left;
+  padding: var(--space-2);
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-weight-medium);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+}
+.repeat-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.repeat-table .input {
+  width: 100%;
+}
+.repeat-table__actions {
+  width: 44px;
+  text-align: center;
+}
+.repeat-table__add {
+  margin-top: var(--space-2);
+}
+
+/* accordion (요청 헤더 / 응답 — details/summary 기반) */
+.accordion {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+}
+.accordion__summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.accordion__summary::-webkit-details-marker {
+  display: none;
+}
+.accordion__summary::before {
+  content: '▸';
+  color: var(--color-text-tertiary);
+  transition: transform var(--transition-fast);
+}
+.accordion[open] .accordion__summary::before {
+  transform: rotate(90deg);
+}
+.accordion__body {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+/* 폼 섹션 (펼침 영역 그룹) */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.form-section__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+.check-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.check-option input {
+  accent-color: var(--color-accent);
+}

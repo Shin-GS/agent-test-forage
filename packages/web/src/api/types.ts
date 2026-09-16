@@ -142,6 +142,11 @@ export interface SpecEndpointItem {
   path: string;
   summary: string | null;
   status: StatusView;
+  /**
+   * 엔드포인트 출처 (StatusView code+description). code: LIBRARY(자동 등록) / MANUAL(관리자 수동).
+   * 스펙 상세의 출처 배지 표시용. BE 가 추가 예정/구버전 호환을 위해 optional.
+   */
+  source?: StatusView;
   excluded: boolean;
   confirmRequired: boolean;
 }
@@ -149,6 +154,108 @@ export interface SpecEndpointItem {
 export interface SpecAuthProfileItem {
   name: string;
   loginPageUrl: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Admin — Endpoint 편집 (Case 9). 관리자 수동 API 등록/편집.
+// - GET /specs/{id}/endpoints/{endpointId} → EndpointDetail (operationJson 문자열 동반)
+// - POST /specs/{id}/endpoints, PATCH .../{endpointId} → ManualEndpointRequest
+// operationJson 은 OpenAPI Operation 문자열. FE 는 endpointOperation.ts 로 폼 모델 ↔ 구조화 요청을
+// 왕복하며, 수정 모드 초기화 시 operationJson 을 파싱해 폼을 복원한다.
+// ---------------------------------------------------------------------------
+
+/** 엔드포인트 상세 (BE GET /specs/{id}/endpoints/{endpointId}). operationJson 은 OpenAPI Operation 문자열 */
+export interface EndpointDetail {
+  id: number;
+  apiSpecId: number;
+  method: string;
+  path: string;
+  summary: string | null;
+  status: StatusView;
+  /** 출처 (code: LIBRARY | MANUAL). 스키마 편집 가능 여부 판정 */
+  source: StatusView;
+  excluded: boolean;
+  confirmRequired: boolean;
+  confirmMessage: string | null;
+  /** OpenAPI Operation JSON 문자열. 파싱해 파라미터/바디/헤더/응답 폼을 복원한다 */
+  operationJson: string | null;
+}
+
+/** 파라미터 입력 (경로/쿼리 공용) — ManualEndpointRequest.parameters[] */
+export interface ParameterInput {
+  name: string;
+  /** "path" | "query" */
+  in: "path" | "query";
+  type: string;
+  required: boolean;
+  description: string | null;
+}
+
+/** 바디 필드 입력 — RequestBodyInput.fields[] */
+export interface FieldInput {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string | null;
+}
+
+/** 요청 바디 입력 — ManualEndpointRequest.requestBody (GET/DELETE 는 null) */
+export interface RequestBodyInput {
+  contentType: string;
+  fields: FieldInput[];
+}
+
+/** 요청/응답 헤더 입력 — ManualEndpointRequest.headers[], ResponseInput.headers[] */
+export interface HeaderInput {
+  name: string;
+  required: boolean;
+  description: string | null;
+}
+
+/** 응답 정의 입력 — ManualEndpointRequest.responses[] */
+export interface ResponseInput {
+  statusCode: string;
+  description: string | null;
+  headers: HeaderInput[];
+}
+
+/**
+ * 수동 API 등록/수정 요청 (BE POST /specs/{id}/endpoints, PATCH .../{endpointId}).
+ * - LIBRARY 수정 시 서버가 스키마 필드(method/path/parameters/requestBody/headers/responses)를 무시하고 메타만 반영.
+ * - GET/DELETE 는 requestBody 를 무시한다(FE 도 미포함으로 보낸다).
+ */
+export interface ManualEndpointRequest {
+  method: string;
+  path: string;
+  summary: string | null;
+  parameters: ParameterInput[];
+  requestBody: RequestBodyInput | null;
+  headers: HeaderInput[];
+  responses: ResponseInput[];
+  excluded: boolean;
+  confirmRequired: boolean;
+  confirmMessage: string | null;
+}
+
+/** 수동 등록/메타 수정 요청의 인증 프로필 입력 (name + loginPageUrl). loginPageUrl 은 비우면 이름만 저장 */
+export interface SpecAuthProfileInput {
+  name: string;
+  loginPageUrl: string | null;
+}
+
+/**
+ * 관리자 수동 서버 등록 / 메타 수정 요청 (BE POST /specs/manual, PATCH /specs/{id}).
+ * - 등록: baseUrl 필수. 중복이면 서버가 기존 스펙에 병합하고 그 스펙을 반환.
+ * - 수정: baseUrl 은 보내도 서버가 무시(식별 키). name 만 필수.
+ */
+export interface ManualSpecRequest {
+  name: string;
+  baseUrl: string;
+  description?: string | null;
+  domain?: string | null;
+  capabilities?: string[];
+  notes?: string | null;
+  authProfiles?: SpecAuthProfileInput[];
 }
 
 /** 서비스 설명 메타 (BE SpecDetailResponse.ServiceInfo). 관리자 우선(adminEdited) 규칙 표시용 */

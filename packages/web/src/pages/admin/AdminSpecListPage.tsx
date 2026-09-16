@@ -14,8 +14,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, specsApi } from "../../api";
 import type { SpecListItem } from "../../api/types";
+import { useNavigate } from "react-router-dom";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { PageShell } from "../../components/layout/PageShell";
+import { PageToolbar } from "../../components/layout/PageToolbar";
 import { useListNavigation } from "../../hooks/useListNavigation";
 import { useToastStore } from "../../store/toastStore";
 
@@ -35,6 +37,7 @@ type ConfirmAction = "deactivate" | "delete";
 
 export function AdminSpecListPage() {
   const navigateToDetail = useListNavigation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useToastStore((s) => s.show);
 
@@ -101,7 +104,26 @@ export function AdminSpecListPage() {
   }
 
   return (
-    <PageShell title="스펙 관리">
+    <PageShell
+      title="스펙 관리"
+      toolbar={
+        <PageToolbar
+          actions={
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => navigate("/admin/specs/new")}
+            >
+              + 서버 등록
+            </button>
+          }
+        >
+          <span className="list-count" role="status" aria-live="polite">
+            총 {specs?.length ?? 0}개
+          </span>
+        </PageToolbar>
+      }
+    >
       <div className="page-body">
         {isLoading && (
           <div className="recipe-state" role="status" aria-live="polite">
@@ -131,10 +153,6 @@ export function AdminSpecListPage() {
 
         {specs && hasAny && (
           <>
-            <div className="list-count" role="status" aria-live="polite">
-              총 {specs.length}개
-            </div>
-
             <table className="data-table admin-spec-table">
               <thead>
                 <tr>

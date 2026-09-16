@@ -157,6 +157,7 @@ public class SpecQueryService {
                         e.getPath(),
                         e.getSummary(),
                         StatusView.of(e.getStatus()),
+                        StatusView.of(e.getSource()),
                         e.isExcluded(),
                         e.isConfirmRequired()))
                 .toList();

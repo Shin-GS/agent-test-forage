@@ -5,6 +5,7 @@ import com.testforge.entity.spec.ApiEndpoint;
 import com.testforge.entity.spec.ApiSpec;
 import com.testforge.entity.spec.AuthProfile;
 import com.testforge.entity.spec.enums.AuthProfileStatus;
+import com.testforge.entity.spec.enums.EndpointSource;
 import com.testforge.entity.spec.enums.EndpointStatus;
 import com.testforge.repository.spec.ApiEndpointRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
@@ -135,6 +136,74 @@ class SpecRegistrationIntegrationTest {
         List<ApiEndpoint> endpoints = endpointRepository.findByApiSpecId(spec.getId());
         assertThat(endpoints).hasSize(2);
         ApiEndpoint post = endpoints.stream()
+                .filter(e -> "POST".equals(e.getHttpMethod())).findFirst().orElseThrow();
+        assertThat(post.getStatus()).isEqualTo(EndpointStatus.DEPRECATED);
+    }
+
+    // ── register: MANUAL endpoint preserved on re-register (not deprecated), PK kept ──
+    @Test
+    void register_manualEndpoint_preservedOnReRegister() throws Exception {
+        // 최초 등록으로 스펙 생성.
+        register(registerBody(specJson(List.of("GET /api/v1/users"))));
+        ApiSpec spec = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
+
+        // 관리자가 수동 등록한 엔드포인트를 직접 삽입 (라이브러리 스펙에는 없는 method+path).
+        ApiEndpoint manual = new ApiEndpoint(spec.getId(), "POST", "/api/v1/manual-only");
+        manual.setSource(EndpointSource.MANUAL);
+        manual.setStatus(EndpointStatus.ACTIVE);
+        Long manualIdBefore = endpointRepository.save(manual).getId();
+
+        // 그 method+path를 포함하지 않는 스펙으로 재등록.
+        register(registerBody(specJson(List.of("GET /api/v1/users"))));
+
+        ApiEndpoint after = endpointRepository.findByApiSpecId(spec.getId()).stream()
+                .filter(e -> "/api/v1/manual-only".equals(e.getPath())).findFirst().orElseThrow();
+        // MANUAL 행은 ACTIVE·source=MANUAL로 보존되고 PK가 유지되어야 한다.
+        assertThat(after.getId()).isEqualTo(manualIdBefore);
+        assertThat(after.getStatus()).isEqualTo(EndpointStatus.ACTIVE);
+        assertThat(after.getSource()).isEqualTo(EndpointSource.MANUAL);
+    }
+
+    // ── register: MANUAL endpoint promoted to LIBRARY when library registers same method+path ──
+    @Test
+    void register_manualEndpoint_promotedToLibraryOnOverlap() throws Exception {
+        // 최초 등록으로 스펙 생성.
+        register(registerBody(specJson(List.of("GET /api/v1/users"))));
+        ApiSpec spec = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
+
+        // 관리자가 수동 등록한 엔드포인트 (나중에 라이브러리가 같은 method+path를 등록).
+        ApiEndpoint manual = new ApiEndpoint(spec.getId(), "POST", "/api/v1/orders");
+        manual.setSource(EndpointSource.MANUAL);
+        manual.setStatus(EndpointStatus.ACTIVE);
+        manual.setSummary("manual-summary");
+        Long manualIdBefore = endpointRepository.save(manual).getId();
+
+        // 라이브러리가 같은 POST /api/v1/orders를 등록 → 같은 행이 라이브러리 값으로 갱신.
+        register(registerBody(specJson(List.of("GET /api/v1/users", "POST /api/v1/orders"))));
+
+        ApiEndpoint after = endpointRepository.findByApiSpecId(spec.getId()).stream()
+                .filter(e -> "/api/v1/orders".equals(e.getPath())).findFirst().orElseThrow();
+        // PK 유지 + source=LIBRARY로 승격 + 라이브러리 값으로 갱신.
+        assertThat(after.getId()).isEqualTo(manualIdBefore);
+        assertThat(after.getSource()).isEqualTo(EndpointSource.LIBRARY);
+        assertThat(after.getStatus()).isEqualTo(EndpointStatus.ACTIVE);
+        assertThat(after.getSummary()).isEqualTo("post /api/v1/orders");
+    }
+
+    // ── register: LIBRARY endpoint removed → DEPRECATED (source-based branch) ──
+    @Test
+    void register_libraryEndpointRemoved_marksDeprecated() throws Exception {
+        // 라이브러리가 두 엔드포인트를 등록 (둘 다 source=LIBRARY).
+        register(registerBody(specJson(List.of("GET /api/v1/users", "POST /api/v1/users"))));
+        ApiSpec spec = specRepository.findByBaseUrlAndDeletedAtIsNull(BASE_URL).orElseThrow();
+        ApiEndpoint postBefore = endpointRepository.findByApiSpecId(spec.getId()).stream()
+                .filter(e -> "POST".equals(e.getHttpMethod())).findFirst().orElseThrow();
+        assertThat(postBefore.getSource()).isEqualTo(EndpointSource.LIBRARY);
+
+        // POST 없이 재등록 → LIBRARY 행이므로 DEPRECATED로 표시.
+        register(registerBody(specJson(List.of("GET /api/v1/users"))));
+
+        ApiEndpoint post = endpointRepository.findByApiSpecId(spec.getId()).stream()
                 .filter(e -> "POST".equals(e.getHttpMethod())).findFirst().orElseThrow();
         assertThat(post.getStatus()).isEqualTo(EndpointStatus.DEPRECATED);
     }

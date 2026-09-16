@@ -1,6 +1,10 @@
 /**
  * 스펙 등록/관리
  * Priority: high
+ *
+ * 관심사: 스펙 등록(자동/재등록 upsert)·엔드포인트·인증 프로필·상태의 "원천(서버 규칙)" 검증.
+ * source(LIBRARY/MANUAL) 전환·수동 API 보존 등 재등록 정합성의 원천 규칙은 여기(SPEC-011~013)서 커버하고,
+ * 관리자 화면에서의 조작/표시는 admin.js C 범위(ADMIN-060~077)와 연계한다.
  */
 const SPEC_TESTS = {
   feature: "spec",
@@ -30,6 +34,45 @@ const SPEC_TESTS = {
         "엔드포인트가 최신 스펙으로 갱신되고, 사라진 API는 DEPRECATED 표시 확인"
       ],
       expected: "재기동 시 같은 baseUrl 스펙을 upsert로 갱신 (중복 생성 없음, PK 유지)"
+    },
+    // === 재등록 시 source 보존/승격 (원천 규칙 — admin.js C 연계) ===
+    // upsertEndpoints 병합 규칙의 서버측 원천 검증. 화면 표시는 ADMIN-073/074에서 확인.
+    {
+      id: "SPEC-011",
+      title: "재등록 시 수동(MANUAL) 전용 엔드포인트 보존",
+      precondition: "관리자가 수동 추가한 API(라이브러리 스펙에 없는 method+path)가 있는 스펙",
+      steps: [
+        "스펙에 MANUAL API(예: POST /custom) 1건이 ACTIVE로 존재하는 상태 준비",
+        "라이브러리가 같은 baseUrl로 재등록하되 그 method+path는 포함하지 않음",
+        "재등록 후 MANUAL API가 DEPRECATED로 강등되지 않고 ACTIVE·source=MANUAL로 보존되는지 확인",
+        "해당 endpoint의 PK가 유지되어 참조 레시피가 깨지지 않는지 확인"
+      ],
+      expected: "라이브러리에 없는 MANUAL 엔드포인트는 재등록에도 보존(강등 안 함, PK 유지)"
+    },
+    {
+      id: "SPEC-012",
+      title: "재등록 시 겹치는 엔드포인트 자동 승격 (MANUAL→LIBRARY)",
+      precondition: "관리자가 수동 추가한 API와 동일 method+path를 라이브러리가 등록",
+      steps: [
+        "스펙에 MANUAL API(예: POST /orders)가 존재하는 상태 준비",
+        "라이브러리가 같은 baseUrl로 POST /orders를 포함해 재등록",
+        "유니크 키(specId,method,path)상 두 행이 생기지 않고 같은 행이 upsert되는지 확인",
+        "해당 엔드포인트가 라이브러리 스키마로 갱신되고 source가 LIBRARY로 승격되는지 확인",
+        "endpoint PK가 유지되어 참조 레시피가 보존되는지 확인"
+      ],
+      expected: "겹치는 API는 라이브러리 값으로 덮어쓰고 source=LIBRARY 승격(단일 행 upsert, PK 유지)"
+    },
+    {
+      id: "SPEC-013",
+      title: "재등록 시 사라진 LIBRARY 엔드포인트만 DEPRECATED",
+      precondition: "LIBRARY API 여러 건 + MANUAL API 1건이 섞인 스펙",
+      steps: [
+        "라이브러리가 재등록하며 기존 LIBRARY API 중 일부(예: GET /legacy)를 스펙에서 제외",
+        "사라진 LIBRARY API만 DEPRECATED로 마킹되는지 확인(물리 삭제 아님)",
+        "같은 재등록에서 MANUAL 전용 API는 DEPRECATED 되지 않고 보존되는지 대조 확인",
+        "DEPRECATED API를 참조하던 레시피는 실행 전 유효성 검증에서 경고되는지 확인"
+      ],
+      expected: "사라진 것은 LIBRARY만 DEPRECATED, MANUAL은 보존 — source에 따라 처리 분기"
     },
     // === 관리자 수동 관리 ===
     {

@@ -1,21 +1,30 @@
 package com.testforge.controller.spec;
 
 import com.testforge.common.error.ApiException;
+import com.testforge.dto.spec.DuplicateEndpointRequest;
+import com.testforge.dto.spec.EndpointDetailResponse;
+import com.testforge.dto.spec.ManualEndpointRequest;
+import com.testforge.dto.spec.ManualSpecRequest;
 import com.testforge.dto.spec.SpecDetailResponse;
 import com.testforge.dto.spec.SpecSummaryResponse;
 import com.testforge.entity.user.enums.UserRole;
 import com.testforge.security.CurrentUser;
+import com.testforge.service.spec.SpecCommandService;
 import com.testforge.service.spec.SpecQueryService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 스펙 조회/관리 API. 관리자 페이지(admin.md 스펙 관리)가 소비한다.
@@ -34,9 +43,12 @@ import java.util.List;
 public class SpecQueryController {
 
     private final SpecQueryService queryService;
+    private final SpecCommandService commandService;
 
-    public SpecQueryController(SpecQueryService queryService) {
+    public SpecQueryController(SpecQueryService queryService,
+                               SpecCommandService commandService) {
         this.queryService = queryService;
+        this.commandService = commandService;
     }
 
     /**
@@ -81,6 +93,77 @@ public class SpecQueryController {
         requireAdmin();
         queryService.softDelete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ─────────────────────── 관리자 수동 등록/편집 (모두 ADMIN) ───────────────────────
+
+    /**
+     * 서버 수동 생성. ADMIN만 가능. 경로를 {@code /manual}로 분리한 이유:
+     * {@code POST /api/v1/specs}는 SecurityConfig에서 라이브러리 토큰용 permitAll이므로
+     * 세션 인증을 우회한다. 관리자 생성은 세션 인증 경로를 타야 하므로 별도 경로를 쓴다.
+     * baseUrl이 기존 미삭제 스펙과 같으면 병합하고 그 스펙 id를 반환한다.
+     */
+    @PostMapping("/manual")
+    public ResponseEntity<Map<String, Long>> createManual(@RequestBody ManualSpecRequest request) {
+        requireAdmin();
+        Long id = commandService.createSpec(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
+    }
+
+    /** 서버 메타 수정. ADMIN만 가능. baseUrl은 요청에 와도 무시(식별 키 변경 금지). */
+    @PatchMapping("/{id}")
+    public ResponseEntity<Void> updateManual(@PathVariable Long id,
+                                             @RequestBody ManualSpecRequest request) {
+        requireAdmin();
+        commandService.updateSpec(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 편집용 엔드포인트 단건 조회 (operationJson + source 포함). ADMIN만 가능. */
+    @GetMapping("/{id}/endpoints/{endpointId}")
+    public EndpointDetailResponse getEndpoint(@PathVariable Long id,
+                                              @PathVariable Long endpointId) {
+        requireAdmin();
+        return commandService.getEndpoint(id, endpointId);
+    }
+
+    /** 엔드포인트 수동 생성 (source=MANUAL). ADMIN만 가능. */
+    @PostMapping("/{id}/endpoints")
+    public ResponseEntity<Map<String, Long>> createEndpoint(@PathVariable Long id,
+                                                            @RequestBody ManualEndpointRequest request) {
+        requireAdmin();
+        Long endpointId = commandService.createEndpoint(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", endpointId));
+    }
+
+    /** 엔드포인트 수정. MANUAL은 전체, LIBRARY는 메타만. ADMIN만 가능. */
+    @PatchMapping("/{id}/endpoints/{endpointId}")
+    public ResponseEntity<Void> updateEndpoint(@PathVariable Long id,
+                                               @PathVariable Long endpointId,
+                                               @RequestBody ManualEndpointRequest request) {
+        requireAdmin();
+        commandService.updateEndpoint(id, endpointId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 엔드포인트 소프트 삭제 (DEPRECATED 전이, 참조 보호). ADMIN만 가능. */
+    @DeleteMapping("/{id}/endpoints/{endpointId}")
+    public ResponseEntity<Void> deleteEndpoint(@PathVariable Long id,
+                                               @PathVariable Long endpointId) {
+        requireAdmin();
+        commandService.deleteEndpoint(id, endpointId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 엔드포인트 복제 (사본은 항상 MANUAL). ADMIN만 가능. */
+    @PostMapping("/{id}/endpoints/{endpointId}/duplicate")
+    public ResponseEntity<Map<String, Long>> duplicateEndpoint(@PathVariable Long id,
+                                                               @PathVariable Long endpointId,
+                                                               @RequestBody(required = false)
+                                                               DuplicateEndpointRequest request) {
+        requireAdmin();
+        Long newId = commandService.duplicateEndpoint(id, endpointId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", newId));
     }
 
     /** 관리 액션 공통 ADMIN 게이트. 비-admin이면 403(forbidden). role은 세션에서 도출. */
