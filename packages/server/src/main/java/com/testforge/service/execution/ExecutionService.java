@@ -1734,11 +1734,129 @@ public class ExecutionService {
             // 사전 편집값은 JSON 문자열로 저장(variablesJson과 동일한 문자열-필드 규약).
             node.put("prerunInputsJson", RecipeJsonUtil.toJsonString(prerunInputs));
         }
+        // 실행용 확정 뷰(execution.md 실행 스냅샷 계약): 이 시점 스펙 메타를 굳혀 스냅샷만으로 재현 가능하게 한다.
+        // stepsJson 원문(위 stepsJson 필드)은 편집/재현용으로 보존하고, services/resolvedSteps는 실행용 파생 뷰다.
+        appendExecutionView(node, recipe.getStepsJson());
         try {
             return objectMapper.writeValueAsString(node);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to serialize recipe snapshot", e);
         }
+    }
+
+    /**
+     * 스냅샷 노드에 실행용 확정 뷰 두 필드({@code services}/{@code resolvedSteps})를 추가한다
+     * (execution.md 실행 스냅샷 계약). API 스텝만 대상으로, 원본 {@code stepsJson} 배열 인덱스를
+     * {@code stepIndex}로 굳혀 실행 직행 뷰를 만든다. 스크립트/서브레시피 스텝은 제외되므로
+     * {@code stepIndex}는 비연속일 수 있다.
+     *
+     * <p><b>서비스 못 찾음 처리(조용한 폴백 금지)</b>: 스텝의 {@code apiSpecId}가 가리키는 서비스(스펙)를
+     * 해석하지 못하면(삭제 등) 그 스텝을 {@code resolvedSteps}에서 <b>제외</b>하고 {@code services}에도
+     * 넣지 않는다. {@code DEFAULT_BASE_URL} 같은 대체는 하지 않으며, 못 찾은 사실만 WARN 로깅한다.
+     * FE는 {@code resolvedSteps}에 그 {@code stepIndex}가 없으면 실행 실패로 판정한다.
+     *
+     * <p>추가만 하며(기존 필드/동작 불변), 단일 서비스 레시피도 그대로 동작한다(회귀 없음).
+     */
+    private void appendExecutionView(ObjectNode node, String stepsJson) {
+        List<Map<String, Object>> steps = RecipeJsonUtil.parseSteps(stepsJson);
+        // 엔드포인트 일괄 조회(N+1 방지) — apiSpecId 역산 및 method/path 확정에 사용
+        Map<Long, ApiEndpoint> endpointsById = loadEndpointsForSteps(steps);
+
+        // 1) 각 API 스텝을 stepIndex 기준으로 해석해 후보를 만든다(서비스 미해석 스텝은 다음 단계에서 제외).
+        //    endpointId 없는 스텝(실행 대상 아님)과 API 아닌 스텝은 애초에 후보에 넣지 않는다.
+        record ResolvedStep(int stepIndex, Long apiSpecId, Long endpointId, ApiEndpoint endpoint) {
+        }
+        List<ResolvedStep> candidates = new java.util.ArrayList<>();
+        Set<Long> specIds = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < steps.size(); i++) {
+            Map<String, Object> step = steps.get(i);
+            if (resolveStepType(step.get("type")) != StepType.API) {
+                continue; // 스크립트/서브레시피 스텝은 실행 확정 뷰 대상이 아님
+            }
+            Long endpointId = asLong(step.get("endpointId"));
+            if (endpointId == null) {
+                continue; // endpointId 없는 API 스텝은 실행 대상이 아니므로 제외
+            }
+            ApiEndpoint endpoint = endpointsById.get(endpointId);
+            if (endpoint == null) {
+                // endpoint(method/path) 조회 실패 → URL 확정 불가. baseUrl만 있어도 실행 불가이므로
+                // resolvedSteps에서 제외(조용한 폴백 금지). FE는 이 stepIndex 부재를 실행 실패로 판정.
+                log.warn("Skipping step from resolvedSteps: endpoint not found (stepIndex={}, endpointId={})",
+                        i, endpointId);
+                continue;
+            }
+            Long apiSpecId = resolveApiSpecId(step, endpointsById);
+            if (apiSpecId == null) {
+                // apiSpecId 미지정 + endpoint 로 역산 불가 → 서비스 확정 불가(조용한 폴백 금지)
+                log.warn("Skipping step from resolvedSteps: cannot resolve apiSpecId (stepIndex={}, endpointId={})",
+                        i, endpointId);
+                continue;
+            }
+            candidates.add(new ResolvedStep(i, apiSpecId, endpointId, endpoint));
+            specIds.add(apiSpecId);
+        }
+
+        // 2) 후보들의 apiSpecId로 ApiSpec을 일괄 조회(baseUrl 확정). 못 찾은 서비스는 폴백 없이 제외 대상.
+        Map<Long, ApiSpec> specsById = new HashMap<>();
+        if (!specIds.isEmpty()) {
+            for (ApiSpec spec : apiSpecRepository.findByIdIn(specIds)) {
+                specsById.put(spec.getId(), spec);
+            }
+        }
+
+        // 3) resolvedSteps/services 구성. 서비스를 못 찾은 스텝은 baseUrl 확정 불가 → 제외 + 로깅.
+        ArrayNode resolvedSteps = objectMapper.createArrayNode();
+        ObjectNode services = objectMapper.createObjectNode();
+        for (ResolvedStep candidate : candidates) {
+            ApiSpec spec = specsById.get(candidate.apiSpecId());
+            if (spec == null) {
+                // 서비스(스펙) 삭제 등으로 baseUrl 확정 불가 → resolvedSteps/services에서 제외(대체 금지)
+                log.warn("Skipping step from resolvedSteps: apiSpec not found (stepIndex={}, apiSpecId={}, endpointId={})",
+                        candidate.stepIndex(), candidate.apiSpecId(), candidate.endpointId());
+                continue;
+            }
+            ObjectNode resolved = resolvedSteps.addObject();
+            resolved.put("stepIndex", candidate.stepIndex());
+            resolved.put("apiSpecId", candidate.apiSpecId());
+            resolved.put("endpointId", candidate.endpointId());
+            ApiEndpoint endpoint = candidate.endpoint(); // 후보 단계에서 non-null 보장(endpoint 못 찾으면 제외됨)
+            resolved.put("method", endpoint.getHttpMethod());
+            // path는 endpoint 원본 그대로(경로 변수 치환 안 함 — 실행 시점 pathParams로 치환)
+            resolved.put("path", endpoint.getPath());
+            resolved.put("baseUrl", spec.getBaseUrl());
+
+            // services: resolvedSteps에 실제로 등장한 apiSpecId의 메타만 담는다. 키는 문자열화된 apiSpecId.
+            String specKey = String.valueOf(candidate.apiSpecId());
+            if (!services.has(specKey)) {
+                ObjectNode serviceNode = services.putObject(specKey);
+                serviceNode.put("name", spec.getName());
+                serviceNode.put("baseUrl", spec.getBaseUrl());
+            }
+        }
+
+        node.set("services", services);
+        node.set("resolvedSteps", resolvedSteps);
+    }
+
+    /**
+     * API 스텝의 대상 서비스 {@code apiSpecId}를 확정한다. 스텝에 {@code apiSpecId}가 명시돼 있으면 그 값을,
+     * 없으면(구 데이터, 아직 마이그레이션 전) {@code endpointId}로 조회한 {@link ApiEndpoint}의
+     * {@code apiSpecId}로 역산한다. 둘 다 불가하면 null(서비스 확정 불가).
+     *
+     * <p>역산 로직을 별도 헬퍼로 분리한 것은, 추후 {@code apiSpecId} 역산 마이그레이션이 동일 규칙을
+     * 재사용할 수 있게 하기 위함이다(엔드포인트 → 소속 서비스 역산).
+     */
+    private Long resolveApiSpecId(Map<String, Object> step, Map<Long, ApiEndpoint> endpointsById) {
+        Long apiSpecId = asLong(step.get("apiSpecId"));
+        if (apiSpecId != null) {
+            return apiSpecId;
+        }
+        Long endpointId = asLong(step.get("endpointId"));
+        if (endpointId == null) {
+            return null;
+        }
+        ApiEndpoint endpoint = endpointsById.get(endpointId);
+        return endpoint == null ? null : endpoint.getApiSpecId();
     }
 
     /**

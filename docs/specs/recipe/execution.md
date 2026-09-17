@@ -6,6 +6,10 @@ last-updated: 2026-09-16
 <!-- 2026-09-16: 플랜 1단계 — reportStep 자동 전이/완료 계약, 단일=N=1 통일, 액션 피커 레시피별 일반화 반영 -->
 <!-- 2026-09-17: 1단계 리뷰 반영 — 단일 재개/완료 BE 자동 판단 명시, respond 불변식, usageCount 갱신 시점(RUNNING 전이), 표기 "실행 중 결정" 통일 -->
 <!-- 2026-09-16: 2단계 반영 — 요청 헤더 실행 주입 규칙(FE 직접 호출 유지, 값 소스/시크릿 취급) 추가 -->
+<!-- 2026-09-16: 스텝별 apiSpecId(멀티 서비스) 반영 — 스텝별 baseUrl/endpoint 해석 규칙 + 스냅샷 services/resolvedSteps 계약 섹션 신설 -->
+<!-- 2026-09-16: 정식 구현 확정 — 스텝 서비스(스펙) 못 찾음 시 DEFAULT_BASE_URL 조용한 폴백 금지·명확한 실패 처리 섹션 신설, 구 데이터는 일회성 마이그레이션으로 확정(로드 시 폴백 의존 제거) -->
+<!-- 2026-09-16: 리뷰 반영(H1/M1) — 마이그레이션 앵커 정정, resolvedSteps에 stepIndex 추가·대응을 endpointId→stepIndex로 변경(스크립트/서브레시피 혼재 시 인덱스 어긋남 방지) -->
+<!-- 2026-09-16: 문서 재검증 반영 — services/resolvedSteps 생성 주체=BE(실행 시작 시 파싱, 통짜저장 정당예외) + services 키는 문자열 apiSpecId 명시 -->
 
 # 레시피 실행 플로우
 
@@ -237,6 +241,42 @@ session_status: idle + 히스토리 refresh
 
 - 사이드 패널이 프로토타입에서 미구현이므로, **결과 메시지(텍스트) 표시가 결과 전달의 주 경로**다.
 - 결과 제공형 카드는 노출하되 `[결과 보기]`는 후속으로 미룬다(비활성 또는 생략). 카드 유형 정의는 [card-ui.md](../chat/card-ui.md#유형) 참조.
+
+## 스텝별 baseUrl/endpoint 해석 (멀티 서비스)
+
+API 스텝은 스텝마다 `apiSpecId`(대상 서비스) + `endpointId`(그 서비스의 endpoint)를 갖는다. 한 레시피의 스텝들이 서로 다른 서비스를 가리킬 수 있다(멀티 서비스, [structure.md 멀티 서비스 실행 규칙](structure.md#멀티-서비스-실행-규칙-확정)).
+
+- **해석 규칙**: 실행 시 스텝의 `apiSpecId`로 서비스의 `baseUrl`을, `endpointId`로 endpoint의 `method`/`path`를 얻어 요청 URL을 조립한다. `baseUrl + path`로 최종 URL을 만들고, `path`의 경로 변수(`/seats/{seatId}/bookings`)는 실행 시 `pathParams`로 치환한다(원본 path 보존).
+- **FE 직접 호출 유지**: 레시피 실행은 여전히 사용자 브라우저가 외부 API를 직접 호출한다(서버 프록시 없음). BE는 실행에 필요한 **baseUrl/endpoint 메타를 스냅샷으로만 제공**하고, 실제 HTTP 호출은 하지 않는다.
+- **인증은 서비스(origin)별**: 스텝마다 다른 서비스(origin)를 호출하므로 세션 쿠키 인증도 서비스별로 독립적이다(한 서비스 로그인 쿠키가 다른 서비스에 자동 적용되지 않음). 멀티 서비스 레시피 실행 중 서비스 A 인증 후 서비스 B에서 다시 인증이 필요하면, 그 스텝의 401/403이 **스텝별 인증 대기(로그인 후 그 스텝부터 재개)**로 처리된다([스텝 실패/인증 대기] 흐름과 동일). 서비스별 로그인 유도는 각 스펙의 인증 프로필을 따른다.
+- **스냅샷 우선**: baseUrl/endpoint 메타는 아래 [실행 스냅샷 계약](#실행-스냅샷-계약-servicesresolvedsteps)의 `services`/`resolvedSteps`에서 가져온다. 실행 중 스펙을 재조회하지 않고 스냅샷 값으로 호출해, 스펙이 나중에 바뀌어도 그 실행/히스토리는 스냅샷 기준으로 재현된다.
+- **구 데이터 처리(정식 구현)**: 배포 전이라, `apiSpecId` 없는 구 스텝 데이터는 로드 시 조용한 폴백에 기대지 않고 [일회성 마이그레이션](../../db/recipe.md#apispecid-역산-마이그레이션-일회성)으로 `apiSpecId`를 확정 기록한다(`endpointId`로 소속 서비스 역산). 따라서 스냅샷 생성 시점에는 이미 모든 API 스텝이 `apiSpecId`를 갖는다.
+
+### 스텝 서비스(스펙) 못 찾음 실패 처리
+
+실행 시 스텝의 `apiSpecId`가 가리키는 서비스(스펙)를 **찾을 수 없는 경우**(스펙이 삭제됨 / 비활성이라 스냅샷 생성 시 해석 실패 등) 처리 규칙이다.
+
+- **조용한 폴백 금지**: 서비스를 못 찾았다고 `DEFAULT_BASE_URL`이나 레시피 메타 대상 서비스로 **말없이 대체하지 않는다**. 엉뚱한 서버로 요청이 나가는 것을 막기 위함이다.
+- **명확한 실패**: 해당 스텝을 ❌ 실패 처리하고, 에러 메시지에 사유를 사람말로 남긴다 — 예: `"스텝 N: 서비스(스펙)를 찾을 수 없습니다"`. 실패 스텝 이후 처리는 기존 스텝 실패 정책([서브레시피 실패](#서브레시피-실패-시-부모-레시피-동작)·[네트워크 끊김](#네트워크-끊김) 등)과 동일한 경로를 탄다.
+- **적용 지점**: 스냅샷 생성 시 `resolvedSteps`에 그 스텝의 `baseUrl`/`endpoint`를 확정하지 못하면(서비스 미해석) 실행 진입 전에 이미 실패로 판정할 수 있다. 스냅샷에 값이 있으나 실행 시점 재현에서 문제가 되는 경우도 동일하게 스텝 실패로 처리한다.
+- **예방(검증)**: 저장 시 [RecipeValidator]가 스텝 `apiSpecId`/`endpointId`의 소속·존재·ACTIVE를 검증해 사전 경고하므로([structure.md 멀티 서비스 실행 규칙](structure.md#멀티-서비스-실행-규칙-확정)), 이 실행 실패는 저장 이후 스펙이 삭제/비활성된 경우에 주로 발생한다.
+
+### 실행 스냅샷 계약 (services / resolvedSteps)
+
+실행 시작 시 BE는 그 시점의 스펙 메타를 읽어 `EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON`에 실행용 뷰 두 필드를 함께 굳힌다. 목적은 **그 시점 스냅샷만으로 실행 재현이 가능**하게 하는 것이다(스펙 변경/삭제와 무관).
+
+| 필드 | 구조 | 용도 |
+|------|------|------|
+| `services` | `{ "<apiSpecId>": { name, baseUrl } }` | 그 레시피가 참조하는 **모든 서비스 메타**(표시/디버깅용). 여러 서비스를 가리키면 여러 엔트리 |
+| `resolvedSteps` | `[ { stepIndex, apiSpecId, endpointId, method, path, baseUrl } ]` | **스텝별 실행 확정 뷰**(실행 직행용). 각 항목은 원본 `stepsJson` 배열 인덱스 `stepIndex`로 대응 |
+
+- **생성 주체 = BE(실행 시작 시)**: `services`/`resolvedSteps`는 **BE가 실행 시작(EXECUTION_RECIPE 스냅샷 저장) 시점에 생성**한다. 이때 BE는 그 레시피의 `stepsJson`을 파싱해 각 API 스텝의 `apiSpecId`/`endpointId`로 스펙(baseUrl)·endpoint(method/path)를 조회해 확정 뷰로 굳힌다. 평상시 "서버는 STEPS_JSON을 통짜 저장(파싱은 검증용만)" 원칙의 **정당한 예외**다 — 실행 오케스트레이션은 스텝 해석이 필요하기 때문이며, FE가 스펙을 신뢰 없이 조회해 만드는 대신 서버가 확정한다. FE는 이 스냅샷을 받아 호출만 한다.
+- **원문 보존 + 실행용 분리**: `stepsJson` 원문은 **편집/재현용**으로 스냅샷에 그대로 보존하고, `resolvedSteps`는 **실행용** 파생 뷰다. FE는 `resolvedSteps`의 `baseUrl`/`method`/`path`로 바로 호출하고, `path`의 경로 변수는 실행 시점에 `pathParams`로 치환한다.
+- **services 키 표기**: `services`는 JSON object라 키가 **문자열화된 apiSpecId**(예: `"4"`)다. `resolvedSteps[].apiSpecId`는 숫자이므로, 조회 시 문자열 변환에 유의한다(`services[String(step.apiSpecId)]`).
+- **대응 관계 (stepIndex 기준)**: `resolvedSteps`의 각 항목은 원본 `stepsJson` 배열의 **인덱스 `stepIndex`로 대응**한다(endpointId 기준 대응 아님). 같은 `endpointId`를 반복 호출하거나 스크립트/서브레시피 스텝이 섞이면 endpointId·순서 매칭은 어긋나므로, 명시적 `stepIndex`로만 원본 스텝을 특정한다. API가 아닌 스텝(스크립트/서브레시피)은 `resolvedSteps`에 포함하지 않으므로 `stepIndex`가 건너뛴 값(비연속)이 될 수 있다.
+- **구 데이터 전제**: 마이그레이션으로 모든 API 스텝이 `apiSpecId`를 갖는다는 전제 아래 `resolvedSteps`/`services`를 채운다. `apiSpecId`가 가리키는 서비스를 해석하지 못하면 위 [스텝 서비스 못 찾음](#스텝-서비스스펙-못-찾음-실패-처리)에 따라 그 스텝을 실패 처리하고 조용히 다른 서비스로 대체하지 않는다.
+- **플랜**: 플랜은 레시피별 `EXECUTION_RECIPE` 행으로 분리되므로, `services`/`resolvedSteps`는 **각 레시피 스냅샷 행 단위**로 들어간다. 별도의 상위 배열 구조는 두지 않는다([plan.md](plan.md)).
+- 스키마 위치: [db/execution.md RECIPE_SNAPSHOT_JSON](../../db/execution.md#레시피-스냅샷-히스토리-재현).
 
 ## 요청 헤더 주입 (2단계)
 

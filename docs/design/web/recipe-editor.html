@@ -354,7 +354,7 @@
       <div class="page-body">
         <!-- 스텝 목록 (축약) -->
         <div class="section">
-          <div class="section__title"><span class="section__number">3</span> 스텝 (3개)</div>
+          <div class="section__title"><span class="section__number">3</span> 스텝 (4개)</div>
 
           <!-- 스텝 1 (접힘) -->
           <div class="step-card">
@@ -366,11 +366,12 @@
             </div>
           </div>
 
-          <!-- 스텝 2 (펼침 — API 타입) -->
+          <!-- 스텝 2 (펼침 — API 타입) : 레시피 대상 서비스(사람인)와 같은 서비스 → 서비스 뱃지 생략 -->
           <div class="step-card" style="border-color: var(--color-accent);">
             <div class="step-card__header" style="background: var(--color-accent-subtle);">
               <span class="step-card__number">2</span>
               <span class="step-card__name">회원가입 API</span>
+              <!-- 레시피 대상 서비스와 같거나 상속이면 서비스 뱃지 생략(과설계 지양) -->
               <span class="step-card__type">API</span>
               <button class="btn btn--ghost btn--sm">▴</button>
             </div>
@@ -378,9 +379,20 @@
               <div class="split-layout">
                 <!-- 좌: 설정 -->
                 <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                  <!-- 스텝 대상 서비스(멀티 서비스): "서브도메인" → "대상 서비스(스텝)". 미선택이면 레시피 대상 서비스 상속.
+                       FE: 실제 <select>. 미선택(상속) placeholder에 상속 서비스명 노출, 저장 시 FE가 레시피 apiSpecId로 확정. -->
                   <div class="field-grid" style="grid-template-columns: 1fr 1fr;">
-                    <div class="form-group"><label class="form-label">서브도메인</label><select class="input"><option>member-api</option></select></div>
-                    <div class="form-group"><label class="form-label">API</label><select class="input"><option>POST /api/v1/users</option></select></div>
+                    <div class="form-group">
+                      <label class="form-label" for="step2-service">대상 서비스 (스텝)</label>
+                      <select id="step2-service" class="input" aria-label="스텝 2 대상 서비스">
+                        <option value="">레시피 대상 서비스 상속 (사람인)</option>
+                        <option selected>사람인</option>
+                        <option>잡코리아</option>
+                        <option>쇼핑몰</option>
+                      </select>
+                      <span class="form-hint">비우면 레시피 대상 서비스를 사용합니다. 저장 시 확정됩니다.</span>
+                    </div>
+                    <div class="form-group"><label class="form-label" for="step2-api">API</label><select id="step2-api" class="input"><option>POST /api/v1/users</option></select></div>
                   </div>
 
                   <!-- 스텝 표시명 (선택): 비우면 엔드포인트 summary → method+path 로 폴백 -->
@@ -506,7 +518,7 @@
                     <div class="data-explorer__item">password</div>
                   </div>
                   <div class="data-explorer__group" style="border-top: 1px solid var(--color-border); padding-top: var(--space-2);">
-                    <div class="data-explorer__title">📋 현재 API 스키마 — 요청 필드</div>
+                    <div class="data-explorer__title">📋 현재 API 스키마 (사람인) — 요청 필드</div>
                     <div class="data-explorer__item" style="color: var(--color-text-tertiary);">email (string, 필수)</div>
                     <div class="data-explorer__item" style="color: var(--color-text-tertiary);">password (string, 필수)</div>
                     <div class="data-explorer__item" style="color: var(--color-text-tertiary);">nickname (string)</div>
@@ -521,13 +533,46 @@
             </div>
           </div>
 
-          <!-- 스텝 3 (접힘) -->
+          <!-- 스텝 3 (접힘) : 레시피 대상 서비스(사람인)와 다른 서비스(잡코리아)를 명시 선택 → 서비스 뱃지 노출.
+               비개발자가 "이 스텝은 다른 서비스"임을 접힌 상태에서도 인지하도록 헤더에 뱃지. -->
           <div class="step-card">
             <div class="step-card__header">
               <span class="step-card__number">3</span>
               <span class="step-card__name">프로필 설정</span>
+              <span class="badge badge--info" title="레시피 대상 서비스와 다른 서비스를 호출하는 스텝입니다">🔀 잡코리아</span>
               <span class="step-card__type">API</span>
               <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+          </div>
+
+          <!-- 스텝 4 (접힘) : 스텝이 가리키는 서비스(스펙)가 삭제/비활성 → 못 찾음 경고.
+               헤더에 badge--error(접힌 상태 식별), 펼치면 본문 상단에 mapping-note--warn 경고. -->
+          <div class="step-card" style="border-color: var(--color-error-border);">
+            <div class="step-card__header">
+              <span class="step-card__number">4</span>
+              <span class="step-card__name">쿠폰 발급 API</span>
+              <span class="badge badge--error" title="이 스텝의 서비스를 찾을 수 없습니다">⚠️ 서비스 없음</span>
+              <span class="step-card__type">API</span>
+              <button class="btn btn--ghost btn--sm">▾</button>
+            </div>
+            <div class="step-card__body">
+              <!-- 서비스 못 찾음/비활성 경고 (execution.md 스텝 서비스 못 찾음 실패 처리 정합) -->
+              <div class="mapping-note mapping-note--warn">⚠️ 이 스텝의 서비스를 찾을 수 없습니다 — 서비스를 다시 선택하세요. 이대로 실행하면 이 스텝은 실패합니다(다른 서버로 대체하지 않음).</div>
+              <div class="field-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="form-group">
+                  <label class="form-label" for="step4-service">대상 서비스 (스텝)</label>
+                  <!-- 삭제된 참조 보존(useServiceOptions 패턴): 목록에 없는 이전 선택값을 톤다운 옵션으로 보존 -->
+                  <select id="step4-service" class="input" aria-label="스텝 4 대상 서비스" style="border-color: var(--color-error-border);">
+                    <option value="__deleted__" selected disabled style="color: var(--color-text-tertiary);">(삭제됨) 이전 서비스</option>
+                    <option value="">레시피 대상 서비스 상속 (사람인)</option>
+                    <option>사람인</option>
+                    <option>잡코리아</option>
+                    <option>쇼핑몰</option>
+                  </select>
+                  <span class="form-hint">서비스를 다시 선택하면 경고가 해제됩니다.</span>
+                </div>
+                <div class="form-group"><label class="form-label" for="step4-api">API</label><select id="step4-api" class="input" disabled><option>서비스를 먼저 선택하세요</option></select></div>
+              </div>
             </div>
           </div>
 

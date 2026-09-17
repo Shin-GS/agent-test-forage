@@ -79,6 +79,14 @@ public class RecipeVersion {
         return snapshotJson;
     }
 
+    /**
+     * 스냅샷 JSON 갱신. 일회성 마이그레이션(apiSpecId 백필)이 이력의 versionNo/createdAt은 보존한 채
+     * 스냅샷 내부 stepsJson만 교체할 때 쓴다. 일반 편집 흐름에선 새 버전을 append하므로 사용하지 않는다.
+     */
+    public void setSnapshotJson(String snapshotJson) {
+        this.snapshotJson = snapshotJson;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }

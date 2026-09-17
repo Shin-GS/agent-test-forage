@@ -311,6 +311,7 @@ export function RecipeEditPage() {
             onChange={(next) => patchForm({ steps: next })}
             userVariables={form.variables}
             currentRecipeId={recipeId}
+            recipeApiSpecId={form.apiSpecId}
             stepMappingErrors={validation.stepMappingErrors}
             errorStepIndexes={validation.errorStepIndexes}
           />

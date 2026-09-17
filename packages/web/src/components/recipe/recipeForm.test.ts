@@ -85,3 +85,39 @@ describe("recipeForm 왕복 — 헤더 매핑 + 기본값", () => {
     expect(restored.headerMappings).toEqual([]);
   });
 });
+
+describe("recipeForm 왕복 — 스텝 apiSpecId (멀티 서비스 확정)", () => {
+  it("스텝 apiSpecId(명시)가 있으면 그대로 직렬화되고 왕복 후 보존된다", () => {
+    const step = apiStep({ apiSpecId: 7 });
+    const server = formStepToServer(step, 1); // 레시피 대상은 1이지만 스텝 명시 7 우선
+    expect(server.apiSpecId).toBe(7);
+
+    const restored = serverStepToForm(server, 1);
+    expect(restored.type).toBe("api");
+    if (restored.type !== "api") return;
+    expect(restored.apiSpecId).toBe(7);
+  });
+
+  it("스텝 apiSpecId 가 없으면(상속) 레시피 대상 apiSpecId 로 확정 저장된다", () => {
+    const step = apiStep({ apiSpecId: null });
+    const server = formStepToServer(step, 5);
+    expect(server.apiSpecId).toBe(5); // 상속 확정
+
+    const restored = serverStepToForm(server, 5);
+    expect(restored.type).toBe("api");
+    if (restored.type !== "api") return;
+    expect(restored.apiSpecId).toBe(5);
+  });
+
+  it("스텝/레시피 apiSpecId 둘 다 없으면 apiSpecId 를 생략한다(빈 스텝)", () => {
+    const step = apiStep({ apiSpecId: null });
+    const server = formStepToServer(step, null);
+    expect(server.apiSpecId).toBeUndefined();
+
+    // 복원 시에도 recipeApiSpecId 가 없으면 null 로 유지
+    const restored = serverStepToForm(server, null);
+    expect(restored.type).toBe("api");
+    if (restored.type !== "api") return;
+    expect(restored.apiSpecId).toBeNull();
+  });
+});

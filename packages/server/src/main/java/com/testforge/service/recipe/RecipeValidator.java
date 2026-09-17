@@ -74,7 +74,7 @@ public class RecipeValidator {
             }
 
             switch (type) {
-                case TYPE_API -> validateApiStep(i, step, warnings);
+                case TYPE_API -> validateApiStep(i, step, apiSpecId, warnings);
                 case TYPE_SCRIPT -> requireField(i, step, "code", type);
                 case TYPE_RECIPE -> validateRecipeStep(i, step, warnings);
                 case TYPE_USER_INPUT -> requireField(i, step, "variables", type);
@@ -92,17 +92,49 @@ public class RecipeValidator {
         return RecipeValidationResult.invalid(String.join("; ", warnings));
     }
 
-    /** type=api: endpointId 필수 + 존재/ACTIVE 확인 (없음/DEPRECATED는 경고) */
-    private void validateApiStep(int index, Map<String, Object> step, List<String> warnings) {
+    /**
+     * type=api: endpointId 필수 + 스텝의 {@code apiSpecId} 기준 경계 검증.
+     *
+     * <p>스텝에 {@code apiSpecId}가 명시돼 있으면 그 값을, 없으면(구 데이터, 마이그레이션 전) 레시피
+     * 대상 {@code recipeApiSpecId}로 폴백해 경계를 정한다. 그 경계로 다음을 경고성 검증한다(모두 저장 허용):
+     * <ul>
+     *   <li>endpoint 미존재 → 경고</li>
+     *   <li>endpoint의 소속 서비스({@code apiSpecId})가 스텝 경계와 <b>다르면</b> "다른 서비스 소속" 경고
+     *       — 다른 서비스를 가리키는 것 자체는 정상이나, 스텝이 선언한 서비스와 <b>일치</b>해야 통과</li>
+     *   <li>endpoint 상태가 비ACTIVE(DEPRECATED 등) → 경고</li>
+     * </ul>
+     *
+     * @param recipeApiSpecId 레시피 대상 서비스 ID (스텝 {@code apiSpecId} 미지정 시 폴백 경계)
+     */
+    private void validateApiStep(int index, Map<String, Object> step, Long recipeApiSpecId,
+                                 List<String> warnings) {
         Long endpointId = asLong(step.get("endpointId"));
         if (endpointId == null) {
             throw ApiException.invalidRecipe("Step[" + index + "] (api) is missing 'endpointId'");
         }
+        // 경계 = 스텝 apiSpecId 우선, 없으면(구 데이터) 레시피 대상 apiSpecId 폴백
+        Long boundarySpecId = asLong(step.get("apiSpecId"));
+        if (boundarySpecId == null) {
+            boundarySpecId = recipeApiSpecId;
+        }
+
         ApiEndpoint endpoint = endpointRepository.findById(endpointId).orElse(null);
         if (endpoint == null) {
             warnings.add("Step[" + index + "] references missing endpointId=" + endpointId);
-        } else if (endpoint.getStatus() == EndpointStatus.DEPRECATED) {
+            return;
+        }
+        // (b) 스텝이 선언한 서비스와 endpoint의 실제 소속이 다르면 경고 (일치해야 통과)
+        if (boundarySpecId != null && !boundarySpecId.equals(endpoint.getApiSpecId())) {
+            warnings.add("Step[" + index + "] endpointId=" + endpointId
+                    + " belongs to a different service (expected apiSpecId=" + boundarySpecId
+                    + ", actual apiSpecId=" + endpoint.getApiSpecId() + ")");
+        }
+        // (c) 비ACTIVE 상태면 경고. DEPRECATED는 기존 메시지("deprecated") 유지(하위호환), 그 외 비ACTIVE는 상태명 표기.
+        if (endpoint.getStatus() == EndpointStatus.DEPRECATED) {
             warnings.add("Step[" + index + "] references deprecated endpointId=" + endpointId);
+        } else if (endpoint.getStatus() != EndpointStatus.ACTIVE) {
+            warnings.add("Step[" + index + "] references non-active (" + endpoint.getStatus()
+                    + ") endpointId=" + endpointId);
         }
     }
 

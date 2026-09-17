@@ -4,6 +4,11 @@ last-updated: 2026-09-16
 ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/recipe/execution.md, docs/specs/recipe/versioning.md
 ---
 
+<!-- 2026-09-16: 스텝별 apiSpecId(멀티 서비스) 반영 — STEPS_JSON API 스텝에 apiSpecId 정식 1급 필드 + 구 데이터 폴백 명시 -->
+<!-- 2026-09-16: 정식 구현 확정 — 로드 시 조용한 폴백 대신 일회성 마이그레이션(엔드포인트)으로 apiSpecId 확정. 보정 대상=RECIPE.STEPS_JSON + RECIPE_VERSION.SNAPSHOT_JSON, 실행 히스토리(EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON) 제외 -->
+<!-- 2026-09-16: 리뷰 반영(H2/M2) — 저장 시 apiSpecId 확정 주체=FE 명시(서버 통짜 저장+RecipeValidator 검증), 마이그레이션 역산 실패 스텝 보유 레시피는 VALIDATION_STATUS=INVALID 마킹 -->
+<!-- 2026-09-16: 문서 재검증 반영 — RECIPE_VERSION 스냅샷엔 resolvedSteps 없음(복원 후 실행 시작 시 BE가 생성) 명시 -->
+
 # 레시피 도메인 DB 설계
 
 레시피 정의/버전 관리.
@@ -37,7 +42,7 @@ ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/
 | `VISIBILITY` | VARCHAR(20) | COMMON(공통) / PRIVATE(개인) |
 | `TAGS` | JSON | 분류/검색 태그 배열 |
 | `VARIABLES_JSON` | JSON | 사용자 입력 변수 정의 (②) |
-| `STEPS_JSON` | LONGTEXT | 스텝 목록 (③) — 타입/매핑/조건/extract + 스텝 표시명(`label`, 선택) + 요청 헤더 매핑/레시피별 기본값 포함 |
+| `STEPS_JSON` | LONGTEXT | 스텝 목록 (③) — 타입/매핑/조건/extract + 스텝 표시명(`label`, 선택) + 요청 헤더 매핑/레시피별 기본값 포함. API 스텝은 `apiSpecId`(대상 서비스) + `endpointId`를 1급 필드로 보관(멀티 서비스) |
 | `RESULT_DEFINITION_JSON` | JSON | 결과 정의 (④) — 각 항목 `{ key, label(선택), source }` |
 | `RESULT_TEMPLATE` | TEXT | 결과 메시지 템플릿 (⑤). 없으면 AI 요약 |
 | `CURRENT_VERSION` | INT | 현재 버전 번호 |
@@ -63,10 +68,38 @@ ref: docs/specs/recipe/structure.md, docs/specs/recipe/authoring.md, docs/specs/
 
 ### 스텝 JSON 안의 API 참조
 
-- 스텝(type=api)은 `endpointId`(API_ENDPOINT.ID)를 참조
+- 스텝(type=api)은 `apiSpecId`(API_SPEC.ID)와 `endpointId`(API_ENDPOINT.ID)를 참조
 - 물리 FK는 걸지 않음 (JSON 내부라 불가). **논리 참조**
-- 유효성 검증 시: STEPS_JSON 파싱 → endpointId가 존재/ACTIVE인지 체크 → DEPRECATED/삭제면 경고
+- 유효성 검증 시: STEPS_JSON 파싱 → **스텝의 `apiSpecId` 기준으로 `endpointId`가 그 서비스에 존재/ACTIVE인지** 체크 → 소속 아님/없음/DEPRECATED/삭제/INACTIVE면 경고
 - 이것이 spec.md에서 "API_ENDPOINT.ID를 PK로 참조, upsert 시 PK 유지"가 필요한 이유
+
+### API 스텝 JSON: apiSpecId 정식 필드 (멀티 서비스)
+
+API 스텝(type=api)은 **호출 대상 서비스를 스텝별로 지정**한다. `apiSpecId`를 `endpointId`와 함께 **1급 필드**로 저장해, 한 레시피의 스텝들이 서로 다른 서비스를 호출할 수 있다(멀티 서비스). 정본: [structure.md 멀티 서비스 실행 규칙](../specs/recipe/structure.md#멀티-서비스-실행-규칙-확정), [execution.md 스텝별 baseUrl/endpoint 해석](../specs/recipe/execution.md#스텝별-baseurlendpoint-해석-멀티-서비스).
+
+- **필드**: API 스텝 JSON은 `apiSpecId`(대상 서비스 = API_SPEC.ID) + `endpointId`(그 서비스의 API_ENDPOINT.ID)를 함께 담는다. `path`는 endpoint 원본 그대로(예: `/seats/{seatId}/bookings`) 보관하고 실행 시 `pathParams`로 치환한다(원본 path를 미리 치환해 저장하지 않음).
+- **저장 시 명시 확정 (주체 = FE)**: 편집 중에는 `apiSpecId` 미선택(레시피 대상 서비스 상속)을 허용하되, **FE가 저장 요청을 직렬화할 때 미선택 스텝을 레시피 대상 `RECIPE.API_SPEC_ID`로 확정해 채워 전송**한다. 서버로 올라오는 STEPS_JSON에는 `apiSpecId` 없는 API 스텝이 남지 않는다. 서버는 STEPS_JSON을 **통짜로 저장**하고 파싱은 검증용으로만 쓰되(원칙 유지), FE 값을 무조건 신뢰하진 않는다 — **RecipeValidator가 스텝 `apiSpecId` 기준으로 `endpointId` 소속을 검증**해 잘못된 값을 걸러 신뢰 경계를 확보한다(상속 UX + 저장 시 명시 확정, 정본: [structure.md 스텝 서비스 지정 모델](../specs/recipe/structure.md#스텝-서비스-지정-모델-상속-ux--저장-시-명시-확정--확정)).
+- **구 데이터(정식 구현)**: 배포 전이라 로드 시 조용한 폴백에 의존하지 않는다. `apiSpecId` 없는 구 스텝 데이터는 아래 [마이그레이션](#apispecid-역산-마이그레이션-일회성)으로 `apiSpecId`를 확정 기록한다.
+- **경계 검증**: 검증은 위 "스텝 JSON 안의 API 참조"대로 스텝의 `apiSpecId`로 경계 지어 endpoint 소속/존재/ACTIVE를 확인한다(전역 존재 확인만 하던 무경계 상태를 스텝 서비스 기준으로 좁힘).
+- **스냅샷**: 실행 시 이 `apiSpecId`/`endpointId`를 근거로 `EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON`의 `services`/`resolvedSteps`(실행용 확정 뷰)를 만든다([db/execution.md RECIPE_SNAPSHOT_JSON](execution.md#레시피-스냅샷-히스토리-재현)). 서비스를 해석하지 못하면 조용히 대체하지 않고 스텝을 실패 처리한다([execution.md 스텝 서비스 못 찾음](../specs/recipe/execution.md#스텝-서비스스펙-못-찾음-실패-처리)).
+
+#### apiSpecId 역산 마이그레이션 (일회성)
+
+배포 전 기존 데이터에 `apiSpecId`를 채우기 위한 **일회성 관리자 엔드포인트**다. `endpointId`가 속한 서비스를 역산해 API 스텝에 `apiSpecId`를 확정 기록한다.
+
+| 항목 | 내용 |
+|------|------|
+| 엔드포인트 | `POST /api/v1/admin/migrations/step-api-spec-id` |
+| 권한 | **ADMIN** 전용 |
+| 멱등성 | idempotent — 이미 `apiSpecId`가 있는 API 스텝은 **skip**(재실행해도 안전) |
+| 역산 방식 | 스텝의 `endpointId` → `API_ENDPOINT`가 속한 `API_SPEC.ID`를 조회해 `apiSpecId`로 기록 |
+| 보정 대상 | **`RECIPE.STEPS_JSON`** + **`RECIPE_VERSION.SNAPSHOT_JSON` 내부 stepsJson** (레시피 계열 둘 다) |
+| 제외 대상 | **`EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON`(실행 히스토리)** — "그때 그대로" 불변 원칙 + `resolvedSteps`/`services`는 과거엔 없던 개념이라 **소급 주입하지 않음** |
+
+- **RECIPE_VERSION 스냅샷의 범위**: `RECIPE_VERSION.SNAPSHOT_JSON`은 편집 이력이라 stepsJson(+메타)만 담고 **`services`/`resolvedSteps`는 없다**(그건 실행 스냅샷 개념). 마이그레이션은 그 안 stepsJson의 `apiSpecId`만 백필한다. 과거 버전을 복원하면 stepsJson이 현재 레시피로 반영되고, **실행 시작 시 BE가 `resolvedSteps`를 새로 생성**하므로 문제되지 않는다.
+| 운영 | 실행 전 **DB 백업 권장**. 완료 후 엔드포인트는 **제거**하는 임시(one-off) 성격 |
+
+- **역산 실패 처리**: `endpointId`로 서비스를 역산하지 못하는 스텝(엔드포인트 삭제 등)은 건너뛰고 로그에 남긴다(마이그레이션이 전체 실패하지 않도록). 이런 스텝이 **하나라도 있는 레시피는 `RECIPE.VALIDATION_STATUS=INVALID`로 마킹**한다(`VALIDATION_MESSAGE`에 사유 기록). 실행 진입 전 유효성 경고로 걸러져 엉뚱한 실행을 막는다. 멱등성(이미 `apiSpecId` 있는 스텝은 skip)은 그대로 유지된다.
 
 ### API 스텝 JSON: 요청 헤더 매핑 / 레시피별 기본값 (2단계)
 

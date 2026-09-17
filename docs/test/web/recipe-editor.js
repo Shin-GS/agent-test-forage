@@ -598,6 +598,80 @@ const RECIPE_EDITOR_TESTS = {
         "필수(*) 표식이 색상만이 아니라 스크린리더용 '(필수)' 텍스트로도 전달되는지 확인"
       ],
       expected: "값 소스 컨트롤이 실제 폼 컨트롤(select/combobox) + aria-label, 필수 표식이 색+텍스트로 접근 가능"
+    },
+
+    // === 멀티 서비스 스텝 (스텝별 apiSpecId) ===
+    // 정본: docs/specs/recipe/structure.md(스텝 서비스 지정 모델·멀티 서비스 실행 규칙),
+    //       execution.md(스텝별 baseUrl/endpoint 해석·스펙 못 찾음 실패 처리).
+    // 저장 확정 주체=FE(미선택이면 레시피 대상 apiSpecId 채워 전송), 서버는 통짜 저장 + RecipeValidator 경계 검증.
+    {
+      id: "RECIPE-050",
+      priority: "high",
+      title: "[멀티서비스] 스텝별 대상 서비스 선택 + 상속 + 저장 시 확정",
+      precondition: "레시피 대상 서비스(예: 사람인)로 만든 레시피, 편집 모드, 여러 서비스 스펙 등록됨",
+      steps: [
+        "API 스텝에서 '대상 서비스(스텝)' 드롭다운이 표시되고 첫 옵션이 '레시피 대상 서비스 상속 (사람인)'인지 확인",
+        "스텝 서비스를 미선택(상속) 상태로 두면 '비우면 레시피 대상 서비스를 사용합니다. 저장 시 확정됩니다.' 힌트가 보이는지 확인",
+        "미선택 상태로 저장 후 재로드 시 그 스텝의 apiSpecId가 레시피 대상 서비스로 확정 기록됐는지 확인(상속 상태가 남지 않음)",
+        "다른 스텝은 레시피와 다른 서비스(예: 잡코리아)를 명시 선택 → 저장/재로드 후 그 서비스로 보존되는지 확인"
+      ],
+      expected: "스텝별 서비스 선택 가능(멀티 서비스). 미선택은 상속 표시, 저장 시 FE가 레시피 apiSpecId로 확정 → 저장 데이터에 apiSpecId 없는 API 스텝 없음"
+    },
+    {
+      id: "RECIPE-051",
+      priority: "medium",
+      title: "[멀티서비스] 다른 서비스 스텝 — 서비스 뱃지 표시",
+      precondition: "레시피 대상 서비스와 다른 서비스를 호출하는 스텝이 있는 레시피",
+      steps: [
+        "레시피 대상 서비스와 다른 서비스를 선택한 스텝 카드 헤더에 서비스 뱃지(🔀 서비스명)가 표시되는지 확인",
+        "레시피 대상 서비스와 같거나 상속인 스텝에는 뱃지가 생략되는지 확인",
+        "접힌 스텝에서도 뱃지가 보이는지 확인",
+        "(접근성) 뱃지가 aria-label로 '다른 서비스: {명}'을 전달하고 이모지는 aria-hidden인지 확인"
+      ],
+      expected: "다를 때만 서비스 뱃지 노출(같음/상속은 생략), 접힌 상태에서도 식별 가능, 스크린리더로 의미 전달"
+    },
+    {
+      id: "RECIPE-052",
+      priority: "high",
+      title: "[멀티서비스] 스텝 서비스 못 찾음/비활성 — 경고 + 저장 불가",
+      precondition: "스텝이 가리키던 서비스(스펙)가 삭제/비활성(INACTIVE/DEPRECATED)된 레시피 편집",
+      steps: [
+        "해당 스텝 본문 상단에 mapping-note--warn 경고 배너('서비스를 찾을 수 없습니다 — 다시 선택하세요, 실행 시 이 스텝 실패, 다른 서버로 대체 안 함')가 보이는지 확인",
+        "스텝 헤더에 '⚠️ 서비스 없음' 뱃지가 붙는지 확인",
+        "대상 서비스 드롭다운에 '(삭제됨) 이전 서비스'가 보존 표시되는지 확인",
+        "유효한 서비스로 재선택하기 전까지 저장이 막히는지(유효성 에러) 확인 → 재선택하면 경고 해제·저장 가능",
+        "(접근성) 경고 배너 role=status/aria-live, 무효 컨트롤 aria-invalid 확인"
+      ],
+      expected: "못 찾음 스텝은 경고+뱃지 노출, 재선택 전 저장 불가(무효 참조 저장 차단), 재선택 시 해제. 조용한 폴백 없음"
+    },
+    {
+      id: "RECIPE-053",
+      priority: "high",
+      title: "[멀티서비스] 실행 — 스텝별 baseUrl로 호출 + 스펙 못 찾음 스텝 실패",
+      precondition: "스텝1=서비스A, 스텝2=서비스B(다른 baseUrl)로 구성된 레시피 실행(FE 브라우저 직접 호출)",
+      steps: [
+        "실행 스냅샷(RECIPE_SNAPSHOT_JSON)에 services{apiSpecId:{name,baseUrl}} + resolvedSteps[{stepIndex,apiSpecId,endpointId,method,path,baseUrl}]가 있는지 확인",
+        "스텝1은 서비스A baseUrl로, 스텝2는 서비스B baseUrl로 각각 호출되는지 확인(레시피 단위 단일 baseUrl 아님)",
+        "resolvedSteps는 stepIndex로 원본 스텝과 대응(스크립트 스텝은 제외되어 stepIndex 비연속)되는지 확인",
+        "실행 중 어떤 스텝의 서비스를 못 찾으면 DEFAULT_BASE_URL 등으로 대체하지 않고 그 스텝을 명확히 실패 처리하는지 확인",
+        "플랜(레시피 여러 개)에서도 각 EXECUTION_RECIPE 스냅샷이 자기 services/resolvedSteps로 독립 실행되는지 확인"
+      ],
+      expected: "스텝별 baseUrl로 정확히 호출(멀티 서비스), 스냅샷만으로 재현, 스펙 못 찾음 스텝은 조용한 폴백 없이 실패"
+    },
+    {
+      id: "RECIPE-054",
+      priority: "medium",
+      title: "[멀티서비스] 기존 데이터 마이그레이션 — endpointId 역산으로 apiSpecId 백필",
+      precondition: "apiSpecId 없는 구 스텝을 가진 레시피 존재(관리자 계정). 일회성 마이그레이션 엔드포인트 POST /api/v1/admin/migrations/step-api-spec-id",
+      steps: [
+        "마이그레이션 엔드포인트를 관리자로 호출(비-admin은 403)",
+        "각 API 스텝의 endpointId로 API_ENDPOINT를 조회해 실제 apiSpecId가 스텝에 채워지는지 확인",
+        "보정 대상이 RECIPE.STEPS_JSON + RECIPE_VERSION.SNAPSHOT_JSON(레시피 계열)이고, EXECUTION_RECIPE(실행 히스토리)는 보존(미보정)인지 확인",
+        "이미 apiSpecId 있는 스텝은 건너뛰는지(idempotent — 재호출해도 안전) 확인",
+        "endpointId 역산 실패(삭제된 endpoint) 스텝이 있는 레시피는 VALIDATION_STATUS=INVALID로 마킹되는지 확인",
+        "응답에 처리한 레시피 수 / 보정 스텝 수 / 역산 실패 스텝 목록이 포함되는지 확인"
+      ],
+      expected: "endpointId 역산으로 apiSpecId 정확 백필(레시피 계열만), idempotent, 역산 실패 시 INVALID 마킹. 실행 히스토리 스냅샷은 불변"
     }
   ]
 };

@@ -89,6 +89,8 @@ interface ApiStepEditorProps {
   onChange: (next: ApiRecipeStep) => void;
   userVariables: RecipeVariable[];
   priorSteps: StepVariableGroup[];
+  /** 레시피 대상 서비스 apiSpecId. "다른 서비스" 판정 + 상속 안내에 사용 */
+  recipeApiSpecId?: number | null;
   /** 유효성: 값 소스 미지정 매핑 인덱스 */
   mappingErrorIndexes?: number[];
 }
@@ -98,26 +100,50 @@ export function ApiStepEditor({
   onChange,
   userVariables,
   priorSteps,
+  recipeApiSpecId = null,
   mappingErrorIndexes,
 }: ApiStepEditorProps) {
-  // 스펙 상세 (엔드포인트 목록) — apiSpecId 있을 때만.
+  // 유효 서비스: 스텝이 서비스를 명시 선택했으면 그 값, 아니면(상속) 레시피 대상 서비스.
+  // 상속 상태에서도 레시피 대상 서비스의 endpoint 목록/스키마를 조회·자동 나열할 수 있게 한다.
+  // (저장 시 apiSpecId 확정은 recipeForm 이 담당 — 여기선 조회 기준으로만 사용)
+  const effectiveApiSpecId = step.apiSpecId ?? recipeApiSpecId;
+
+  // 스펙 상세 (엔드포인트 목록) — 유효 서비스가 있을 때 조회.
   // queryKey ["spec", id] 는 useServiceOptions 의 단건 조회와 캐시를 공유한다(중복 요청 없음).
   const { data: spec } = useQuery({
-    queryKey: ["spec", step.apiSpecId],
-    queryFn: () => specsApi.getSpec(step.apiSpecId as number),
-    enabled: step.apiSpecId != null,
+    queryKey: ["spec", effectiveApiSpecId],
+    queryFn: () => specsApi.getSpec(effectiveApiSpecId as number),
+    enabled: effectiveApiSpecId != null,
   });
 
   // 엔드포인트 상세(operationJson 포함) — 자동 필드/헤더 나열용. non-admin 도 조회 허용(authoring.md).
-  // apiSpecId + endpointId 가 모두 있을 때만 조회. 실패해도 폴백(수동 입력)으로 편집이 막히지 않는다.
+  // 유효 서비스 + endpointId 가 모두 있을 때만 조회. 실패해도 폴백(수동 입력)으로 편집이 막히지 않는다.
   const { data: endpointDetail, isError: endpointError } = useQuery({
-    queryKey: ["endpoint", step.apiSpecId, step.endpointId],
-    queryFn: () => specsApi.getEndpoint(step.apiSpecId as number, step.endpointId as number),
-    enabled: step.apiSpecId != null && step.endpointId != null,
+    queryKey: ["endpoint", effectiveApiSpecId, step.endpointId],
+    queryFn: () => specsApi.getEndpoint(effectiveApiSpecId as number, step.endpointId as number),
+    enabled: effectiveApiSpecId != null && step.endpointId != null,
   });
 
   // ACTIVE 스펙 목록 + 현재 참조가 비활성/목록밖이면 보존 옵션 추가 (recipe-editor.md 정책)
   const { options: serviceOptions, deletedReference } = useServiceOptions(step.apiSpecId ?? null);
+
+  // 레시피 대상 서비스 옵션(상속 placeholder + "다른 서비스" 뱃지 라벨용).
+  // 목록/보존 옵션에서 recipeApiSpecId 에 해당하는 표시명을 찾는다.
+  const { options: recipeServiceOptions } = useServiceOptions(recipeApiSpecId);
+  const recipeServiceName =
+    recipeApiSpecId != null
+      ? recipeServiceOptions.find((o) => o.id === recipeApiSpecId)?.label ?? null
+      : null;
+
+  // "다른 서비스" 판정: 스텝이 서비스를 명시 선택했고, 그 값이 레시피 대상과 다를 때만 true.
+  // 상속(빈 값)이거나 레시피 대상과 같으면 false → 뱃지 생략(다를 때만 노출).
+  const isDifferentService =
+    step.apiSpecId != null && recipeApiSpecId != null && step.apiSpecId !== recipeApiSpecId;
+  // 명시 선택한 스텝 서비스의 표시명(뱃지 aria-label 용)
+  const stepServiceName =
+    step.apiSpecId != null
+      ? serviceOptions.find((o) => o.id === step.apiSpecId)?.label ?? `#${step.apiSpecId}`
+      : null;
 
   const selectedEndpoint = spec?.endpoints.find((e) => e.id === step.endpointId) ?? null;
 
@@ -266,9 +292,21 @@ export function ApiStepEditor({
             />
           </div>
           <div className="form-group">
-            <label className="form-label">서브도메인</label>
+            <label className="form-label">
+              대상 서비스 (스텝)
+              {isDifferentService && (
+                <span
+                  className="badge badge--info"
+                  style={{ marginLeft: "var(--space-2)" }}
+                  aria-label={`다른 서비스: ${stepServiceName}`}
+                >
+                  <span aria-hidden="true">🔀</span> {stepServiceName}
+                </span>
+              )}
+            </label>
             <select
               className="input"
+              aria-invalid={deletedReference || undefined}
               value={step.apiSpecId ?? ""}
               onChange={(e) =>
                 patch({
@@ -277,30 +315,46 @@ export function ApiStepEditor({
                 })
               }
             >
-              <option value="">서비스 선택...</option>
+              <option value="">
+                {recipeServiceName
+                  ? `레시피 대상 서비스 상속 (${recipeServiceName})`
+                  : "레시피 대상 서비스 상속"}
+              </option>
               {serviceOptions.map((opt) => (
                 <option key={opt.id} value={opt.id}>
                   {opt.label}
                 </option>
               ))}
             </select>
-            {deletedReference && (
+            {deletedReference ? (
               <span className="form-hint" style={{ color: "var(--color-error)" }}>
                 참조 서비스를 찾을 수 없음(삭제됨). 서비스를 다시 선택해주세요.
+              </span>
+            ) : (
+              <span className="form-hint">
+                비우면 레시피 대상 서비스를 사용합니다. 저장 시 확정됩니다.
               </span>
             )}
           </div>
         </div>
 
+        {/* 스텝 서비스(스펙) 못 찾음 / 비활성 경고 */}
+        {deletedReference && (
+          <div className="mapping-note mapping-note--warn" role="status">
+            <span aria-hidden="true">⚠️</span> 이 스텝의 서비스를 찾을 수 없습니다 — 서비스를 다시
+            선택하세요. 이대로 실행하면 이 스텝은 실패합니다(다른 서버로 대체하지 않음).
+          </div>
+        )}
+
         <div className="form-group">
           <label className="form-label">API</label>
           <select
             className="input"
-            disabled={step.apiSpecId == null}
+            disabled={effectiveApiSpecId == null}
             value={step.endpointId ?? ""}
             onChange={(e) => patch({ endpointId: e.target.value === "" ? null : Number(e.target.value) })}
           >
-            <option value="">{step.apiSpecId == null ? "서비스를 먼저 선택" : "엔드포인트 선택..."}</option>
+            <option value="">{effectiveApiSpecId == null ? "서비스를 먼저 선택" : "엔드포인트 선택..."}</option>
             {(spec?.endpoints ?? []).map((ep) => (
               <option key={ep.id} value={ep.id}>
                 {ep.method} {ep.path}

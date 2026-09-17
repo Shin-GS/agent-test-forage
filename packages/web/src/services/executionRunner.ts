@@ -38,11 +38,29 @@ import type {
   SpecDetail,
 } from "../api/types";
 
-/** baseUrl 을 못 찾을 때 사용할 임시 기본값 (demo-shop) */
+/** baseUrl 을 못 찾을 때 사용할 임시 기본값 (demo-shop) — 레거시 폴백 경로에서만 사용 */
 const DEFAULT_BASE_URL = "http://localhost:9101";
 
 /** endpointId → { method, path } 해석 맵 (스펙 상세에서 구성) */
 type EndpointMap = Map<number, { method: string; path: string }>;
+
+/**
+ * 실행 스냅샷의 스텝별 실행 확정 뷰(멀티 서비스). BE가 실행 시작 시 stepsJson 을 파싱해 굳힌다.
+ * (execution.md 실행 스냅샷 계약 / db/execution.md services·resolvedSteps)
+ * - stepIndex: 원본 stepsJson 배열 인덱스(스크립트/서브레시피 제외로 비연속일 수 있음).
+ * - baseUrl + method + path 로 요청 URL 을 조립한다(레시피 단위 단일 baseUrl 사용 중단).
+ */
+interface ResolvedStep {
+  stepIndex: number;
+  apiSpecId?: number;
+  endpointId?: number;
+  method: string;
+  path: string;
+  baseUrl: string;
+}
+
+/** stepIndex → ResolvedStep 조회 맵. 레시피 스냅샷에 resolvedSteps 가 없으면 null(레거시 폴백 신호) */
+type ResolvedStepMap = Map<number, ResolvedStep>;
 
 /**
  * 인증 필요(401/403) 스텝에서 던지는 오류. 실행을 "실패"가 아닌 "인증 대기"로 다루기 위해
@@ -182,11 +200,16 @@ export async function runExecution(
       return { outcome: overallOutcomeOf(current) };
     }
 
+    // 스텝별 실행 확정 뷰(멀티 서비스). 스냅샷에 resolvedSteps 가 있으면 그걸로 스텝별 baseUrl/method/path 를
+    // 해석하고, 없으면(구 실행 스냅샷/재조회 응답) 레거시 단일 spec 경로로 폴백한다.
+    const resolvedStepMap = extractResolvedSteps(recipe);
+
     // 이 레시피의 스텝을 실행한다.
     const recipeRun = await runRecipeSteps(recipe, context, {
       execution: current,
       baseUrl: resolveBaseUrl(current, recipe, spec),
       endpointMap,
+      resolvedStepMap,
       mode: options.mode,
       collectInput: options.collectInput,
       resume: resumeForThisRecipe,
@@ -272,6 +295,8 @@ interface RecipeRunEnv {
   execution: ExecutionResponse;
   baseUrl: string;
   endpointMap: EndpointMap;
+  /** 스텝별 실행 확정 뷰(stepIndex→ResolvedStep). null 이면 resolvedSteps 미제공 → 레거시 폴백 */
+  resolvedStepMap: ResolvedStepMap | null;
   mode: string;
   collectInput?: RunExecutionOptions["collectInput"];
   resume?: RunExecutionOptions["resume"];
@@ -318,6 +343,9 @@ async function runRecipeSteps(
       const result = await executeStep(stepType, snapshot, context, {
         baseUrl: env.baseUrl,
         endpointMap: env.endpointMap,
+        resolvedStepMap: env.resolvedStepMap,
+        // 원본 stepsJson 배열 인덱스. resolvedSteps 조회 키(스텝별 baseUrl/endpoint 해석)로 쓴다.
+        stepIndex: index,
         mode: env.mode,
         collectInput: env.collectInput,
         stepName: stepRecord.stepName ?? snapshot.name ?? `Step${index}`,
@@ -401,8 +429,14 @@ function overallOutcomeOf(execution: ExecutionResponse): "SUCCESS" | "PARTIAL" |
 // ---------------------------------------------------------------------------
 
 interface StepExecContext {
+  /** 레거시 폴백용 레시피 단위 단일 baseUrl (resolvedSteps 미제공 시에만 사용) */
   baseUrl: string;
+  /** 레거시 폴백용 endpointId→{method,path} 맵 (resolvedSteps 미제공 시에만 사용) */
   endpointMap: EndpointMap;
+  /** 스텝별 실행 확정 뷰(stepIndex→ResolvedStep). null 이면 resolvedSteps 미제공 → 레거시 폴백 */
+  resolvedStepMap: ResolvedStepMap | null;
+  /** 원본 stepsJson 배열 인덱스 (resolvedSteps 조회 키) */
+  stepIndex: number;
   mode: string;
   collectInput?: RunExecutionOptions["collectInput"];
   stepName: string;
@@ -445,19 +479,21 @@ async function executeApiStep(
   context: RunContext,
   exec: StepExecContext
 ): Promise<StepResult> {
-  // 스텝은 path/method 를 직접 담지 않고 endpointId 만 가질 수 있다.
-  // 우선순위: 스텝의 명시적 method/path > endpointId 로 스펙에서 해석.
-  const resolved = resolveEndpoint(snapshot, exec.endpointMap);
-  const method = resolved.method.toUpperCase();
+  // 스텝별 baseUrl/endpoint 해석 (멀티 서비스). resolvedSteps 가 있으면 stepIndex 로 그 스텝의
+  // baseUrl + method + path 를 쓰고, 없으면(레거시 스냅샷) 단일 spec 경로로 폴백한다.
+  // (execution.md 스텝별 baseUrl/endpoint 해석 / 스텝 서비스 못 찾음 실패 처리)
+  const { method: rawMethod, path: rawPath, baseUrl } = resolveStepEndpoint(snapshot, exec);
+  const method = rawMethod.toUpperCase();
   // 경로 변수: 먼저 pathParams({{expr}} 치환 → 비면 기본값 폴백) 를 경로 템플릿({id})에 적용, 그다음 context 치환.
+  // resolvedSteps 의 path 는 원본(치환 전)이므로 여기서 동일하게 pathParams 를 적용한다.
   const withPathParams = applyPathParams(
-    resolved.path,
+    rawPath,
     snapshot.pathParams,
     snapshot.pathParamDefaults,
     context,
   );
   const path = substitute(withPathParams, context);
-  const url = joinUrl(exec.baseUrl, path);
+  const url = joinUrl(baseUrl, path);
 
   // 헤더 주입 (execution.md 요청 헤더 주입): 런타임 기본 헤더 + 스냅샷 헤더 매핑 병합.
   // 같은 헤더명이면 매핑 값이 우선(Content-Type 도 덮어쓸 수 있음). 빈 값 헤더는 주입하지 않는다.
@@ -811,7 +847,66 @@ function buildEndpointMap(spec: SpecDetail | null): EndpointMap {
   return map;
 }
 
-/** 스텝의 method/path 를 해석한다. 명시적 값 우선, 없으면 endpointId 로 스펙 맵 조회 */
+/**
+ * 레시피 스냅샷에서 스텝별 실행 확정 뷰(resolvedSteps)를 stepIndex→ResolvedStep 맵으로 뽑는다.
+ * - resolvedSteps 필드가 아예 없으면 null 을 반환한다(레거시 스냅샷 신호 → 호출부가 단일 spec 폴백).
+ * - 배열은 있으나 비어 있으면(모든 스텝이 스크립트/서브레시피 등) 빈 Map 을 반환한다(폴백 아님).
+ * - BE 는 resolvedSteps 를 객체 배열로 스냅샷에 넣는다(문자열 이중 인코딩 아님).
+ */
+function extractResolvedSteps(recipe: ExecutionRecipeView): ResolvedStepMap | null {
+  const snapshot = recipe.recipeSnapshot as any;
+  if (!snapshot) return null;
+  const raw: unknown = snapshot.resolvedSteps;
+  // resolvedSteps 자체가 없으면(구 스냅샷) 레거시 폴백 신호로 null 반환.
+  if (!Array.isArray(raw)) return null;
+
+  const map: ResolvedStepMap = new Map();
+  for (const item of raw as any[]) {
+    if (!item || typeof item !== "object") continue;
+    const stepIndex = Number(item.stepIndex);
+    if (Number.isNaN(stepIndex)) continue;
+    map.set(stepIndex, {
+      stepIndex,
+      apiSpecId: item.apiSpecId != null ? Number(item.apiSpecId) : undefined,
+      endpointId: item.endpointId != null ? Number(item.endpointId) : undefined,
+      method: String(item.method ?? "GET"),
+      path: String(item.path ?? ""),
+      baseUrl: String(item.baseUrl ?? ""),
+    });
+  }
+  return map;
+}
+
+/**
+ * 스텝의 baseUrl + method + path 를 해석한다(멀티 서비스).
+ * - resolvedSteps 제공(맵 non-null): stepIndex 로 항목을 찾아 baseUrl/method/path 를 쓴다.
+ *   - 못 찾으면(서비스 미해석으로 BE 가 제외한 스텝) 조용한 폴백 없이 명확히 실패시킨다.
+ * - resolvedSteps 미제공(맵 null, 구 스냅샷): 레거시 단일 spec 경로(endpointMap + 단일 baseUrl)로 폴백.
+ */
+function resolveStepEndpoint(
+  snapshot: SnapshotStep,
+  exec: StepExecContext
+): { method: string; path: string; baseUrl: string } {
+  if (exec.resolvedStepMap != null) {
+    const resolved = exec.resolvedStepMap.get(exec.stepIndex);
+    if (!resolved) {
+      // 스냅샷에 resolvedSteps 는 있으나 이 stepIndex 가 없다 = 서비스 미해석으로 제외된 스텝.
+      // DEFAULT_BASE_URL 등으로 조용히 대체하지 않고 명확히 실패시킨다(엉뚱한 서버 호출 방지).
+      throw new Error(`스텝 ${exec.stepIndex}: 서비스(스펙)를 찾을 수 없습니다`);
+    }
+    // 스냅샷 확정 뷰가 우선이지만, 스텝에 명시적 method/path 가 있으면 존중한다(resolveEndpoint 와 동일 정책).
+    return {
+      method: snapshot.method ?? resolved.method,
+      path: snapshot.path ?? resolved.path,
+      baseUrl: resolved.baseUrl,
+    };
+  }
+  // 레거시 폴백: 단일 spec 에서 만든 endpointMap + 레시피 단위 단일 baseUrl.
+  const legacy = resolveEndpoint(snapshot, exec.endpointMap);
+  return { method: legacy.method, path: legacy.path, baseUrl: exec.baseUrl };
+}
+
+/** 스텝의 method/path 를 해석한다. 명시적 값 우선, 없으면 endpointId 로 스펙 맵 조회 (레거시 폴백 경로) */
 function resolveEndpoint(
   snapshot: SnapshotStep,
   endpointMap: EndpointMap
@@ -920,4 +1015,7 @@ export const __test__ = {
   applyBodyDefaults,
   substituteDeep,
   resolveMappedValue,
+  extractResolvedSteps,
+  resolveStepEndpoint,
+  executeApiStep,
 };

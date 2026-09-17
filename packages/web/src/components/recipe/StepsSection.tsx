@@ -14,6 +14,44 @@ import { newStep, priorStepVariables, stepTypeLabel, type StepType } from "./rec
 import { ApiStepEditor } from "./steps/ApiStepEditor";
 import { ScriptStepEditor } from "./steps/ScriptStepEditor";
 import { SubRecipeStepEditor } from "./steps/SubRecipeStepEditor";
+import { useServiceOptions } from "./useServiceOptions";
+
+/**
+ * 스텝 카드 헤더용 서비스 뱃지. 접힌 상태에서도 문제/다른 서비스 스텝을 식별하게 한다.
+ *  - 레시피 대상 서비스와 다른 서비스를 명시 선택 → 🔀 {서비스명} (badge--info)
+ *  - 참조 서비스가 삭제/없음 → ⚠️ 서비스 없음 (badge--error)
+ *  - 상속(빈 값)이거나 레시피 대상과 같음 → 뱃지 생략
+ */
+function StepServiceBadge({
+  apiSpecId,
+  recipeApiSpecId,
+}: {
+  apiSpecId: number | null;
+  recipeApiSpecId: number | null;
+}) {
+  const { options, deletedReference } = useServiceOptions(apiSpecId);
+  if (apiSpecId == null) return null; // 상속 — 뱃지 없음
+
+  if (deletedReference) {
+    return (
+      <span className="badge badge--error" aria-label="서비스 없음">
+        <span aria-hidden="true">⚠️</span> 서비스 없음
+      </span>
+    );
+  }
+
+  // 레시피 대상과 같으면 뱃지 생략 (다를 때만 노출)
+  if (recipeApiSpecId != null && apiSpecId === recipeApiSpecId) return null;
+  // recipeApiSpecId 가 없으면(레시피 서비스 미선택) "다름" 판정 불가 → 뱃지 생략
+  if (recipeApiSpecId == null) return null;
+
+  const name = options.find((o) => o.id === apiSpecId)?.label ?? `#${apiSpecId}`;
+  return (
+    <span className="badge badge--info" aria-label={`다른 서비스: ${name}`}>
+      <span aria-hidden="true">🔀</span> {name}
+    </span>
+  );
+}
 
 /**
  * 스텝 카드 표시명 폴백. API 스텝은 표시명(label) 우선, 없으면 name, 그래도 없으면 "스텝 N".
@@ -31,6 +69,8 @@ interface StepsSectionProps {
   onChange: (next: RecipeStep[]) => void;
   userVariables: RecipeVariable[];
   currentRecipeId?: number | null;
+  /** 레시피 대상 서비스 apiSpecId. 스텝 "다른 서비스" 판정 + 상속 안내에 사용 */
+  recipeApiSpecId?: number | null;
   /** 유효성: stepIndex → 매핑 에러 인덱스 목록 */
   stepMappingErrors?: Record<number, number[]>;
   /** 유효성: 에러가 있는 stepIndex 집합 */
@@ -42,6 +82,7 @@ export function StepsSection({
   onChange,
   userVariables,
   currentRecipeId,
+  recipeApiSpecId = null,
   stepMappingErrors,
   errorStepIndexes = [],
 }: StepsSectionProps) {
@@ -99,6 +140,12 @@ export function StepsSection({
             >
               <span className="step-card__number">{index + 1}</span>
               <span className="step-card__name">{stepDisplayName(step, index)}</span>
+              {step.type === "api" && (
+                <StepServiceBadge
+                  apiSpecId={step.apiSpecId ?? null}
+                  recipeApiSpecId={recipeApiSpecId}
+                />
+              )}
               <span className="step-card__type">{stepTypeLabel(step.type)}</span>
               <div className="step-card__controls">
                 <button
@@ -148,6 +195,7 @@ export function StepsSection({
                     onChange={(s: ApiRecipeStep) => updateStep(index, s)}
                     userVariables={userVariables}
                     priorSteps={priorSteps}
+                    recipeApiSpecId={recipeApiSpecId}
                     mappingErrorIndexes={stepMappingErrors?.[index]}
                   />
                 )}

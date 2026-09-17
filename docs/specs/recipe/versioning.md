@@ -1,8 +1,11 @@
 ---
 status: confirmed
-last-updated: 2026-09-12
+last-updated: 2026-09-16
 ref: docs/db/recipe.md, docs/specs/common/auth.md, docs/specs/pages/recipe-editor.md
 ---
+
+<!-- 2026-09-16: 스텝별 apiSpecId(멀티 서비스) 정식 구현 반영 — 복원 시 스텝 apiSpecId 포함/정합 확인 명시(마이그레이션이 RECIPE_VERSION.SNAPSHOT_JSON도 보정) -->
+<!-- 2026-09-16: 리뷰 반영(M3) — 복원으로 INVALID된 레시피 실행 시 execution.md "스텝 서비스 못 찾음 실패 처리"로 이어진다는 상호 참조 추가 -->
 
 # 레시피 버전 관리
 
@@ -57,6 +60,7 @@ ref: docs/db/recipe.md, docs/specs/common/auth.md, docs/specs/pages/recipe-edito
 
 - 복원은 **덮어쓰기가 아니라 새 버전 커밋**이다. 대상 버전의 스냅샷을 현재 레시피에 반영하되, 그 반영 자체가 새로운 수정으로 이력에 남는다(선형 이력 유지, 되돌리기도 이력에 남음).
 - **스냅샷 전체를 통짜로 반영**한다. 대상 버전 스냅샷(`SNAPSHOT_JSON`)의 모든 구성 요소 — 메타의 대상 서비스(`apiSpecId`) + 스텝별 `apiSpecId`/`endpointId` + 사용자 입력 변수 + 결과 정의 + 결과 템플릿 — 를 그대로 `RECIPE`에 반영한다. 일부 필드만 선택 복원하지 않는다.
+- **스텝 apiSpecId 정합 전제**: 버전 스냅샷의 API 스텝은 **스텝별 `apiSpecId`를 이미 포함**하고 있어야 한다(정식 구현 불변식). 구 버전 스냅샷은 apiSpecId 역산 마이그레이션이 **`RECIPE_VERSION.SNAPSHOT_JSON` 내부 stepsJson까지 보정**하므로([db/recipe.md 마이그레이션](../../db/recipe.md#apispecid-역산-마이그레이션-일회성)), 복원 시 apiSpecId 누락 스텝이 발생하지 않는다. 복원 반영 시 스텝의 `apiSpecId`/`endpointId`를 그대로 옮기고, 아래 재검증으로 소속·존재·ACTIVE 정합을 확인한다.
 - 절차([db/recipe.md 버전 번호 규칙](../../db/recipe.md#버전-번호-규칙)과 정합):
   1. 복원 직전의 현재 상태를 `RECIPE_VERSION`에 `VERSION_NO = 현재값`으로 스냅샷
   2. 대상 버전 스냅샷을 `RECIPE`에 반영
@@ -64,6 +68,7 @@ ref: docs/db/recipe.md, docs/specs/common/auth.md, docs/specs/pages/recipe-edito
 - **복원 시 재검증**한다(스펙 호환성/순환 참조/필수 필드 등, [authoring.md 유효성 검증](authoring.md#유효성-검증)).
   - 재검증 결과가 `INVALID`여도 **복원은 허용**한다. 상태만 `VALIDATION_STATUS = INVALID` + `VALIDATION_MESSAGE`로 표시한다.
   - 이유: 과거 버전은 그 사이 스펙 변경(DEPRECATED/삭제)으로 무효화됐을 수 있으나, 사용자가 내용을 확인·수정할 수 있도록 일단 복원하는 편이 낫다. INVALID 레시피는 실행 전 유효성 경고로 걸러진다.
+  - **실행 연결**: 복원으로 `INVALID`가 된 레시피(스텝 `apiSpecId`의 서비스가 삭제/비활성된 경우 등)를 그대로 실행하면 [execution.md 스텝 서비스(스펙) 못 찾음 실패 처리](execution.md#스텝-서비스스펙-못-찾음-실패-처리)로 이어져 해당 스텝이 명확히 실패한다(조용한 폴백 없음).
 
 ## 권한
 

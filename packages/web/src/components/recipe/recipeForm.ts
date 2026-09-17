@@ -93,7 +93,7 @@ export function formToCreateRequest(form: RecipeFormState): RecipeCreateRequest 
     visibility: form.visibility,
     tags: form.tags,
     variables: form.variables.map(stripUid),
-    steps: form.steps.map(formStepToServer),
+    steps: form.steps.map((s) => formStepToServer(s, form.apiSpecId)),
     resultDefinition: form.resultDefinition.map(stripUid),
     resultTemplate: form.resultTemplate.trim() || null,
   };
@@ -107,7 +107,7 @@ export function formToUpdateRequest(form: RecipeFormState): RecipeUpdateRequest 
     visibility: form.visibility,
     tags: form.tags,
     variables: form.variables.map(stripUid),
-    steps: form.steps.map(formStepToServer),
+    steps: form.steps.map((s) => formStepToServer(s, form.apiSpecId)),
     resultDefinition: form.resultDefinition.map(stripUid),
     resultTemplate: form.resultTemplate.trim() || null,
   };
@@ -462,8 +462,15 @@ export function serverStepToForm(raw: unknown, recipeApiSpecId: number | null): 
   return result;
 }
 
-/** FE 폼 스텝 → 서버 스텝 JSON (직렬화). 왕복 일관성 유지 */
-export function formStepToServer(step: RecipeStep): UnknownRecord {
+/**
+ * FE 폼 스텝 → 서버 스텝 JSON (직렬화). 왕복 일관성 유지.
+ *
+ * @param recipeApiSpecId 레시피 대상 서비스 apiSpecId. API 스텝 저장 시 "명시 확정"에 사용한다.
+ *   확정 규칙(structure.md 스텝 서비스 지정 모델 — 저장 시 명시 확정):
+ *     step.apiSpecId(있으면) → 없으면(상속) recipeApiSpecId → 둘 다 없으면 apiSpecId 생략(빈 스텝, 저장 검증에서 걸림).
+ *   저장된 스텝엔 상속 상태가 남지 않고 항상 확정된 apiSpecId 가 기록된다(불변식).
+ */
+export function formStepToServer(step: RecipeStep, recipeApiSpecId: number | null = null): UnknownRecord {
   const condition = step.condition && step.condition.trim() ? step.condition : undefined;
 
   if (step.type === "script") {
@@ -499,10 +506,15 @@ export function formStepToServer(step: RecipeStep): UnknownRecord {
   const bodyDefaults = mappingsToDefaultsMap(requestMappings);
   const headerDefaults = mappingsToDefaultsMap(headerMappings);
 
+  // 저장 시 명시 확정: 스텝 apiSpecId(명시) → 없으면 레시피 대상 apiSpecId(상속) 로 채운다.
+  // 둘 다 없으면(레시피 서비스도 미선택) apiSpecId 는 생략 → 빈 스텝으로 저장 검증에서 걸린다.
+  const resolvedApiSpecId = step.apiSpecId ?? recipeApiSpecId;
+
   return {
     type: "api",
     name: step.name,
     ...(step.label ? { label: step.label } : {}),
+    ...(resolvedApiSpecId != null ? { apiSpecId: resolvedApiSpecId } : {}),
     endpointId: step.endpointId ?? null,
     ...(Object.keys(pathParams).length > 0 ? { pathParams } : {}),
     body: mappingsToObjectMap(requestMappings),

@@ -1,8 +1,13 @@
 ---
 status: draft
-last-updated: 2026-09-08
+last-updated: 2026-09-16
 ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel/history.md, docs/specs/pages/history-full.md, docs/specs/common/messaging.md
 ---
+
+<!-- 2026-09-16: 스텝별 apiSpecId(멀티 서비스) 반영 — RECIPE_SNAPSHOT_JSON에 services/resolvedSteps 실행 확정 뷰 신설 -->
+<!-- 2026-09-16: 정식 구현 확정 — RECIPE_SNAPSHOT_JSON의 services/resolvedSteps 계약 상세 기술(원문 stepsJson 보존 + 실행용 파생 뷰), 실행 히스토리는 마이그레이션 제외 명시 -->
+<!-- 2026-09-16: 리뷰 반영(M1) — resolvedSteps에 stepIndex 추가·대응을 endpointId→stepIndex로 변경(스크립트/서브레시피 혼재 시 인덱스 어긋남 방지) -->
+<!-- 2026-09-16: 문서 재검증 반영 — services/resolvedSteps 생성 주체=BE(실행 시작 시) + services 키 문자열 apiSpecId 명시 -->
 
 # 실행/히스토리 도메인 DB 설계
 
@@ -92,7 +97,7 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 | `RECIPE_ID` | BIGINT FK NULL | 원본 레시피 링크 (삭제 대비 NULL 허용) |
 | `RECIPE_NAME` | VARCHAR(100) | 실행 시점 레시피명 (스냅샷) |
 | `RECIPE_VERSION_NO` | INT NULL | 실행 시점 레시피 버전 번호 (참고용) |
-| `RECIPE_SNAPSHOT_JSON` | LONGTEXT | **실행 시점 레시피 전체 스냅샷** (메타+스텝+변수+결과정의). 원본이 바뀌거나 삭제돼도 히스토리 재현 가능 |
+| `RECIPE_SNAPSHOT_JSON` | LONGTEXT | **실행 시점 레시피 전체 스냅샷** (메타+스텝+변수+결과정의). 원본이 바뀌거나 삭제돼도 히스토리 재현 가능. 멀티 서비스 실행을 위해 실행용 확정 뷰 `services`/`resolvedSteps`를 함께 굳힌다(아래 [services/resolvedSteps](#servicesresolvedsteps-멀티-서비스-실행용-확정-뷰)) |
 | `SEQUENCE` | INT | 플랜 내 순서 |
 | `STATUS` | VARCHAR(20) | PENDING / RUNNING / SUCCESS / SKIPPED / FAILED / STOPPED |
 | `RESULT_VALUES_JSON` | JSON | 이 레시피의 결과 정의 값 (다음 레시피 입력/템플릿용) |
@@ -121,6 +126,22 @@ ref: docs/specs/recipe/execution.md, docs/specs/recipe/plan.md, docs/specs/panel
 - 목적 구분:
   - `RECIPE_VERSION` (recipe.md) = 레시피 편집 이력/복원용
   - `EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON` = 실행 감사/히스토리 재현용 (실행과 완전 독립)
+
+#### services / resolvedSteps (멀티 서비스 실행용 확정 뷰)
+
+멀티 서비스 실행([execution.md 스텝별 baseUrl/endpoint 해석](../specs/recipe/execution.md#스텝별-baseurlendpoint-해석-멀티-서비스))을 위해, 실행 시작 시 BE가 그 시점 스펙 메타를 읽어 `RECIPE_SNAPSHOT_JSON` 안에 실행용 뷰 두 필드를 함께 굳힌다. 목적은 **스냅샷만으로 실행 재현**(스펙이 나중에 바뀌거나 삭제돼도 그 실행/히스토리는 안 깨짐)이다.
+
+| 필드 | 구조 | 용도 |
+|------|------|------|
+| `services` | `{ "<apiSpecId>": { name, baseUrl } }` | 그 레시피가 참조하는 **모든 서비스 메타**(표시/디버깅용). 여러 서비스를 가리키면 여러 엔트리 |
+| `resolvedSteps` | `[ { stepIndex, apiSpecId, endpointId, method, path, baseUrl } ]` | **스텝별 실행 확정 뷰**(실행 직행용). 각 항목은 원문 `stepsJson` 배열 인덱스 `stepIndex`로 대응 |
+
+- **생성 주체 = BE(실행 시작 시)**: 이 두 필드는 **BE가 실행 시작(EXECUTION_RECIPE 스냅샷 저장) 시점에** `stepsJson`을 파싱해 각 API 스텝의 `apiSpecId`/`endpointId`로 스펙·endpoint를 조회해 굳힌다(통짜 저장 원칙의 정당한 예외 — 실행 오케스트레이션). FE가 아니라 서버가 확정한다.
+- **원문 보존 + 실행용 분리**: `stepsJson` 원문은 **편집/재현용**으로 스냅샷에 그대로 보존하고, `resolvedSteps`는 그로부터 파생한 **실행용** 뷰다. FE는 `resolvedSteps`의 `baseUrl`/`method`/`path`로 외부 API를 직접 호출하고(서버 프록시 없음), `path`의 경로 변수는 실행 시 `pathParams`로 치환한다(원본 path 보존). `services`는 JSON object라 키가 **문자열화된 apiSpecId**(`resolvedSteps[].apiSpecId`는 숫자 — 조회 시 문자열 변환 유의).
+- **대응/제외 (stepIndex 기준)**: `resolvedSteps`의 각 항목은 원문 `stepsJson` 배열의 **인덱스 `stepIndex`로 대응**한다(endpointId 기준 아님). 같은 endpointId 반복 호출 + 스크립트/서브레시피 스텝 혼재 시 순서·endpointId 매칭이 어긋나므로 명시적 `stepIndex`로만 원본 스텝을 특정한다. API가 아닌 스텝(스크립트/서브레시피)은 `resolvedSteps`에 포함하지 않으므로 `stepIndex`가 비연속(건너뜀)일 수 있다.
+- **플랜 단위**: 플랜은 레시피별 `EXECUTION_RECIPE` 행으로 분리되므로 `services`/`resolvedSteps`는 **각 레시피 스냅샷 행 단위**로 들어간다. 별도 상위 배열을 두지 않는다([plan.md](../specs/recipe/plan.md)).
+- **서비스 못 찾음**: 스냅샷 생성 시 스텝 `apiSpecId`의 서비스를 해석하지 못하면 조용히 대체하지 않고 그 스텝을 실패 처리한다([execution.md 스텝 서비스 못 찾음](../specs/recipe/execution.md#스텝-서비스스펙-못-찾음-실패-처리)).
+- **마이그레이션 제외**: `services`/`resolvedSteps`는 과거엔 없던 개념이므로, 기존 실행 히스토리의 `RECIPE_SNAPSHOT_JSON`에 **소급 주입하지 않는다**("그때 그대로" 불변 원칙). apiSpecId 역산 마이그레이션의 보정 대상은 레시피 계열(`RECIPE`/`RECIPE_VERSION`)뿐이다([db/recipe.md 마이그레이션](recipe.md#apispecid-역산-마이그레이션-일회성)).
 
 ---
 
