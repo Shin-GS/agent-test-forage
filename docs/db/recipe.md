@@ -79,17 +79,19 @@ API 스텝(type=api)은 **호출 대상 서비스를 스텝별로 지정**한다
 
 - **필드**: API 스텝 JSON은 `apiSpecId`(대상 서비스 = API_SPEC.ID) + `endpointId`(그 서비스의 API_ENDPOINT.ID)를 함께 담는다. `path`는 endpoint 원본 그대로(예: `/seats/{seatId}/bookings`) 보관하고 실행 시 `pathParams`로 치환한다(원본 path를 미리 치환해 저장하지 않음).
 - **저장 시 명시 확정 (주체 = FE)**: 편집 중에는 `apiSpecId` 미선택(레시피 대상 서비스 상속)을 허용하되, **FE가 저장 요청을 직렬화할 때 미선택 스텝을 레시피 대상 `RECIPE.API_SPEC_ID`로 확정해 채워 전송**한다. 서버로 올라오는 STEPS_JSON에는 `apiSpecId` 없는 API 스텝이 남지 않는다. 서버는 STEPS_JSON을 **통짜로 저장**하고 파싱은 검증용으로만 쓰되(원칙 유지), FE 값을 무조건 신뢰하진 않는다 — **RecipeValidator가 스텝 `apiSpecId` 기준으로 `endpointId` 소속을 검증**해 잘못된 값을 걸러 신뢰 경계를 확보한다(상속 UX + 저장 시 명시 확정, 정본: [structure.md 스텝 서비스 지정 모델](../specs/recipe/structure.md#스텝-서비스-지정-모델-상속-ux--저장-시-명시-확정--확정)).
-- **구 데이터(정식 구현)**: 배포 전이라 로드 시 조용한 폴백에 의존하지 않는다. `apiSpecId` 없는 구 스텝 데이터는 아래 [마이그레이션](#apispecid-역산-마이그레이션-일회성)으로 `apiSpecId`를 확정 기록한다.
+- **구 데이터(정식 구현)**: 배포 전이라 로드 시 조용한 폴백에 의존하지 않는다. `apiSpecId` 없는 구 스텝 데이터는 아래 [마이그레이션](#apispecid-역산-마이그레이션-일회성)으로 `apiSpecId`를 확정 기록했다(**2026-09-17 실행 완료**).
 - **경계 검증**: 검증은 위 "스텝 JSON 안의 API 참조"대로 스텝의 `apiSpecId`로 경계 지어 endpoint 소속/존재/ACTIVE를 확인한다(전역 존재 확인만 하던 무경계 상태를 스텝 서비스 기준으로 좁힘).
 - **스냅샷**: 실행 시 이 `apiSpecId`/`endpointId`를 근거로 `EXECUTION_RECIPE.RECIPE_SNAPSHOT_JSON`의 `services`/`resolvedSteps`(실행용 확정 뷰)를 만든다([db/execution.md RECIPE_SNAPSHOT_JSON](execution.md#레시피-스냅샷-히스토리-재현)). 서비스를 해석하지 못하면 조용히 대체하지 않고 스텝을 실패 처리한다([execution.md 스텝 서비스 못 찾음](../specs/recipe/execution.md#스텝-서비스스펙-못-찾음-실패-처리)).
 
 #### apiSpecId 역산 마이그레이션 (일회성)
 
-배포 전 기존 데이터에 `apiSpecId`를 채우기 위한 **일회성 관리자 엔드포인트**다. `endpointId`가 속한 서비스를 역산해 API 스텝에 `apiSpecId`를 확정 기록한다.
+> ✅ **2026-09-17 실행 완료** — `processedRecipes=51, patchedSteps=242, failedSteps=0`. 실행·검증 후 일회성 엔드포인트/서비스 코드는 **제거**했다(아래 내용은 이력·근거 보존용). `endpointId`가 속한 서비스를 역산해 API 스텝에 `apiSpecId`를 확정 기록했다.
+
+배포 전 기존 데이터에 `apiSpecId`를 채우기 위한 **일회성 관리자 엔드포인트**였다.
 
 | 항목 | 내용 |
 |------|------|
-| 엔드포인트 | `POST /api/v1/admin/migrations/step-api-spec-id` |
+| 엔드포인트 | `POST /api/v1/admin/migrations/step-api-spec-id` (제거됨) |
 | 권한 | **ADMIN** 전용 |
 | 멱등성 | idempotent — 이미 `apiSpecId`가 있는 API 스텝은 **skip**(재실행해도 안전) |
 | 역산 방식 | 스텝의 `endpointId` → `API_ENDPOINT`가 속한 `API_SPEC.ID`를 조회해 `apiSpecId`로 기록 |

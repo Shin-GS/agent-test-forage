@@ -661,8 +661,8 @@ const RECIPE_EDITOR_TESTS = {
     {
       id: "RECIPE-054",
       priority: "medium",
-      title: "[멀티서비스] 기존 데이터 마이그레이션 — endpointId 역산으로 apiSpecId 백필",
-      precondition: "apiSpecId 없는 구 스텝을 가진 레시피 존재(관리자 계정). 일회성 마이그레이션 엔드포인트 POST /api/v1/admin/migrations/step-api-spec-id",
+      title: "[멀티서비스] 기존 데이터 마이그레이션 — endpointId 역산으로 apiSpecId 백필 (✅ 2026-09-17 완료, 엔드포인트 제거됨)",
+      precondition: "[완료] 2026-09-17 실행: processedRecipes=51, patchedSteps=242, failedSteps=0. 검증 후 일회성 엔드포인트(POST /api/v1/admin/migrations/step-api-spec-id) 제거. 아래는 이력 보존용.",
       steps: [
         "마이그레이션 엔드포인트를 관리자로 호출(비-admin은 403)",
         "각 API 스텝의 endpointId로 API_ENDPOINT를 조회해 실제 apiSpecId가 스텝에 채워지는지 확인",
