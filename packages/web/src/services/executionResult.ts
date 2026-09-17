@@ -6,8 +6,27 @@
 import { specsApi } from "../api";
 import type { ExecutionResponse } from "../api/types";
 import type { RunResult } from "./executionRunner";
+import { findRunningRecipe, extractResolvedSteps } from "./executionRunner";
 import { useChatStore } from "../store/chatStore";
 import { useToastStore } from "../store/toastStore";
+
+/**
+ * 401/403 이 난 스텝의 실제 서비스(apiSpecId)를 해석한다(멀티 서비스).
+ * - 현재 RUNNING 레시피의 resolvedSteps[stepIndex].apiSpecId 를 우선 사용한다.
+ * - resolvedSteps 가 없거나(구 스냅샷/단일 서비스) 해당 stepIndex 의 apiSpecId 가 없으면
+ *   레시피 대표 execution.apiSpecId 로 폴백한다(기존 동작 보존, 회귀 방지).
+ */
+function resolveAuthApiSpecId(execution: ExecutionResponse, stepIndex: number): number {
+  const recipe = findRunningRecipe(execution);
+  if (recipe) {
+    const resolvedSteps = extractResolvedSteps(recipe);
+    const apiSpecId = resolvedSteps?.get(stepIndex)?.apiSpecId;
+    if (apiSpecId != null) {
+      return apiSpecId;
+    }
+  }
+  return execution.apiSpecId;
+}
 
 /**
  * runExecution 결과를 스토어에 반영한다.
@@ -51,8 +70,10 @@ export async function applyRunResult(
   const store = useChatStore.getState();
   let serviceName: string | null = null;
   let loginProfiles: { name: string; loginPageUrl: string }[] = [];
+  // 인증이 필요한 스텝의 실제 서비스로 조회한다(레시피 대표 서비스 아님, 멀티 서비스 대응).
+  const authApiSpecId = resolveAuthApiSpecId(execution, result.auth.stepIndex);
   try {
-    const spec = await specsApi.getSpec(execution.apiSpecId);
+    const spec = await specsApi.getSpec(authApiSpecId);
     serviceName = spec.name;
     loginProfiles = (spec.authProfiles ?? [])
       .filter((p) => !!p.loginPageUrl)

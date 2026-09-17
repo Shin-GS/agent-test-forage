@@ -50,7 +50,7 @@ type EndpointMap = Map<number, { method: string; path: string }>;
  * - stepIndex: 원본 stepsJson 배열 인덱스(스크립트/서브레시피 제외로 비연속일 수 있음).
  * - baseUrl + method + path 로 요청 URL 을 조립한다(레시피 단위 단일 baseUrl 사용 중단).
  */
-interface ResolvedStep {
+export interface ResolvedStep {
   stepIndex: number;
   apiSpecId?: number;
   endpointId?: number;
@@ -60,7 +60,7 @@ interface ResolvedStep {
 }
 
 /** stepIndex → ResolvedStep 조회 맵. 레시피 스냅샷에 resolvedSteps 가 없으면 null(레거시 폴백 신호) */
-type ResolvedStepMap = Map<number, ResolvedStep>;
+export type ResolvedStepMap = Map<number, ResolvedStep>;
 
 /**
  * 인증 필요(401/403) 스텝에서 던지는 오류. 실행을 "실패"가 아닌 "인증 대기"로 다루기 위해
@@ -398,7 +398,7 @@ async function runRecipeSteps(
 // ---------------------------------------------------------------------------
 
 /** 현재 RUNNING 상태인 EXECUTION_RECIPE (sequence 순 첫 번째). 없으면 null */
-function findRunningRecipe(execution: ExecutionResponse): ExecutionRecipeView | null {
+export function findRunningRecipe(execution: ExecutionResponse): ExecutionRecipeView | null {
   const recipes = execution.recipes ?? [];
   for (const recipe of recipes) {
     if ((recipe.status?.code ?? "").toUpperCase() === "RUNNING") {
@@ -853,7 +853,7 @@ function buildEndpointMap(spec: SpecDetail | null): EndpointMap {
  * - 배열은 있으나 비어 있으면(모든 스텝이 스크립트/서브레시피 등) 빈 Map 을 반환한다(폴백 아님).
  * - BE 는 resolvedSteps 를 객체 배열로 스냅샷에 넣는다(문자열 이중 인코딩 아님).
  */
-function extractResolvedSteps(recipe: ExecutionRecipeView): ResolvedStepMap | null {
+export function extractResolvedSteps(recipe: ExecutionRecipeView): ResolvedStepMap | null {
   const snapshot = recipe.recipeSnapshot as any;
   if (!snapshot) return null;
   const raw: unknown = snapshot.resolvedSteps;
