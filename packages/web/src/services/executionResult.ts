@@ -16,7 +16,7 @@ import { useToastStore } from "../store/toastStore";
  * - resolvedSteps 가 없거나(구 스냅샷/단일 서비스) 해당 stepIndex 의 apiSpecId 가 없으면
  *   레시피 대표 execution.apiSpecId 로 폴백한다(기존 동작 보존, 회귀 방지).
  */
-function resolveAuthApiSpecId(execution: ExecutionResponse, stepIndex: number): number {
+export function resolveAuthApiSpecId(execution: ExecutionResponse, stepIndex: number): number {
   const recipe = findRunningRecipe(execution);
   if (recipe) {
     const resolvedSteps = extractResolvedSteps(recipe);
