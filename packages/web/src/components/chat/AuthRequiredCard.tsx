@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import type { ExecutionResponse } from "../../api/types";
+import { conversationsApi } from "../../api";
 import { runExecution } from "../../services/executionRunner";
 import type { RunExecutionOptions } from "../../services/executionRunner";
 import { applyRunResult } from "../../services/executionResult";
@@ -17,6 +18,7 @@ export function AuthRequiredCard() {
   const currentConversationId = useChatStore((state) => state.currentConversationId);
   const setAuthPause = useChatStore((state) => state.setAuthPause);
   const [resuming, setResuming] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 현재 대화방의 인증 대기 상태일 때만 표시
@@ -24,7 +26,10 @@ export function AuthRequiredCard() {
     return null;
   }
 
-  const statusLabel = authPause.httpStatus === 403 ? "권한이 없습니다" : "로그인이 필요합니다";
+  // 403(권한 부족)은 401과 동일한 "인증 대기" 상태 모델을 쓰되 문구/액션만 분기한다
+  // (error-handling.md "403 — 권한 부족").
+  const isForbidden = authPause.httpStatus === 403;
+  const statusLabel = isForbidden ? "권한이 없습니다" : "로그인이 필요합니다";
 
   const handleContinue = async () => {
     if (resuming) return;
@@ -56,6 +61,21 @@ export function AuthRequiredCard() {
     }
   };
 
+  // 403 전용: 레시피 실행 중지 후 인증 대기 해제.
+  const handleStop = async () => {
+    if (stopping) return;
+    setStopping(true);
+    setError(null);
+    try {
+      await conversationsApi.stop(authPause.conversationId);
+      setAuthPause(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "레시피 중단에 실패했습니다");
+    } finally {
+      setStopping(false);
+    }
+  };
+
   return (
     <div className="message message--ai">
       <div className="message__avatar">🤖</div>
@@ -84,16 +104,41 @@ export function AuthRequiredCard() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    🔗 {profile.name} 로그인 →
+                    🔗 {profile.name}
+                    {isForbidden ? " — 다른 계정으로 로그인 →" : " 로그인 →"}
                   </a>
                 ))}
               </div>
             )}
 
-            <div style={{ marginTop: "var(--space-3)" }}>
-              <button type="button" className="btn btn--primary btn--sm" onClick={handleContinue} disabled={resuming}>
+            <div
+              style={{
+                marginTop: "var(--space-3)",
+                display: "flex",
+                gap: "var(--space-2)",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={handleContinue}
+                disabled={resuming || stopping}
+              >
                 {resuming ? "확인 중..." : "로그인 완료 — 계속 진행"}
               </button>
+              {/* 403(권한 부족)에서만 실행 중단 선택지 제공 (error-handling.md) */}
+              {isForbidden && (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={handleStop}
+                  disabled={resuming || stopping}
+                  aria-label="레시피 실행 중단"
+                >
+                  {stopping ? "중단 중..." : "레시피 중단"}
+                </button>
+              )}
             </div>
 
             {error && (
