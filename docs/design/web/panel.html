@@ -989,6 +989,14 @@ statusCode: 201</div>
           <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); line-height: var(--line-height-relaxed);">
             사람인 채용공고에 이력서를 제출합니다.
           </p>
+          <!-- 서비스 전환 예고: 지목 레시피 서비스가 현재 대화방 서비스와 다를 때만 표시.
+               (같은 서비스 / 미설정→자동 설정이면 이 블록 없음 — 위 기본 케이스가 그 상태다.)
+               INVALID 경고와 유사한 인라인 안내 스타일이되, 경고/위험 톤이 아니라 info/중립 톤(--color-info-*).
+               이 예시(입사지원=사람인)는 데모상 전환이 일어나지 않지만, "다른 서비스일 때만 나타나는 블록"을 보여준다. -->
+          <p role="status" style="display: flex; gap: var(--space-2); margin-top: var(--space-2); padding: var(--space-2); font-size: var(--font-size-xs); color: var(--color-info); background: var(--color-info-subtle); border: 1px solid var(--color-info-border); border-radius: var(--radius-sm); line-height: var(--line-height-normal);">
+            <span aria-hidden="true">🔀</span>
+            <span>대상 서비스가 '잡코리아'(으)로 변경됩니다.</span>
+          </p>
           <!-- INVALID 경고: 대상 레시피가 INVALID일 때만 추가 (실행 차단 아님) -->
           <p role="alert" style="display: flex; gap: var(--space-2); margin-top: var(--space-2); padding: var(--space-2); font-size: var(--font-size-xs); color: var(--color-warning); background: var(--color-warning-subtle); border: 1px solid var(--color-warning-border); border-radius: var(--radius-sm); line-height: var(--line-height-normal);">
             <span aria-hidden="true">⚠️</span>
@@ -1036,6 +1044,13 @@ statusCode: 201</div>
           </div>
           <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); line-height: var(--line-height-relaxed);">
             사람인 서비스에 테스트 회원을 등록합니다.
+          </p>
+          <!-- 서비스 전환 예고: 재실행 대상 레시피 서비스가 현재 대화방 서비스와 다를 때만 표시.
+               (같은 서비스 / 미설정→자동 설정이면 이 블록 없음.)
+               Case 6과 동일한 info/중립 톤 인라인 안내(--color-info-*). 문구만 재사용. -->
+          <p role="status" style="display: flex; gap: var(--space-2); margin-top: var(--space-2); padding: var(--space-2); font-size: var(--font-size-xs); color: var(--color-info); background: var(--color-info-subtle); border: 1px solid var(--color-info-border); border-radius: var(--radius-sm); line-height: var(--line-height-normal);">
+            <span aria-hidden="true">🔀</span>
+            <span>대상 서비스가 '잡코리아'(으)로 변경됩니다.</span>
           </p>
         </div>
         <div class="modal__footer">

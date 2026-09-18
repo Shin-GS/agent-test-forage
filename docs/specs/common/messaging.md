@@ -1,6 +1,6 @@
 ---
 status: draft
-last-updated: 2026-09-08
+last-updated: 2026-09-22
 ---
 
 # 메시징 및 SSE 이벤트 정의
@@ -121,7 +121,7 @@ last-updated: 2026-09-08
 }
 ```
 
-- `targetRecipeId`: 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, AI 매칭 스킵용. nullable)
+- `targetRecipeId`: 사용자가 지목한 레시피 ID (사이드 패널 [▶] 실행 등, AI 매칭 스킵용. nullable). 값이 있으면 **지목이 곧 서비스 확정**이므로 서버는 AI `select_service`/`clarify` 없이 지목 레시피 서비스로 대화방 서비스를 자동 설정/전환한 뒤 실행한다([intent-classification.md targetRecipeId 서비스 확정](../chat/scenarios/intent-classification.md), 분기·원자성은 [chat/overview.md 지목 레시피 실행 시 서비스 자동 설정/전환](../chat/overview.md#지목-레시피-실행-시-서비스-자동-설정전환)).
 - 전송 API는 **동기 접수**로 거의 즉시 리턴하고(무거운 처리는 async), 응답에 최소 `{ accepted: true, sessionId }`를 준다. FE는 이 성공 응답을 받은 뒤에만 낙관적 임시 메시지를 렌더한다(아래 낙관적 UI).
 - **첫 메시지 = 대화방 생성 겸함**: 대화방 ID 없이 첫 메시지를 보내면 서버가 대화방+메시지를 함께 생성하고 새 대화방 정보를 응답에 포함(+ `session_list_update` upsert 발행). 이후 메시지는 대화방 ID로 전송.
   - `POST /api/v1/conversations` — 대화방 생성 + 첫 메시지 (body에 첫 메시지 content 포함). 응답에 `conversation` 포함
@@ -154,6 +154,7 @@ last-updated: 2026-09-08
 > **한 턴 귀속 규칙 (촉발 파트의 턴):** 실행의 진행/결과(PROGRESS/RESULT)는 **그 실행을 촉발한 파트(`EXECUTION.TRIGGER_PART_ID`, 예: execution_mode·plan 카드 파트)가 속한 턴에 append**된다. 그 결과 카드와 진행/결과가 **하나의 AI 턴(아바타 1개)** 으로 묶여 `[CARD, PROGRESS, RESULT]`로 렌더된다. 촉발 파트가 없는 실행(대화 없이/직접 실행 등)은 새 ASSISTANT 턴을 만들어 append(폴백). 재개(이어서 실행/respond)는 새 진행 블록이므로 새 턴을 만든다. 진행 블록 자체(PROGRESS 파트)는 `executionId`로 실행을 정참조하며(갱신/RESULT append 시 executionId로 역조회), `TRIGGER_PART_ID`는 촉발 카드 파트를 가리키는 값으로 유지한다(PROGRESS 파트 id로 덮어쓰지 않음). 대화방 단위 락으로 한 대화방 동시 실행은 1개이며, 한 발화가 여러 실행을 한 턴에 묶는 형태(exec A/B)는 순차 다중 실행 도입 시 활성화한다.
 
 - **SYSTEM 안내**(취소/중지, 대상 서비스 설정/해제 등)는 `role=system` 턴 + `TEXT` 파트 1개로 표현한다(별도 SYSTEM 파트 타입 없음). 서비스 설정 알림은 `PATCH /conversations/{id}/service` 성공 시 발행되며, 카드 선택·패널 드롭다운 어느 경로든 동일하게 남는다(새 대화 미생성 상태는 제외 — 대화방이 없어 남길 곳이 없고 pending으로만 보관).
+- **지목 실행(targetRecipeId) 자동 전환 알림 — 실제 변경 시에만**: 패널/홈/히스토리 [▶] 실행은 지목 레시피 서비스 기준으로 대화방 서비스를 결정한다(미설정→자동 설정, 다른 서비스→전환, 같은 서비스→무변경). 이 중 **실제로 서비스가 바뀌는 경우(미설정→설정, 다른 서비스→전환)에만** 서비스 설정/전환 SYSTEM 알림을 남긴다. **같은 서비스면 아무 변경이 없으므로 SYSTEM 알림을 남기지 않는다**(불필요한 "서비스 변경" 소음 방지). 전환 시 알림 문구는 사유를 명시한다(예: "'상품 주문하기' 실행을 위해 대상 서비스를 '온라인 쇼핑몰'로 변경했어요"). 상세: [chat/overview.md 지목 레시피 실행 시 서비스 자동 설정/전환](../chat/overview.md#지목-레시피-실행-시-서비스-자동-설정전환).
 - **빈 ASSISTANT 턴**: AI 응답을 시작할 때 `status=streaming`인 빈 턴을 먼저 만들고 파트를 append한다(기존 "PENDING 자리 미리 INSERT" 패턴의 대체). 완료 시 턴 `status=complete`.
 
 ## 클라이언트 → 서버 (사용자 액션)
