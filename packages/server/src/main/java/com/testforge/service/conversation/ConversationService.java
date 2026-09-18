@@ -301,6 +301,68 @@ public class ConversationService {
         return toDetail(saved);
     }
 
+    /**
+     * 지목 레시피([▶], targetRecipeId) 실행 전용 대상 서비스 확정. 지목 레시피는 소속 서비스가 자명하므로
+     * AI clarify/select_service 없이 대화방 서비스를 지목 레시피 서비스로 먼저 맞춘다
+     * (chat/overview.md "지목 레시피 실행 시 서비스 자동 설정/전환"). {@link #updateService}(PATCH /service)와
+     * 별개 경로다 — 촉발 카드(service_select)가 없고, 전환 사유를 밝히되 "다시 입력" 유도 없이 바로 이어 실행되기
+     * 때문이다.
+     *
+     * <p>정책(핵심): 현재 {@code apiSpecId}와 {@code recipeApiSpecId} 비교로 세 분기.
+     * <ul>
+     *   <li><b>같으면 no-op</b> — 어떤 변경/SYSTEM 알림/SSE도 발생시키지 않는다(멱등, 이게 핵심 정책).</li>
+     *   <li><b>미설정→설정</b> / <b>다른 서비스→전환</b>: apiSpecId 갱신 + 전환 사유를 밝힌 SYSTEM 안내 저장 +
+     *       SSE(message_new, session_list_update) 발행.</li>
+     * </ul>
+     *
+     * <p>소유 격리(auth.md): {@link #getOwnedOrThrow}로 requesterId 기준 조회(타인 소유면 404). recipeApiSpecId는
+     * 레시피가 가진 값이라 항상 유효하나, 방어적으로 미삭제 스펙 존재를 확인하고 없으면 400. 지목 실행 자동
+     * 전환은 실행 흐름과 원자적으로 이어져야 하므로 상태 전이(ai_responding 등)는 건드리지 않는다.
+     *
+     * @param conversationId  대상 대화방
+     * @param requesterId     요청자(대화방 소유자) — 소유 검증
+     * @param recipeApiSpecId 지목 레시피의 소속 서비스(스펙) ID
+     * @param recipeName      전환 사유 안내에 쓸 레시피명 (null이면 레시피 언급 없이 안내)
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void ensureServiceForTargetRecipe(Long conversationId, Long requesterId,
+                                             Long recipeApiSpecId, String recipeName) {
+        if (recipeApiSpecId == null) {
+            return; // 서비스가 없는 레시피(비정상)면 자동 전환할 대상이 없어 no-op.
+        }
+        Conversation conversation = getOwnedOrThrow(conversationId, requesterId);
+
+        // 같은 서비스면 무변경·무알림(멱등). 이게 핵심 정책 — 알림/SSE가 절대 발생하면 안 된다.
+        if (java.util.Objects.equals(conversation.getApiSpecId(), recipeApiSpecId)) {
+            return;
+        }
+
+        // 방어적: 지목 레시피의 서비스가 실제로 존재하는지 확인(삭제된 스펙 등).
+        if (apiSpecRepository.findByIdAndDeletedAtIsNull(recipeApiSpecId).isEmpty()) {
+            throw ApiException.invalidRequest("유효하지 않은 서비스입니다");
+        }
+
+        conversation.setApiSpecId(recipeApiSpecId);
+
+        // 전환 사유를 밝힌 SYSTEM 안내(updateService의 "다시 입력" 문구는 쓰지 않는다 — 바로 이어 실행됨).
+        String serviceName = serviceNameOf(recipeApiSpecId);
+        String notice = (recipeName != null && !recipeName.isBlank())
+                ? "'" + recipeName + "' 실행을 위해 대상 서비스를 '" + serviceName + "'(으)로 변경했어요."
+                : "대상 서비스를 '" + serviceName + "'(으)로 변경했어요.";
+        Message savedNotice = saveTurn(conversationId, MessageRole.SYSTEM, MessageStatus.COMPLETE,
+                List.of(PartDraft.text(notice)));
+        conversation.setLastMessageAt(savedNotice.getCreatedAt());
+        Conversation saved = conversationRepository.save(conversation);
+
+        Long ownerId = saved.getUserId();
+        publishAfterCommit(ownerId, SseEventType.MESSAGE_NEW, conversationId, toMessage(savedNotice));
+        publishAfterCommit(ownerId, SseEventType.SESSION_LIST_UPDATE, conversationId,
+                SessionListUpdatePayload.upsert(toListSnapshot(saved)));
+
+        log.info("Service auto-switched for target recipe: conversationId={}, apiSpecId={}",
+                conversationId, recipeApiSpecId);
+    }
+
     /** 읽음 처리 (lastReadAt = now). 없거나 삭제/타인 소유면 404. */
     @Transactional
     public ConversationDetailResponse markRead(Long id, Long requesterId) {

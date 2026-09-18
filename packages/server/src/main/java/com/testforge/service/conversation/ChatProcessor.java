@@ -20,6 +20,7 @@ import com.testforge.repository.conversation.MessagePartRepository;
 import com.testforge.repository.conversation.MessageRepository;
 import com.testforge.repository.recipe.RecipeRepository;
 import com.testforge.repository.spec.ApiSpecRepository;
+import com.testforge.service.recipe.RecipeAccessPolicy;
 import com.testforge.utils.RecipeJsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +64,7 @@ public class ChatProcessor {
     private final RecipeRepository recipeRepository;
     private final ApiSpecRepository apiSpecRepository;
     private final InvestigateLoop investigateLoop;
+    private final RecipeAccessPolicy recipeAccessPolicy;
 
     public ChatProcessor(IntentResolver intentResolver,
                          ConversationService conversationService,
@@ -71,7 +73,8 @@ public class ChatProcessor {
                          MessagePartRepository messagePartRepository,
                          RecipeRepository recipeRepository,
                          ApiSpecRepository apiSpecRepository,
-                         InvestigateLoop investigateLoop) {
+                         InvestigateLoop investigateLoop,
+                         RecipeAccessPolicy recipeAccessPolicy) {
         this.intentResolver = intentResolver;
         this.conversationService = conversationService;
         this.conversationRepository = conversationRepository;
@@ -80,6 +83,7 @@ public class ChatProcessor {
         this.recipeRepository = recipeRepository;
         this.apiSpecRepository = apiSpecRepository;
         this.investigateLoop = investigateLoop;
+        this.recipeAccessPolicy = recipeAccessPolicy;
     }
 
     /**
@@ -92,6 +96,13 @@ public class ChatProcessor {
      */
     public void process(Long conversationId, Long userId) {
         try {
+            // 지목 레시피([▶], targetRecipeId) 실행이면, 컨텍스트 조립 전에 대화방 서비스를 지목 레시피
+            // 서비스로 먼저 맞춘다(chat/overview.md 서비스 자동 설정/전환). 이 메서드가 실행되지 않으면
+            // 대화방 서비스가 미설정/다른 서비스일 때 지목 레시피가 후보에 없어 select_service로 빠진다(마찰).
+            // process는 @Async + AFTER_COMMIT이라 트랜잭션 밖이므로 ensure...(@Transactional)가 즉시 커밋되고,
+            // 이어지는 buildContext가 갱신된 apiSpecId를 읽는다(이 순서 유지 필수).
+            ensureServiceForTargetRecipe(conversationId, userId);
+
             IntentContext context = buildContext(conversationId, userId);
             IntentResult result = intentResolver.resolve(context);
 
@@ -139,6 +150,40 @@ public class ChatProcessor {
         return AssistantMessageDraft.system(
                 "처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
                 RecipeJsonUtil.toJsonString(Map.of("level", "error")));
+    }
+
+    // ── 지목 레시피 서비스 자동 설정/전환 ──
+
+    /**
+     * 마지막 USER 턴의 targetRecipeId가 있으면, 그 레시피의 서비스로 대화방 서비스를 확정한다
+     * (미설정→설정 / 다른 서비스→전환 / 같은 서비스→no-op). buildContext 이전에 커밋되어야 갱신된
+     * apiSpecId가 반영된 후보로 컨텍스트가 조립된다. 레시피가 없거나(삭제) 서비스(apiSpecId)가 null이면
+     * 스킵하고 기존 흐름을 그대로 탄다.
+     *
+     * <p>buildContext가 턴을 다시 로드하므로 targetRecipeId 조회를 위해 여기서 한 번 더 조회하는 것은
+     * 중복이지만, 자동 전환의 정확성(컨텍스트 조립 전 서비스 확정)을 위해 허용한다.
+     */
+    private void ensureServiceForTargetRecipe(Long conversationId, Long userId) {
+        List<Message> turns = messageRepository.findByConversationIdOrderByIdAsc(conversationId);
+        Long targetRecipeId = latestUserTargetRecipeId(turns);
+        if (targetRecipeId == null) {
+            return;
+        }
+        Recipe recipe = recipeRepository.findByIdAndDeletedAtIsNull(targetRecipeId).orElse(null);
+        if (recipe == null || recipe.getApiSpecId() == null) {
+            return; // 삭제됐거나 서비스 없는 레시피면 자동 전환 대상 없음 — 기존 흐름 유지.
+        }
+        // 소유 격리(auth.md 수평 권한): 남의 PRIVATE 레시피 ID를 targetRecipeId로 주입한 요청은
+        // 서비스 전환을 스킵한다(간접 노출/대화방 상태 오염 방지). canView는 role 미사용이라 null 안전
+        // (COMMON=전원 통과 / PRIVATE=userId==ownerUserId). 스킵 시 이후 buildContext 후보에도 없어
+        // select_service/no_match로 자연 종결된다 — 예외를 던지지 않아 정상 흐름 종결을 보장한다.
+        if (!recipeAccessPolicy.canView(recipe, userId, null)) {
+            log.info("target recipe not visible to user, skipping service switch: conversationId={}, recipeId={}, userId={}",
+                    conversationId, targetRecipeId, userId);
+            return;
+        }
+        conversationService.ensureServiceForTargetRecipe(
+                conversationId, userId, recipe.getApiSpecId(), recipe.getName());
     }
 
     // ── 컨텍스트 조립 ──
