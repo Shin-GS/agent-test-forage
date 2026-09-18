@@ -4,7 +4,7 @@
 // - 데이터는 각 뷰가 React Query 로 스스로 조회(채팅 store 와 분리).
 // - 반응형: Desktop 고정 열(항상 열림), Tablet/Mobile 은 is-open 오버레이(헤더 토글 버튼).
 
-import type { CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { ExecutionDetailView } from "./detail/ExecutionDetailView";
 import { HomeView } from "./home/HomeView";
 import { HistoryView } from "./history/HistoryView";
@@ -64,6 +64,20 @@ export function SidePanel({
   const setOpen = usePanelStore((s) => s.setOpen);
   const openDetail = usePanelStore((s) => s.openDetail);
   const closeDetail = usePanelStore((s) => s.closeDetail);
+  const syncRecipeFilterToService = usePanelStore((s) => s.syncRecipeFilterToService);
+
+  // ── 레시피 탭 필터 ← 대화방 대상 서비스 동기화 (단방향, 탭 전환 없음) ──
+  // (기획 panel/overview.md "레시피 탭 필터와의 관계") 대화방 대상 서비스가 정해지거나 바뀌거나
+  // 대화방을 전환할 때, 레시피 탭 필터를 그 서비스로 맞춰 둔다(미설정이면 null=전체 서비스).
+  // 서비스 소스: 새 대화(conversationId 없음)는 pending, 기존 대화는 대화방 apiSpecId.
+  //   - "변경 감지(prev 비교)"가 아니라 "현재 값으로 맞춤"이라, 대화방 진입/마운트 시에도 반영된다.
+  //   - store setter 가 같은 값이면 no-op 이라 사용자가 필터를 딴 값으로 바꿔 탐색 중일 때는
+  //     이 effect 가 재실행되지 않는 한(서비스가 실제로 바뀌지 않는 한) 그 선택을 덮지 않는다.
+  //   - 탭은 건드리지 않는다(필터 값만 갱신).
+  const syncSourceApiSpecId = conversationId == null ? pendingApiSpecId : conversationApiSpecId;
+  useEffect(() => {
+    syncRecipeFilterToService(syncSourceApiSpecId);
+  }, [syncSourceApiSpecId, syncRecipeFilterToService]);
 
   return (
     <aside

@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { PanelContext } from "../types";
+import { usePanelStore } from "../panelStore";
 import { RecipeCard } from "./RecipeCard";
 import { useRecipes, useServices, type RecipeFilter } from "./useRecipes";
 
@@ -19,8 +20,11 @@ const FILTERS: { key: RecipeFilter; label: string }[] = [
 export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
   const busy = conversationStatus !== "idle";
 
-  // 탐색 전용 로컬 상태 (대화방 서비스와 독립)
-  const [apiSpecId, setApiSpecId] = useState<number | null>(null);
+  // 서비스 필터(선택 도메인): panelStore 로 승격. 대화방 대상 서비스가 바뀌면 SidePanel 이
+  // syncRecipeFilterToService 로 이 값을 맞춰 두고(단방향), 사용자가 드롭다운으로 직접 바꾸면
+  // setRecipeFilterApiSpecId 로 갱신한다(이후 탐색 자유). 기획 panel/overview.md "레시피 탭 필터와의 관계".
+  const apiSpecId = usePanelStore((s) => s.recipeFilterApiSpecId);
+  const setApiSpecId = usePanelStore((s) => s.setRecipeFilterApiSpecId);
   const [filter, setFilter] = useState<RecipeFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [keyword, setKeyword] = useState("");
