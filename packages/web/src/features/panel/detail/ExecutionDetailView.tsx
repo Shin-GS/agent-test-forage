@@ -119,7 +119,7 @@ function StepJson({ step, withCopy }: { step: ExecutionStepView; withCopy: boole
             <div className="exec-detail__json-head">
               <CopyButton
                 text={prettyJson(step.userInput)}
-                label={`${step.stepIndex + 1}번 스텝 입력값 복사`}
+                label={`${step.stepIndex + 1}번 단계 입력값 복사`}
               />
             </div>
           )}
@@ -133,7 +133,7 @@ function StepJson({ step, withCopy }: { step: ExecutionStepView; withCopy: boole
             <div className="exec-detail__json-head">
               <CopyButton
                 text={prettyJson(step.response)}
-                label={`${step.stepIndex + 1}번 스텝 응답 복사`}
+                label={`${step.stepIndex + 1}번 단계 응답 복사`}
               />
             </div>
           )}
@@ -317,7 +317,7 @@ function SummaryHeader({ data }: { data: ExecutionResponse }) {
   // 단일: 서비스명(BE 상세 응답 serviceName — INACTIVE/삭제 스펙도 이름 채움), 플랜: 유형(N개 레시피)
   const firstMetric = isPlan
     ? { key: "유형", val: `플랜 (${recipes.length}개 레시피)` }
-    : { key: "서비스", val: data.serviceName ?? "-" };
+    : { key: "대상 사이트", val: data.serviceName ?? "-" };
 
   return (
     <div className="exec-summary">
@@ -333,7 +333,7 @@ function SummaryHeader({ data }: { data: ExecutionResponse }) {
           </div>
         )}
         <div className="exec-summary__item">
-          <span className="exec-summary__key">스텝 성공률</span>
+          <span className="exec-summary__key">단계 성공률</span>
           <span className="exec-summary__val">
             {n}/{m}
           </span>
@@ -364,8 +364,8 @@ function FailBanner({ data }: { data: ExecutionResponse }) {
   const { recipe, step } = first;
   const stepNo = step.stepIndex + 1;
   const label = multi
-    ? `"${recipe.recipeName}" ${stepNo}번 스텝 "${step.stepName}"에서 실패`
-    : `${stepNo}번 스텝 "${step.stepName}"에서 실패`;
+    ? `"${recipe.recipeName}" ${stepNo}번 단계 "${step.stepName}"에서 실패`
+    : `${stepNo}번 단계 "${step.stepName}"에서 실패`;
 
   function jumpToFailure(e: MouseEvent<HTMLAnchorElement>) {
     e.preventDefault();

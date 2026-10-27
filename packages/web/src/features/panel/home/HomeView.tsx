@@ -111,7 +111,7 @@ export function HomeView({
           ) : (
             recent.map((item) => {
               const serviceLabel =
-                item.serviceName ?? (item.apiSpecId == null ? "여러 서비스" : null);
+                item.serviceName ?? (item.apiSpecId == null ? "여러 사이트" : null);
               return (
                 <button
                   key={item.id}

@@ -7,7 +7,7 @@
 import { useId, useState } from "react";
 import { ConfirmModal } from "../../../components/common/ConfirmModal";
 import { AppTooltip } from "../../../components/common/AppTooltip";
-import { stepTypeLabel } from "../../../components/recipe/recipeForm";
+import { stepTypeUserLabel } from "../../../components/recipe/recipeForm";
 import type { RecipeStep, RecipeSummary, RecipeVariable } from "../../../api/types";
 import { formatRelative } from "../shared/format";
 import type { RunRecipeFn } from "../types";
@@ -35,9 +35,9 @@ function scopeBadge(recipe: RecipeSummary): { icon: string; label: string } {
   return code === "PRIVATE" ? { icon: "🔒", label: "개인" } : { icon: "🌐", label: "공통" };
 }
 
-/** 스텝 표시명 폴백: API 스텝은 label→name, 그 외는 name, 최종 "스텝 N" */
+/** 단계 표시명 폴백: API 스텝은 label→name, 그 외는 name, 최종 "단계 N" */
 function stepDisplayName(step: RecipeStep, index: number): string {
-  const fallback = `스텝 ${index + 1}`;
+  const fallback = `단계 ${index + 1}`;
   if (step.type === "api") {
     return (step.label && step.label.trim()) || (step.name && step.name.trim()) || fallback;
   }
@@ -60,7 +60,7 @@ function RecipeCardDetail({ recipeId }: { recipeId: number }) {
     return (
       <div className="side-panel__recipe-loading" role="status" aria-live="polite">
         <span className="side-panel__spinner" aria-hidden />
-        <span>스텝 정보를 불러오는 중…</span>
+        <span>단계 정보를 불러오는 중…</span>
       </div>
     );
   }
@@ -68,7 +68,7 @@ function RecipeCardDetail({ recipeId }: { recipeId: number }) {
   if (isError || !data) {
     return (
       <div className="side-panel__recipe-error" role="alert">
-        ⚠️ 스텝 정보를 불러오지 못했어요.
+        ⚠️ 단계 정보를 불러오지 못했어요.
       </div>
     );
   }
@@ -80,17 +80,17 @@ function RecipeCardDetail({ recipeId }: { recipeId: number }) {
     <>
       {steps.length === 0 ? (
         <div className="side-panel__recipe-steps">
-          <span className="side-panel__recipe-empty">등록된 스텝이 없어요.</span>
+          <span className="side-panel__recipe-empty">등록된 단계가 없어요.</span>
         </div>
       ) : (
         <div className="side-panel__recipe-steps">
-          <span className="side-panel__recipe-steps-label">스텝 흐름</span>
+          <span className="side-panel__recipe-steps-label">진행 단계</span>
           {steps.map((step, i) => (
             <div key={i} className="side-panel__recipe-step">
               <span>
                 {i + 1}. {stepDisplayName(step, i)}
               </span>
-              <span className="side-panel__recipe-step__type">{stepTypeLabel(step.type)}</span>
+              <span className="side-panel__recipe-step__type">{stepTypeUserLabel(step.type)}</span>
             </div>
           ))}
         </div>
@@ -98,7 +98,7 @@ function RecipeCardDetail({ recipeId }: { recipeId: number }) {
 
       {variables.length > 0 && (
         <div className="side-panel__recipe-vars-value">
-          <span className="side-panel__recipe-vars">입력 변수</span>{" "}
+          <span className="side-panel__recipe-vars">입력할 값</span>{" "}
           {variablesSummary(variables)}
         </div>
       )}
@@ -126,7 +126,7 @@ export function RecipeCard({ recipe, serviceName, busy, onRunRecipe }: Props) {
     [recipe.name, serviceName].filter(Boolean).join(" · "),
     recipe.description,
     invalid
-      ? "스펙 변경으로 유효하지 않을 수 있어요. 실행은 되지만 일부 스텝이 실패할 수 있어요."
+      ? "사이트 정보가 바뀌어 유효하지 않을 수 있어요. 실행은 되지만 일부 단계가 실패할 수 있어요."
       : null,
   ]
     .filter(Boolean)
@@ -144,13 +144,13 @@ export function RecipeCard({ recipe, serviceName, busy, onRunRecipe }: Props) {
                 className="side-panel__recipe-warn"
                 tabIndex={0}
                 role="img"
-                aria-label="스펙 변경으로 필수 필드가 무효화됨"
+                aria-label="사이트 정보가 바뀌어 일부 값이 유효하지 않음"
               >
                 ⚠️
               </span>
             }
           >
-            스펙 변경으로 필수 필드가 무효화됨
+            사이트 정보가 바뀌어 일부 값이 유효하지 않음
           </AppTooltip>
         )}
 

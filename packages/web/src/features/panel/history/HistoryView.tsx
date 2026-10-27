@@ -48,7 +48,7 @@ export function HistoryView({ onOpenDetail }: Props) {
             {items.map((item) => {
               // 서비스명: serviceName 있으면 그대로, 없고 apiSpecId도 없으면(플랜 등) "여러 서비스".
               const serviceLabel =
-                item.serviceName ?? (item.apiSpecId == null ? "여러 서비스" : null);
+                item.serviceName ?? (item.apiSpecId == null ? "여러 사이트" : null);
               const relative = relativeTime(item.startedAt);
               const duration = formatDuration(item.durationMs);
               const subParts = [serviceLabel && `🌐 ${serviceLabel}`, item.resultSummary]

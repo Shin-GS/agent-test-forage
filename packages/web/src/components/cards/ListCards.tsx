@@ -96,13 +96,13 @@ export function ServiceSelectCard({
       await conversationsApi.updateService(convId, apiSpecId, partId);
       // 목록 배지는 BE 가 발행하는 session_list_update → 목록 재조회로 반영된다.
       // (대화방 목록은 낙관적 UI 대상이 아니다 — messaging.md. 목록의 진실은 서버.)
-      showToast("서비스가 설정되었습니다", "success");
+      showToast("대상 사이트가 설정되었습니다", "success");
       setStarted(true);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         showToast("현재 대화방에 진행 중인 작업이 있어요. 완료 후 다시 시도해주세요.", "warning");
       } else {
-        setError(err instanceof Error ? err.message : "서비스 설정에 실패했습니다");
+        setError(err instanceof Error ? err.message : "대상 사이트 설정에 실패했습니다");
       }
     } finally {
       setRunning(false);
@@ -127,7 +127,7 @@ export function ServiceSelectCard({
             </button>
           );
         })}
-        {services.length === 0 && <span style={descStyle}>표시할 서비스가 없습니다</span>}
+        {services.length === 0 && <span style={descStyle}>표시할 사이트가 없습니다</span>}
         {(started || consumed) && <span className="badge badge--info">설정됨</span>}
       </div>
       {running && (

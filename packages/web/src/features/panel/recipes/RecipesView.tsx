@@ -55,7 +55,7 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
   const emptyMessage = keyword.trim()
     ? `'${keyword.trim()}'에 해당하는 레시피가 없어요.`
     : selectedServiceName
-      ? `이 서비스(${selectedServiceName})에 등록된 레시피가 없어요.`
+      ? `이 사이트(${selectedServiceName})에 등록된 레시피가 없어요.`
       : "아직 레시피가 없어요. 관리자에게 요청하거나 직접 만들어보세요.";
 
   return (
@@ -64,11 +64,11 @@ export function RecipesView({ conversationStatus, onRunRecipe }: PanelContext) {
       <div className="side-panel__toolbar">
         <select
           className="input"
-          aria-label="서비스 선택"
+          aria-label="대상 사이트 선택"
           value={apiSpecId ?? ""}
           onChange={(e) => setApiSpecId(e.target.value === "" ? null : Number(e.target.value))}
         >
-          <option value="">전체 서비스</option>
+          <option value="">전체 사이트</option>
           {(servicesQuery.data ?? []).map((service) => (
             <option key={service.id} value={service.id}>
               {/* 비개발자 배려: 설명이 있으면 "설명 (기술명)", 없으면 기술명만 */}

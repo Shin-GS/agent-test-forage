@@ -23,7 +23,7 @@ const MODE_LABELS: Record<string, { label: string; mode: string }> = {
 
 /** 값 출처 → 아이콘/설명 (messaging.md) */
 const SOURCE_BADGE: Record<string, { icon: string; text: string }> = {
-  utterance: { icon: "🗣️", text: "발화" },
+  utterance: { icon: "🗣️", text: "대화에서 입력" },
   default: { icon: "📌", text: "기본값" },
   none: { icon: "✏️", text: "미입력" },
 };

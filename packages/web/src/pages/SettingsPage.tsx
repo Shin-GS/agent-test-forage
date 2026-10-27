@@ -51,7 +51,7 @@ function SettingsContent({ data }: { data: SettingsResponse }) {
         <h2 id="settings-exec-title" className="settings-section__title">
           ⚡ 레시피 실행 설정 <span className="badge badge--neutral">읽기 전용</span>
         </h2>
-        <SettingRow label="스텝 타임아웃" desc="개별 스텝 최대 대기 시간" value={`${data.stepTimeoutSeconds} 초`} />
+        <SettingRow label="단계 타임아웃" desc="개별 단계 최대 대기 시간" value={`${data.stepTimeoutSeconds} 초`} />
         <SettingRow label="전체 타임아웃" desc="레시피 전체 최대 실행 시간" value={`${data.recipeTimeoutSeconds} 초`} />
         <FileOnlyNote />
       </section>

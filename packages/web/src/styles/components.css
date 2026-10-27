@@ -685,6 +685,14 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.onboarding__subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  max-width: 32rem;
+  text-align: center;
+  line-height: var(--line-height-relaxed);
+}
+
 .onboarding__actions {
   display: flex;
   gap: var(--space-3);

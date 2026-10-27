@@ -100,7 +100,7 @@ export function ActionPicker() {
   return (
     <div className="action-picker-area">
       <div className="action-picker">
-        <div className="action-picker__title">입력 정보</div>
+        <div className="action-picker__title">필요한 값 입력</div>
         <div className="action-picker__fields">
           {variables.map((v) => (
             <div className="form-group" key={v.key}>

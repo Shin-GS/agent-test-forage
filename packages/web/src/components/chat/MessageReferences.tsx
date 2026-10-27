@@ -187,7 +187,7 @@ function ReferenceDetail({ id, labelledBy, apiSpecId, endpointId, expanded }: Re
 
       {!isLoading && !isError && data && endpoint && (
         <>
-          <div className="reference-detail__service">서비스: {data.name}</div>
+          <div className="reference-detail__service">사이트: {data.name}</div>
           <div className="reference-detail__endpoint">
             <span>
               {endpoint.method} {endpoint.path}

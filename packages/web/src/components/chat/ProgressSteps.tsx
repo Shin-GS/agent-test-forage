@@ -293,7 +293,7 @@ function ResumeButton({ executionId }: { executionId: number }) {
 
 function StepRow({ step }: { step: ProgressStepPayload }) {
   const { icon, mod } = stepView(step.status);
-  const label = step.name ?? `스텝 ${step.index + 1}`;
+  const label = step.name ?? `단계 ${step.index + 1}`;
   return (
     <div className={`progress-steps__item ${mod}`}>
       <span className="progress-steps__icon" aria-hidden>

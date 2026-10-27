@@ -378,7 +378,7 @@ async function runRecipeSteps(
       const message = error instanceof Error ? error.message : String(error);
       const reported = await safeReport(env.execution.id, stepRecord.id, {
         status: "FAILED",
-        summary: "스텝 실패",
+        summary: "단계 실패",
         errorMessage: message,
       });
       if (!reported) {
@@ -466,7 +466,7 @@ async function executeStep(
       // 서브레시피 실행은 프로토타입 범위 밖 — 스킵 취급 (성공 처리하되 요약에 명시)
       return {
         response: null,
-        summary: "서브레시피 실행 미지원(프로토타입)",
+        summary: "다른 작업 불러오기는 아직 지원되지 않아요",
         extractedValues: {},
       };
     default:

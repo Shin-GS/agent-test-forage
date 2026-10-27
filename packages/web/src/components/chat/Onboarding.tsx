@@ -57,6 +57,9 @@ export function Onboarding({ onQuickAction }: Props) {
   return (
     <div className="onboarding">
       <div className="onboarding__title">🚀 빠른 시작</div>
+      <div className="onboarding__subtitle">
+        레시피는 미리 만들어 둔 작업 묶음이에요. 아래에서 고르거나, 하고 싶은 일을 그냥 입력해보세요.
+      </div>
 
       {isLoading ? (
         <div className="onboarding__hint">레시피를 불러오는 중...</div>

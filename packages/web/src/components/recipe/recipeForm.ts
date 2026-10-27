@@ -528,7 +528,7 @@ export function formStepToServer(step: RecipeStep, recipeApiSpecId: number | nul
   };
 }
 
-/** 스텝 타입 표시 라벨 */
+/** 스텝 타입 표시 라벨 (내부/편집 화면용 — 정확 용어) */
 export function stepTypeLabel(type: StepType): string {
   switch (type) {
     case "api":
@@ -537,6 +537,21 @@ export function stepTypeLabel(type: StepType): string {
       return "스크립트";
     case "recipe":
       return "서브레시피";
+  }
+}
+
+/**
+ * 스텝 타입 표시 라벨 (비개발자 노출용 — 쉬운 말). glossary "사용자 표시 용어".
+ * 레시피 카드 펼침 등 일반 사용자 화면에서 쓴다. 편집 화면(관리자)은 stepTypeLabel 유지.
+ */
+export function stepTypeUserLabel(type: StepType): string {
+  switch (type) {
+    case "api":
+      return "API 호출";
+    case "script":
+      return "스크립트";
+    case "recipe":
+      return "다른 작업";
   }
 }
 

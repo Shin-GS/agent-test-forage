@@ -22,8 +22,8 @@ const STATUS_TEXT: Record<ConversationRuntimeStatus, { locked: boolean; hint: st
   idle: { locked: false, hint: "", placeholder: "메시지를 입력하세요..." },
   ai_responding: { locked: true, hint: "AI가 응답 중입니다", placeholder: "AI 응답 대기 중..." },
   executing: { locked: true, hint: "레시피 실행 중입니다", placeholder: "실행 중에는 입력할 수 없습니다" },
-  // 기획(execution.md): 입력 대기 중에는 자유 채팅을 잠그고 액션 피커로만 값을 받는다.
-  input_waiting: { locked: true, hint: "입력을 기다리고 있습니다 (아래에서 값을 입력하세요)", placeholder: "액션 피커로 입력하세요" },
+  // 기획(execution.md): 입력 대기 중에는 자유 채팅을 잠그고 값 입력(액션 피커)으로만 값을 받는다.
+  input_waiting: { locked: true, hint: "입력을 기다리고 있습니다 (아래에서 값을 입력하세요)", placeholder: "아래에서 값을 입력하세요" },
 };
 
 export function ChatInput({ status, onSend, onStop }: Props) {

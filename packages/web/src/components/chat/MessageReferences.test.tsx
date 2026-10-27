@@ -161,7 +161,7 @@ describe("MessageReferences 인라인 확장", () => {
     await user.click(screen.getByRole("button"));
 
     const region = await screen.findByRole("region");
-    expect(within(region).getByText("서비스: 사용자 서비스")).toBeTruthy();
+    expect(within(region).getByText("사이트: 사용자 서비스")).toBeTruthy();
     // 엔드포인트 상세 영역 내에서만 조회 (칩 라벨과 텍스트가 겹치므로 within 으로 스코프)
     expect(within(region).getByText("POST /api/v1/users")).toBeTruthy();
     expect(within(region).getByText("회원가입")).toBeTruthy();
@@ -200,7 +200,7 @@ describe("전체 스펙 보기 링크 분기", () => {
     renderRefs(payloadWith("/specs/42/endpoints/7"));
 
     await user.click(screen.getByRole("button"));
-    await screen.findByText("서비스: 사용자 서비스");
+    await screen.findByText("사이트: 사용자 서비스");
     expect(screen.queryByText("전체 스펙 보기 →")).toBeNull();
   });
 

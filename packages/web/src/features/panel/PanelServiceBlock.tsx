@@ -80,7 +80,7 @@ export function PanelServiceBlock({
       // 목록 배지/서비스는 BE 가 발행하는 session_list_update → 목록 재조회로 반영된다
       // (대화방 목록은 낙관적 UI 대상이 아님 — messaging.md. 목록의 진실은 서버).
     } catch {
-      showToast("서비스 변경에 실패했어요. 잠시 후 다시 시도해주세요.", "warning");
+      showToast("대상 사이트 변경에 실패했어요. 잠시 후 다시 시도해주세요.", "warning");
     }
   };
 
@@ -90,7 +90,7 @@ export function PanelServiceBlock({
         side="bottom"
         align="start"
         popupClassName="panel-service__menu"
-        ariaLabel="대상 서비스 선택"
+        ariaLabel="대상 사이트 선택"
         trigger={
           <button
             type="button"
@@ -103,10 +103,10 @@ export function PanelServiceBlock({
             <span className="panel-service__label">
               {activeLabel ? (
                 <>
-                  <span className="panel-service__label-prefix">대상 서비스:</span> {activeLabel}
+                  <span className="panel-service__label-prefix">대상 사이트:</span> {activeLabel}
                 </>
               ) : (
-                "서비스 선택 안 됨"
+                "사이트 선택 안 됨"
               )}
             </span>
             <span className="panel-service__caret" aria-hidden>
@@ -134,8 +134,8 @@ export function PanelServiceBlock({
 
       <ConfirmModal
         open={pendingChange != null}
-        title="대상 서비스를 바꿀까요?"
-        description="대상 서비스를 바꾸면 이후 레시피 매칭에 영향을 줍니다. 과거 실행 기록은 유지됩니다. 계속하시겠어요?"
+        title="대상 사이트를 바꿀까요?"
+        description="대상 사이트를 바꾸면 이후 레시피를 찾는 기준이 바뀝니다. 과거 실행 기록은 유지됩니다. 계속하시겠어요?"
         confirmLabel="변경"
         cancelLabel="취소"
         onCancel={() => setPendingChange(null)}
